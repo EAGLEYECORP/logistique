@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Logistique Fret</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>🚚 Logistique Fret</h1>
+    <p class="sub">Gestion simple de flotte, chauffeurs, itinéraires et douane (Maroc)</p>
+  </header>
+
+  <nav id="tabs">
+    <button data-tab="tableau" class="active">Tableau de bord</button>
+    <button data-tab="camions">Camions</button>
+    <button data-tab="carburant">Gasoil</button>
+    <button data-tab="chauffeurs">Chauffeurs</button>
+    <button data-tab="itineraires">Itinéraires</button>
+    <button data-tab="douane">Douane</button>
+    <button data-tab="nomenclature">Nomenclature</button>
+    <button data-tab="parametres">Paramètres</button>
+  </nav>
+
+  <main id="app"></main>
+
+  <footer>
+    Données enregistrées uniquement dans ce navigateur. Pensez à faire une sauvegarde (Paramètres → Exporter).
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

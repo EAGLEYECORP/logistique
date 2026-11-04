@@ -1,0 +1,48 @@
+# Publie l'application sur GitHub Pages à chaque push sur la branche principale.
+# Prérequis (une fois) : Settings → Pages → Source : « GitHub Actions ».
+name: Publication GitHub Pages
+
+on:
+  push:
+    branches: [ccr-9838cb49-guapr6]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+
+  publication:
+    needs: tests
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Préparer le site (fichiers de l'application uniquement)
+        run: |
+          mkdir _site
+          cp index.html style.css data.js noyau.js ia.js app.js commercial.js sw.js manifest.webmanifest icon.svg _site/
+          cp -r vendor _site/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploiement
+        uses: actions/deploy-pages@v4

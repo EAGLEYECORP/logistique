@@ -1,0 +1,14 @@
+{
+  "name": "Logistique Fret",
+  "short_name": "Fret",
+  "description": "Flotte, gasoil, chauffeurs, itinéraires et douane pour transporteurs.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7fb",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -2,34 +2,47 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Logistique Fret</title>
+  <meta name="description" content="Gestion simple de flotte, gasoil, chauffeurs, itinéraires et douane pour les transporteurs au Maroc.">
+  <meta name="theme-color" content="#1d4ed8">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>🚚 Logistique Fret</h1>
-    <p class="sub">Gestion simple de flotte, chauffeurs, itinéraires et douane (Maroc)</p>
-  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="icon.svg" alt="" width="36" height="36">
+        <div><strong>Logistique Fret</strong><span>Transport · Maroc</span></div>
+      </div>
+      <nav id="nav" aria-label="Navigation principale"></nav>
+      <div class="sidebar-foot">
+        <span class="dot-online"></span> Données sur cet appareil
+      </div>
+    </aside>
 
-  <nav id="tabs">
-    <button data-tab="tableau" class="active">Tableau de bord</button>
-    <button data-tab="camions">Camions</button>
-    <button data-tab="carburant">Gasoil</button>
-    <button data-tab="chauffeurs">Chauffeurs</button>
-    <button data-tab="itineraires">Itinéraires</button>
-    <button data-tab="douane">Douane</button>
-    <button data-tab="nomenclature">Nomenclature</button>
-    <button data-tab="parametres">Paramètres</button>
-  </nav>
+    <main>
+      <header class="topbar">
+        <div>
+          <h1 id="titre"></h1>
+          <p id="soustitre"></p>
+        </div>
+        <div id="actions" class="row"></div>
+      </header>
+      <div id="app"></div>
+    </main>
+  </div>
 
-  <main id="app"></main>
+  <nav id="bottombar" class="bottombar" aria-label="Navigation"></nav>
 
-  <footer>
-    Données enregistrées uniquement dans ce navigateur. Pensez à faire une sauvegarde (Paramètres → Exporter).
-  </footer>
+  <dialog id="modale"></dialog>
+  <div id="toasts" aria-live="polite"></div>
 
   <script src="data.js"></script>
+  <script src="noyau.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

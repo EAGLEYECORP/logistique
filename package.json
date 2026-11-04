@@ -1,0 +1,8 @@
+{
+  "name": "logistique-fret",
+  "private": true,
+  "description": "Gestion de flotte, gasoil, chauffeurs, trajets et douane pour transporteurs (Maroc).",
+  "scripts": {
+    "test": "node tests/noyau.test.js"
+  }
+}

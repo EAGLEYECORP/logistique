@@ -1,0 +1,19 @@
+# Site statique : aucun build, le dossier racine est publié tel quel.
+[build]
+  publish = "."
+  command = ""
+
+# Le service worker et la page doivent toujours être revalidés pour que les mises à jour arrivent.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

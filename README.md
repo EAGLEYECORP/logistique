@@ -1,7 +1,7 @@
 # Logistique Fret
 
-Application web **simple, gratuite et hors ligne** pour les entreprises de transport de marchandises au Maroc :
-flotte, gasoil, chauffeurs, trajets, douane et nomenclature.
+Application web **simple, gratuite et hors ligne** pour les entreprises de transport routier international de marchandises au Maroc :
+commandes, clients, facturation, flotte, chauffeurs, trajets, douane et nomenclature.
 
 Pas de serveur, pas d'abonnement, pas d'installation obligatoire. Elle s'ouvre dans un navigateur et peut être
 **installée sur le téléphone** comme une application, qui fonctionne ensuite **sans réseau** (route, port, zones blanches).
@@ -10,16 +10,20 @@ Pas de serveur, pas d'abonnement, pas d'installation obligatoire. Elle s'ouvre d
 
 | Module | Ce qu'il fait |
 |---|---|
-| **Accueil** | Indicateurs (flotte, chauffeurs disponibles, dépenses 30 jours, coût gasoil/km, dossiers), liste « À traiter » avec accès direct, graphique des dépenses gasoil + entretien sur 8 semaines |
-| **Camions** | Jauges d'usure vidange et pneus, papiers (assurance, visite technique), conso moyenne, coût d'entretien. Bouton « Entretien » : vidange, pneus, freins, réparation… avec coût et garage. Historique exportable |
+| **Accueil** | Chiffre d'affaires et marge 30 jours, encours clients et retards, commandes en cours, chauffeurs, flotte, dépenses, coût gasoil/km. « À traiter » (papiers, entretien, repos, factures en retard, commandes à facturer ou à affecter), « Aujourd'hui et demain » (chargements, livraisons), graphique des dépenses |
+| **Commandes** | Ordres de transport national et international : client, chargement/livraison (ville, pays), poids, palettes, CMR, prix en MAD ou €, équipe. Étapes Devis → Confirmée → Chargée → En transit → En douane → Livrée avec horodatage, création du trajet en un clic, **marge par commande** (gasoil, péages, ferry, frais de route), facturation en un clic |
+| **Clients** | Chargeurs avec ICE, contact, délai de paiement, CA 90 jours et encours |
+| **Factures** | Numérotation FAC-AAAA-0001, HT/TVA/TTC, échéance selon le client, encaissement, relance par e-mail préremplie, facture imprimable/PDF avec vos mentions (ICE, RC, IF, RIB), « Tout facturer » |
+| **Camions** | Jauges d'usure vidange et pneus, papiers (assurance, visite technique, carte verte, tachygraphe, autorisation internationale), conso moyenne, coût d'entretien. Bouton « Entretien » : vidange, pneus, freins, réparation… avec coût et garage. Historique exportable |
 | **Gasoil** | Saisie des pleins, consommation plein à plein, coût par camion et par km, alerte si la conso dépasse la moyenne (fuite, pneus, vol de gasoil) |
-| **Chauffeurs** | Un responsable par camion, prise et fin de service, repos obligatoire après l'amplitude maximale, permis et visite médicale, appel en un clic |
+| **Chauffeurs** | Un responsable par camion, prise et fin de service, repos obligatoire après l'amplitude maximale, permis, visite médicale, **passeport, visa Schengen, carte conducteur**, appel en un clic |
 | **Trajets** | Coût et durée **calculés pendant la saisie** (gasoil, péage, coût/km, pauses, repos de nuit, nombre de jours). Seuls les chauffeurs disponibles sont proposés, leur camion est choisi automatiquement, et le compteur est mis à jour à la fin du trajet |
 | **Douane** | Dossiers import / export / transit, liste des documents (facture, colisage, CMR/B/L, EUR.1, DUM BADR, BAE…), progression, échéance, impression |
 | **Codes SH** | Recherche dans les 97 chapitres du Système Harmonisé et dans vos codes habituels (10 chiffres, droit d'importation, notes). **Assistant IA** : propose le classement d'une marchandise (voir ci-dessous) |
-| **Réglages** | Prix du gasoil, seuils d'alerte, temps de conduite et de repos, sauvegarde/restauration, installation sur mobile |
+| **Réglages** | Entreprise (mentions légales des factures), prix du gasoil, taux €/MAD, TVA, délais, seuils d'alerte, temps de conduite et de repos, assistant IA, sauvegarde/restauration, installation sur mobile |
 
-Ergonomie : fenêtres de saisie, notifications, mode sombre automatique, tableaux transformés en cartes sur mobile,
+Ergonomie : recherche globale **⌘K / Ctrl+K** (commandes, clients, CMR, factures, camions…), liens directs vers chaque page (`#commandes`, `#factures`…),
+fenêtres de saisie, notifications, mode sombre automatique, tableaux transformés en cartes sur mobile avec menu « Plus »,
 touche **N** pour ajouter un élément sur la page courante.
 
 ## Démarrer
@@ -62,6 +66,7 @@ en jours, pauses et repos, dépenses et alertes, et l'interprétation des répon
 
 - Les listes de documents douaniers et les règles de temps de conduite sont des **modèles de départ** : vérifiez-les avec la
   réglementation en vigueur (ADII — [douane.gov.ma](https://www.douane.gov.ma), ministère du Transport) et adaptez-les à votre activité.
+- La TVA par défaut (14 %) est un point de départ : le transport international et l'export peuvent relever d'un autre régime. Faites-la valider par votre comptable et ajustez-la par facture.
 - Les codes tarifaires complets (10 chiffres) et les taux changent avec la loi de finances : consultez le tarif officiel avant toute déclaration.
 
 ## Structure
@@ -74,6 +79,7 @@ en jours, pauses et repos, dépenses et alertes, et l'interprétation des répon
 | `noyau.js` | État et calculs métier, sans interface (testé) |
 | `ia.js` | Assistant IA : configuration, consigne, schéma de réponse, appel à l'API |
 | `vendor/anthropic-sdk.js` | SDK Anthropic officiel, regroupé en un seul fichier |
-| `app.js` | Interface : vues, fenêtres, navigation |
+| `app.js` | Interface : vues, fenêtres, navigation, recherche globale |
+| `commercial.js` | Commandes, clients, factures, impression des factures |
 | `sw.js`, `manifest.webmanifest`, `icon.svg` | Application installable et hors ligne |
 | `tests/noyau.test.js` | Tests des calculs |

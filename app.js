@@ -45,6 +45,14 @@ const P_ = {
   print: '<path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7z"/>',
   gauge: '<path d="M12 14 16 9M3.5 18a9 9 0 1 1 17 0"/>',
   sparkles: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8zM5 2l.6 1.4L7 4l-1.4.6L5 6l-.6-1.4L3 4l1.4-.6z"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8"/>',
+  building: '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20M8 7h4M8 11h4M8 15h4"/>',
+  receipt: '<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6M9 16h3"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
 };
 const ic = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${P_[n] || ""}</svg>`;
@@ -140,15 +148,19 @@ const optsCamions = (vide = "— Aucun —") => [["", vide], ...S.camions.map((c
 const VUES = {};
 let ongletActif = "tableau";
 const ONGLETS = [
-  ["tableau", "Accueil", "home"],
-  ["camions", "Camions", "truck"],
-  ["carburant", "Gasoil", "fuel"],
-  ["chauffeurs", "Chauffeurs", "users"],
-  ["itineraires", "Trajets", "route"],
-  ["douane", "Douane", "file"],
-  ["nomenclature", "Codes SH", "search"],
-  ["parametres", "Réglages", "settings"],
+  ["tableau", "Accueil", "home", ""],
+  ["commandes", "Commandes", "box", "Exploitation"],
+  ["itineraires", "Trajets", "route", "Exploitation"],
+  ["douane", "Douane", "file", "Exploitation"],
+  ["camions", "Camions", "truck", "Flotte"],
+  ["chauffeurs", "Chauffeurs", "users", "Flotte"],
+  ["carburant", "Gasoil", "fuel", "Flotte"],
+  ["clients", "Clients", "building", "Gestion"],
+  ["factures", "Factures", "receipt", "Gestion"],
+  ["nomenclature", "Codes SH", "search", "Outils"],
+  ["parametres", "Réglages", "settings", "Outils"],
 ];
+const ONGLETS_MOBILE = ["tableau", "commandes", "itineraires", "camions"];
 
 function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   if (onglet !== ongletActif) garderScroll = false;
@@ -156,10 +168,14 @@ function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   const v = VUES[onglet];
   const y = window.scrollY;
   const nbUrgent = alertes().filter((a) => a.niveau === "danger").length;
-  const nav = ONGLETS.map(([id, lib, icone]) =>
-    `<button class="nav-item ${id === onglet ? "active" : ""}" data-tab="${id}" ${id === onglet ? 'aria-current="page"' : ""}>${ic(icone)}<span>${lib}</span>${id === "tableau" && nbUrgent ? `<span class="count">${nbUrgent}</span>` : ""}</button>`).join("");
-  $("#nav").innerHTML = nav;
-  $("#bottombar").innerHTML = nav;
+  const item = ([id, lib, icone]) =>
+    `<button class="nav-item ${id === onglet ? "active" : ""}" data-tab="${id}" ${id === onglet ? 'aria-current="page"' : ""}>${ic(icone)}<span>${lib}</span>${id === "tableau" && nbUrgent ? `<span class="count">${nbUrgent}</span>` : ""}</button>`;
+  let groupe = null;
+  $("#nav").innerHTML = ONGLETS.map((o) => { const t = o[3] !== groupe && o[3] ? `<div class="nav-group">${o[3]}</div>` : ""; groupe = o[3]; return t + item(o); }).join("");
+  const horsBarre = !ONGLETS_MOBILE.includes(onglet);
+  $("#bottombar").innerHTML = ONGLETS.filter(([id]) => ONGLETS_MOBILE.includes(id)).map(item).join("") +
+    `<button class="nav-item ${horsBarre ? "active" : ""}" data-act-global="plus">${ic("more")}<span>${horsBarre ? ONGLETS.find(([id]) => id === onglet)[1] : "Plus"}</span></button>`;
+  if (location.hash.slice(1) !== onglet) history.replaceState(null, "", "#" + onglet);
   $("#titre").textContent = v.titre;
   $("#soustitre").textContent = typeof v.sous === "function" ? v.sous() : v.sous;
   $("#actions").innerHTML = v.actions?.() || "";
@@ -175,7 +191,10 @@ function etiqueterTableaux() {
     const ths = [...t.querySelectorAll("thead th")].map((th) => th.textContent.trim());
     if (!ths.length) return;
     t.classList.add("cards");
-    t.querySelectorAll("tbody tr").forEach((tr) => [...tr.children].forEach((td, i) => { td.dataset.label = ths[i] || ""; }));
+    t.querySelectorAll("tbody tr").forEach((tr) => [...tr.children].forEach((td, i) => {
+      td.dataset.label = ths[i] || "";
+      if (i > 0 && ths[i] && !td.querySelector(":scope > .cell")) { const c = document.createElement("div"); c.className = "cell"; c.append(...td.childNodes); td.append(c); }
+    }));
   });
 }
 const rafraichir = () => afficher(ongletActif, { garderScroll: true });
@@ -189,9 +208,9 @@ VUES.tableau = {
     if (!S.camions.length && !S.chauffeurs.length) {
       return `<div class="card">${vide("truck", "Bienvenue dans Logistique Fret", "Trois étapes pour démarrer. Vos données restent sur cet appareil.")}
         <div class="steps">
-          <div class="step"><b>1</b><div><strong>Ajoutez vos camions</strong></div><div class="sub">Kilométrage, vidange, pneus, assurance</div></div>
-          <div class="step"><b>2</b><div><strong>Ajoutez vos chauffeurs</strong></div><div class="sub">Permis, visite médicale, camion attribué</div></div>
-          <div class="step"><b>3</b><div><strong>Saisissez pleins et trajets</strong></div><div class="sub">Les alertes et les coûts se calculent seuls</div></div>
+          <div class="step"><b>1</b><div><strong>Votre flotte</strong></div><div class="sub">Camions, chauffeurs, papiers nationaux et internationaux</div></div>
+          <div class="step"><b>2</b><div><strong>Vos clients</strong></div><div class="sub">Chargeurs, ICE, délais de paiement</div></div>
+          <div class="step"><b>3</b><div><strong>Vos commandes</strong></div><div class="sub">Du chargement à la facture : marge, suivi, encaissement</div></div>
         </div>
         <div class="row" style="justify-content:center">${btn("aller", "Ajouter un camion", { id: "camions", icone: "plus" })}${btn("demo", "Voir avec des données d'exemple", { cls: "btn ghost" })}</div></div>`;
     }
@@ -202,33 +221,48 @@ VUES.tableau = {
     const etats = S.chauffeurs.map((c) => etatChauffeur(c));
     const dispo = etats.filter((e) => e.dispo).length;
     const enRepos = etats.filter((e) => e.code === "repos").length;
-    const actifs = S.trajets.filter((t) => t.statut === "encours").length;
-    const planifies = S.trajets.filter((t) => t.statut === "planifie").length;
-    const ouverts = S.dossiers.filter((d) => d.statut !== "clos");
-    const incomplets = ouverts.filter((d) => (CHECKLISTS_DOUANE[d.type] || []).some((_, i) => !d.coches?.[i])).length;
+    const act = activiteDepuis(il30);
+    const enc = encoursClients();
+    const actives = S.commandes.filter((c) => c.statut !== "livre");
+    const enRoute = actives.filter((c) => ["charge", "transit", "douane"].includes(c.statut)).length;
     const cf = consoFlotte();
     const al = alertes();
-    const kpi = (icone, l, v, s = "", sNiv = "") => `<div class="kpi"><div class="l">${ic(icone)}${l}</div><div class="v">${v}</div><div class="s ${sNiv}">${s}</div></div>`;
+    const kpi = (icone, l, v, s = "", sNiv = "", onglet = "") => `<${onglet ? `button type="button" data-act="aller" data-id="${onglet}"` : "div"} class="kpi">
+      <div class="l">${ic(icone)}${l}</div><div class="v">${v}</div><div class="s ${sNiv}">${s}</div></${onglet ? "button" : "div"}>`;
+    const demain = dateISO(Date.now() + 86400000);
+    const planning = [
+      ...S.commandes.filter((c) => ["devis", "confirme"].includes(c.statut) && c.dateChargement && c.dateChargement <= demain).map((c) => ({ c, type: "Chargement", date: c.dateChargement })),
+      ...S.commandes.filter((c) => ["charge", "transit", "douane"].includes(c.statut) && c.dateLivraison && c.dateLivraison <= demain).map((c) => ({ c, type: "Livraison", date: c.dateLivraison })),
+    ].sort((a, b) => a.date.localeCompare(b.date));
+    const quand = (d) => d < today() ? badge("En retard", "danger") : d === today() ? badge("Aujourd'hui", "warn") : badge("Demain", "neutral");
     return `
       <div class="kpis">
-        ${kpi("truck", "Flotte", S.camions.length, aEntretenir ? `${aEntretenir} à entretenir` : "Tout est à jour", aEntretenir ? "warn" : "")}
-        ${kpi("users", "Chauffeurs disponibles", `${dispo}<small>/${S.chauffeurs.length}</small>`, enRepos ? `${enRepos} en repos` : "")}
-        ${kpi("route", "Trajets en cours", actifs, `${planifies} planifié${planifies > 1 ? "s" : ""}`)}
-        ${kpi("fuel", "Dépenses 30 jours", `${fmt(gasoil30 + entretien30)}<small> MAD</small>`, `Gasoil ${fmt(gasoil30)} · entretien ${fmt(entretien30)}`)}
-        ${kpi("gauge", "Coût gasoil / km", cf ? `${fmt((cf * S.params.prixGasoil) / 100, 2)}<small> MAD</small>` : "—", cf ? `Conso flotte ${fmt(cf, 1)} L/100` : "Saisissez 2 pleins complets")}
-        ${kpi("file", "Dossiers douane", ouverts.length, incomplets ? `${incomplets} incomplet${incomplets > 1 ? "s" : ""}` : "", incomplets ? "warn" : "")}
+        ${kpi("box", "Chiffre d'affaires 30 j", `${fmt(act.ca)}<small> MAD</small>`, act.nb ? `Marge ${fmt(act.marge)} MAD · ${fmt(act.taux)} %` : "Aucune livraison sur la période", act.marge < 0 ? "danger" : "", "commandes")}
+        ${kpi("receipt", "Encours clients", `${fmt(enc.total)}<small> MAD</small>`, enc.retard ? `${fmt(enc.retard)} MAD en retard` : "Aucun retard", enc.retard ? "danger" : "", "factures")}
+        ${kpi("route", "Commandes en cours", actives.length, `${enRoute} sur la route`, "", "commandes")}
+        ${kpi("users", "Chauffeurs disponibles", `${dispo}<small>/${S.chauffeurs.length}</small>`, enRepos ? `${enRepos} en repos` : "", "", "chauffeurs")}
+        ${kpi("truck", "Flotte", S.camions.length, aEntretenir ? `${aEntretenir} à entretenir ou papiers à renouveler` : "Tout est à jour", aEntretenir ? "warn" : "", "camions")}
+        ${kpi("fuel", "Dépenses flotte 30 j", `${fmt(gasoil30 + entretien30)}<small> MAD</small>`, `Gasoil ${fmt(gasoil30)} · entretien ${fmt(entretien30)}`, "", "carburant")}
+        ${kpi("gauge", "Coût gasoil / km", cf ? `${fmt((cf * S.params.prixGasoil) / 100, 2)}<small> MAD</small>` : "—", cf ? `Conso flotte ${fmt(cf, 1)} L/100` : "Saisissez 2 pleins complets", "", "carburant")}
+        ${kpi("file", "Dossiers douane", S.dossiers.filter((d) => d.statut !== "clos").length, "ouverts", "", "douane")}
       </div>
       <div class="grid-2">
         <div class="card">
           <div class="card-head"><h2>À traiter${al.length ? ` · ${al.length}` : ""}</h2></div>
-          ${al.length ? `<ul class="alerts">${al.map((a) => `<li><span class="ico ${a.niveau}">${ic(a.niveau === "danger" ? "alert" : "flag")}</span>
-            <div class="t">${esc(a.texte)}</div>${btn("aller", "Voir", { id: a.onglet, cls: "btn ghost sm" })}</li>`).join("")}</ul>`
-            : vide("check", "Rien à signaler", "Entretiens, papiers et repos sont à jour.")}
+          ${al.length ? `<ul class="alerts">${al.slice(0, 12).map((a) => `<li><span class="ico ${a.niveau}">${ic(a.niveau === "danger" ? "alert" : "flag")}</span>
+            <div class="t">${esc(a.texte)}</div>${btn("aller", "Voir", { id: a.onglet, cls: "btn ghost sm" })}</li>`).join("")}</ul>${al.length > 12 ? `<p class="hint">+ ${al.length - 12} autres</p>` : ""}`
+            : vide("check", "Rien à signaler", "Entretiens, papiers, repos et factures sont à jour.")}
         </div>
         <div class="card">
-          <div class="card-head"><h2>Dépenses par semaine</h2><div class="legend"><span style="--c:var(--chart-1)">Gasoil</span><span style="--c:var(--chart-2)">Entretien</span></div></div>
-          ${graphiqueDepenses()}
+          <div class="card-head"><h2>Aujourd'hui et demain</h2>${btn("aller", "Commandes", { id: "commandes", cls: "btn ghost sm" })}</div>
+          ${planning.length ? `<ul class="alerts">${planning.map(({ c, type, date }) => `<li><span class="ico ${type === "Chargement" ? "info" : "ok"}">${ic(type === "Chargement" ? "box" : "flag")}</span>
+            <div class="t"><strong>${type}</strong> · ${esc(c.ref)} · ${esc(nomClient(c.clientId))}<span class="sub">${esc(c.origine)} → ${esc(c.destination)} · ${c.chauffeurId ? esc(nomChauffeur(c.chauffeurId)) : "chauffeur à affecter"}</span></div>${quand(date)}</li>`).join("")}</ul>`
+            : vide("calendar", "Rien de prévu", "Aucun chargement ni livraison aujourd'hui ou demain.")}
         </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Dépenses de la flotte par semaine</h2><div class="legend"><span style="--c:var(--chart-1)">Gasoil</span><span style="--c:var(--chart-2)">Entretien</span></div></div>
+        ${graphiqueDepenses()}
       </div>`;
   },
   agir(act) {
@@ -241,7 +275,7 @@ function graphiqueDepenses() {
   const max = Math.max(1, ...sem.map((s) => s.gasoil + s.entretien));
   const pas = Math.pow(10, Math.floor(Math.log10(max)));
   const top = Math.ceil(max / pas) * pas;
-  const W = 520, H = 220, g = 48, b = 26, t = 8;
+  const W = 1000, H = 250, g = 48, b = 26, t = 8;
   const h = H - b - t, bw = (W - g) / sem.length;
   const y = (v) => t + h - (v / top) * h;
   const kfmt = (v) => v >= 1000 ? fmt(v / 1000, v % 1000 ? 1 : 0) + " k" : fmt(v);
@@ -277,13 +311,16 @@ const champsCamion = (c = {}) => [
   { name: "intervallePneus", label: "Durée de vie des pneus (km)", type: "number", value: c.intervallePneus ?? S.params.intervallePneus },
   { name: "assurance", label: "Fin d'assurance", type: "date", value: c.assurance },
   { name: "visite", label: "Prochaine visite technique", type: "date", value: c.visite },
+  { name: "carteVerte", label: "Carte verte (assurance internationale)", type: "date", value: c.carteVerte },
+  { name: "tachygraphe", label: "Prochain contrôle tachygraphe", type: "date", value: c.tachygraphe },
+  { name: "autorisation", label: "Autorisation de transport international", type: "date", value: c.autorisation },
 ];
 function lireCamion(v) {
   return {
     immat: v.immat.toUpperCase(), marque: v.marque, km: num(v.km),
     kmVidange: num(v.kmVidange, num(v.km)), intervalleVidange: num(v.intervalleVidange, S.params.intervalleVidange),
     kmPneus: num(v.kmPneus, num(v.km)), intervallePneus: num(v.intervallePneus, S.params.intervallePneus),
-    assurance: v.assurance, visite: v.visite,
+    ...Object.fromEntries(DOCS_CAMION.map(([k]) => [k, v[k]])),
   };
 }
 
@@ -452,6 +489,9 @@ const champsChauffeur = (ch = {}) => [
   { name: "tel", label: "Téléphone", type: "tel", value: ch.tel },
   { name: "permis", label: "Expiration du permis", type: "date", value: ch.permis },
   { name: "visiteMedicale", label: "Prochaine visite médicale", type: "date", value: ch.visiteMedicale },
+  { name: "passeport", label: "Expiration du passeport", type: "date", value: ch.passeport },
+  { name: "visa", label: "Fin du visa Schengen", type: "date", value: ch.visa },
+  { name: "carteConducteur", label: "Carte conducteur (tachygraphe)", type: "date", value: ch.carteConducteur },
   { name: "camionId", label: "Camion sous sa responsabilité", type: "select", options: optsCamions(), value: ch.camionId, full: true },
   { name: "conge", label: "En congé", type: "checkbox", value: ch.conge, full: true },
 ];
@@ -467,7 +507,7 @@ VUES.chauffeurs = {
       ${S.chauffeurs.map((c) => {
         const e = etatChauffeur(c);
         const termines = S.trajets.filter((t) => t.chauffeurId === c.id && t.statut === "termine");
-        const pap = [["Permis", c.permis], ["Visite méd.", c.visiteMedicale]].filter(([, d]) => d).map(([l, d]) => {
+        const pap = DOCS_CHAUFFEUR.map(([k, l]) => [l, c[k]]).filter(([, d]) => d).map(([l, d]) => {
           const j = joursAvant(d);
           return `<span title="${dateFr(d)}">${badge(l, j < 0 ? "danger" : j <= S.params.alerteJours ? "warn" : "ok")}</span>`;
         }).join("");
@@ -493,7 +533,7 @@ VUES.chauffeurs = {
           autre.camionId = "";
         }
       }
-      const data = { nom: v.nom, tel: v.tel, permis: v.permis, visiteMedicale: v.visiteMedicale, camionId: v.camionId, conge: v.conge };
+      const data = { nom: v.nom, tel: v.tel, camionId: v.camionId, conge: v.conge, ...Object.fromEntries(DOCS_CHAUFFEUR.map(([k]) => [k, v[k]])) };
       if (existant) Object.assign(existant, data); else S.chauffeurs.push({ id: uid(), ...data });
       return true;
     };
@@ -879,6 +919,8 @@ VUES.parametres = {
       <form id="f-params">
         <div class="section-title" style="margin-top:0">Coûts</div>
         ${champs([n("prixGasoil", "Prix du gasoil (MAD/L)"), n("consoDefaut", "Consommation par défaut (L/100 km)"), n("vitesseMoyenne", "Vitesse moyenne (km/h)"), n("seuilConso", "Alerte conso au-dessus de la moyenne (%)")])}
+        <div class="section-title">Facturation</div>
+        ${champs([n("tauxEUR", "Taux de change (MAD pour 1 €)"), n("tvaDefaut", "TVA par défaut (%)"), n("delaiPaiement", "Délai de paiement par défaut (jours)")])}
         <div class="section-title">Entretien</div>
         ${champs([n("intervalleVidange", "Intervalle vidange par défaut (km)"), n("intervallePneus", "Durée de vie pneus par défaut (km)"), n("alerteKm", "Prévenir avant l'échéance (km)"), n("alerteJours", "Prévenir avant une expiration (jours)")])}
         <div class="section-title">Temps de conduite et repos</div>
@@ -887,6 +929,7 @@ VUES.parametres = {
         <div class="row" style="justify-content:flex-end;margin-top:12px">${btn("defaut", "Valeurs par défaut", { cls: "btn ghost" })}<button class="btn">Enregistrer</button></div>
       </form>
     </div>
+    ${carteEntreprise()}
     ${carteReglagesIA()}
     <div class="grid-2">
       <div class="card">
@@ -920,6 +963,7 @@ VUES.parametres = {
     });
   },
   soumettre(fid, v) {
+    if (fid === "f-entreprise") { S.entreprise = { ...v }; sauver(); toast("Informations de l'entreprise enregistrées"); return rafraichir(); }
     if (fid === "f-ia") {
       const actuelle = iaConfig();
       iaSauverConfig({ cle: v.cle || actuelle.cle, modele: v.modele });
@@ -1009,6 +1053,37 @@ function donneesDemo() {
     { id: "d1", ref: "D-EXEMPLE-1", type: "import", client: "Société Atlas SARL", marchandise: "Pièces détachées auto", codeSH: "8708", bureau: "Tanger Med", echeance: j(2), statut: "ouvert", coches: [true, true, true, false, false, true] },
     { id: "d2", ref: "D-EXEMPLE-2", type: "export", client: "Souss Export", marchandise: "Agrumes", codeSH: "0805", bureau: "Agadir", echeance: j(10), statut: "ouvert", coches: [true, true] },
   ];
+  Object.assign(e.camions[0], { carteVerte: j(60), tachygraphe: j(200), autorisation: j(12) });
+  Object.assign(e.camions[1], { carteVerte: j(140), tachygraphe: j(25), autorisation: j(180) });
+  Object.assign(e.camions[2], { carteVerte: j(300), tachygraphe: j(330), autorisation: j(240) });
+  Object.assign(e.chauffeurs[0], { passeport: j(900), visa: j(9), carteConducteur: j(600) });
+  Object.assign(e.chauffeurs[1], { passeport: j(1200), visa: j(160), carteConducteur: j(400) });
+  Object.assign(e.chauffeurs[2], { passeport: j(700), visa: j(240), carteConducteur: j(-2) });
+  e.entreprise = { nom: "Transports Atlas Fret SARL", ville: "Casablanca", adresse: "Zone industrielle Aïn Sebaâ", tel: "05 22 00 00 00", email: "contact@exemple.ma", ice: "000000000000000", rc: "000000", if: "00000000", banque: "Banque exemple", rib: "000 000 0000000000000000 00" };
+  e.clients = [
+    { id: "k-1", nom: "Souss Export", ville: "Agadir", pays: "Maroc", ice: "001122334455667", contact: "M. Idrissi", tel: "05 28 00 00 00", email: "logistique@souss-export.example", delai: 30 },
+    { id: "k-2", nom: "Distribution Sud SAS", ville: "Perpignan", pays: "France", ice: "FR00123456789", contact: "Mme Martin", email: "achats@distrib-sud.example", delai: 45 },
+    { id: "k-3", nom: "Textiles Tanger", ville: "Tanger", pays: "Maroc", ice: "009988776655443", contact: "M. Alaoui", tel: "05 39 00 00 00", delai: 60 },
+  ];
+  const jalons = (...st) => st.map((statut, i) => ({ statut, date: h(-24 * (st.length - i)) }));
+  e.commandes = [
+    { id: "o1", ref: "CMD-2026-0001", clientId: "k-1", marchandise: "Agrumes (clémentines), 24 palettes", origine: "Agadir", paysOrigine: "Maroc", destination: "Perpignan", paysDest: "France", dateChargement: j(-45), dateLivraison: j(-42), poids: 22000, palettes: 24, prix: 2900, devise: "EUR", chauffeurId: "h2", camionId: "c2", cmr: "MA-458812", ferry: 6500, fraisChauffeur: 2500, autres: 300, statut: "livre", jalons: jalons("confirme", "charge", "transit", "douane", "livre"), factureId: "f1" },
+    { id: "o2", ref: "CMD-2026-0002", clientId: "k-3", marchandise: "Confection textile, 18 palettes", origine: "Tanger", paysOrigine: "Maroc", destination: "Madrid", paysDest: "Espagne", dateChargement: j(-5), dateLivraison: j(-3), poids: 9000, palettes: 18, prix: 1850, devise: "EUR", chauffeurId: "h1", camionId: "c1", cmr: "MA-458830", ferry: 5200, fraisChauffeur: 1800, autres: 0, statut: "livre", jalons: jalons("confirme", "charge", "transit", "douane", "livre") },
+    { id: "o3", ref: "CMD-2026-0003", clientId: "k-2", marchandise: "Retour : emballages vides", origine: "Perpignan", paysOrigine: "France", destination: "Casablanca", paysDest: "Maroc", dateChargement: j(-2), dateLivraison: j(1), poids: 6000, palettes: 30, prix: 1400, devise: "EUR", chauffeurId: "h2", camionId: "c2", cmr: "FR-221904", ferry: 6500, fraisChauffeur: 2200, autres: 0, statut: "douane", jalons: jalons("confirme", "charge", "transit", "douane") },
+    { id: "o4", ref: "CMD-2026-0004", clientId: "k-1", marchandise: "Agrumes, 26 palettes", origine: "Agadir", paysOrigine: "Maroc", destination: "Rungis", paysDest: "France", dateChargement: j(0), dateLivraison: j(3), poids: 23500, palettes: 26, prix: 3200, devise: "EUR", chauffeurId: "", camionId: "", cmr: "", ferry: 6500, fraisChauffeur: 2800, autres: 0, statut: "confirme", jalons: jalons("confirme") },
+    { id: "o5", ref: "CMD-2026-0005", clientId: "k-3", marchandise: "Textile, 12 palettes", origine: "Tanger", paysOrigine: "Maroc", destination: "Casablanca", paysDest: "Maroc", dateChargement: j(4), dateLivraison: j(4), poids: 5000, palettes: 12, prix: 6500, devise: "MAD", chauffeurId: "h1", camionId: "c1", statut: "devis", jalons: [] },
+  ];
+  e.trajets.push(
+    { id: "t2", depart: "Agadir", arrivee: "Perpignan", distance: 2150, peage: 2600, conso: 32.5, date: j(-45), chauffeurId: "h2", camionId: "c2", client: "Souss Export · CMD-2026-0001", statut: "termine" },
+    { id: "t3", depart: "Tanger", arrivee: "Madrid", distance: 650, peage: 900, conso: 34, date: j(-5), chauffeurId: "h1", camionId: "c1", client: "Textiles Tanger · CMD-2026-0002", statut: "termine" },
+  );
+  e.trajets.forEach((t) => { if (!t.calcul) t.calcul = calculTrajet({ distance: t.distance, peage: t.peage, conso: t.conso, prix: 11 }); });
+  e.commandes[0].trajetId = "t2"; e.commandes[1].trajetId = "t3";
+  e.factures = [
+    { id: "f1", numero: "FAC-2026-0001", clientId: "k-1", commandeIds: ["o1"], date: j(-41), echeance: j(-11), devise: "EUR", tva: 0, statut: "emise", lignes: [{ designation: "Transport Agadir → Perpignan (France) — Agrumes · CMD-2026-0001 · CMR MA-458812", montant: 2900 }] },
+    { id: "f0", numero: "FAC-2026-0000", clientId: "k-3", commandeIds: [], date: j(-50), echeance: j(-20), devise: "MAD", tva: 14, statut: "payee", datePaiement: j(-18), mode: "virement", lignes: [{ designation: "Transport Tanger → Casablanca — textile", montant: 6000 }] },
+  ];
+  e.commandes[0].factureId = "f1";
   e.codes = [{ id: "k1", code: "4011.20", designation: "Pneumatiques neufs pour autobus ou camions (à compléter à 10 chiffres)", droit: "", notes: "Vérifier le taux sur le portail ADII" }];
   e.meta.derniereSauvegarde = new Date().toISOString();
   return e;
@@ -1019,7 +1094,10 @@ function donneesDemo() {
    ============================================================ */
 document.addEventListener("click", (e) => {
   const tab = e.target.closest("[data-tab]");
-  if (tab) return afficher(tab.dataset.tab);
+  if (tab && !tab.closest("dialog")) {
+    const go = () => afficher(tab.dataset.tab);
+    return document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches ? document.startViewTransition(go) : go();
+  }
   const b = e.target.closest("[data-act]");
   if (!b || !b.closest("#app, #actions")) return;
   if (b.dataset.act === "aller") return afficher(b.dataset.id);
@@ -1043,4 +1121,65 @@ setInterval(() => { if (["tableau", "chauffeurs"].includes(ongletActif) && !$("#
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
 
-afficher("tableau");
+function menuPlus() {
+  const d = $("#modale");
+  const groupes = {};
+  ONGLETS.filter(([id]) => !ONGLETS_MOBILE.includes(id)).forEach((o) => (groupes[o[3]] ||= []).push(o));
+  modale({ titre: "Menu", valider: "Fermer", annuler: "", corps: Object.entries(groupes).map(([g, os]) =>
+    `<div class="section-title" style="margin-top:4px">${g}</div><div class="sheet-grid">${os.map(([id, lib, icone]) => `<button type="button" class="sheet-item" data-tab="${id}">${ic(icone)}<span>${lib}</span></button>`).join("")}</div>`).join("") });
+  d.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { d.close(); afficher(b.dataset.tab); }));
+}
+
+/* ---------- Recherche globale (⌘K / Ctrl+K) ---------- */
+function indexRecherche() {
+  const r = [];
+  const add = (onglet, icone, titre, sous) => r.push({ onglet, icone, titre, sous, cle: sansAccent(titre + " " + sous) });
+  ONGLETS.forEach(([id, lib, icone]) => add(id, icone, lib, "Aller à la page"));
+  S.commandes.forEach((c) => add("commandes", "box", `${c.ref} · ${nomClient(c.clientId)}`, `${c.origine} → ${c.destination} · ${libStatutCmd(c.statut)}${c.cmr ? " · CMR " + c.cmr : ""}`));
+  S.clients.forEach((c) => add("clients", "building", c.nom, [c.ville, c.pays, c.ice].filter(Boolean).join(" · ")));
+  S.factures.forEach((f) => add("factures", "receipt", `${f.numero} · ${nomClient(f.clientId)}`, `${fmtDevise(totauxFacture(f).ttc, f.devise)} · ${etatFacture(f).texte}`));
+  S.camions.forEach((c) => add("camions", "truck", c.immat, `${c.marque || ""} · ${fmt(c.km)} km`));
+  S.chauffeurs.forEach((c) => add("chauffeurs", "users", c.nom, `${c.tel || ""} · ${etatChauffeur(c).texte}`));
+  S.dossiers.forEach((d) => add("douane", "file", `${d.ref} · ${d.client}`, `${d.marchandise || ""} ${d.codeSH ? "· SH " + d.codeSH : ""}`));
+  S.trajets.forEach((t) => add("itineraires", "route", `${t.depart} → ${t.arrivee}`, `${dateFr(t.date)} · ${nomChauffeur(t.chauffeurId)}`));
+  S.codes.forEach((c) => add("nomenclature", "search", c.code, c.designation));
+  return r;
+}
+function ouvrirRecherche() {
+  const d = $("#palette");
+  if (d.open) return;
+  const index = indexRecherche();
+  d.innerHTML = `<div class="palette"><div class="search">${ic("search")}<input id="pq" type="search" placeholder="Commande, client, camion, facture, CMR…" autocomplete="off" aria-label="Rechercher"></div><div id="pres" role="listbox"></div><div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> naviguer</span><span><kbd>↵</kbd> ouvrir</span><span><kbd>esc</kbd> fermer</span></div></div>`;
+  let sel = 0, res = [];
+  const rendre = () => {
+    const q = sansAccent($("#pq").value).trim().split(/\s+/).filter(Boolean);
+    res = (q.length ? index.filter((x) => q.every((m) => x.cle.includes(m))) : index.filter((x) => x.sous === "Aller à la page")).slice(0, 12);
+    sel = Math.min(sel, Math.max(0, res.length - 1));
+    $("#pres").innerHTML = res.map((x, i) => `<button type="button" class="pres ${i === sel ? "sel" : ""}" data-i="${i}" role="option">${ic(x.icone)}<span><strong>${esc(x.titre)}</strong><span class="sub">${esc(x.sous)}</span></span></button>`).join("") || `<p class="hint" style="padding:12px 16px;margin:0">Aucun résultat.</p>`;
+  };
+  const ouvrir = (i) => { const x = res[i]; if (!x) return; d.close(); afficher(x.onglet); };
+  d.oninput = () => { sel = 0; rendre(); };
+  d.onkeydown = (e) => {
+    if (e.key === "ArrowDown") { sel = Math.min(sel + 1, res.length - 1); rendre(); e.preventDefault(); }
+    if (e.key === "ArrowUp") { sel = Math.max(sel - 1, 0); rendre(); e.preventDefault(); }
+    if (e.key === "Enter") { ouvrir(sel); e.preventDefault(); }
+  };
+  d.onclick = (e) => { const b = e.target.closest(".pres"); if (b) ouvrir(+b.dataset.i); else if (e.target === d) d.close(); };
+  d.showModal(); rendre(); $("#pq").focus();
+}
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); ouvrirRecherche(); }
+});
+document.addEventListener("click", (e) => {
+  const g = e.target.closest("[data-act-global]");
+  if (!g) return;
+  if (g.dataset.actGlobal === "plus") menuPlus();
+  if (g.dataset.actGlobal === "recherche") ouvrirRecherche();
+});
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (VUES[h] && h !== ongletActif) afficher(h); });
+
+// Démarrage après le chargement de tous les scripts (commercial.js ajoute ses vues).
+document.addEventListener("DOMContentLoaded", () => {
+  const h = location.hash.slice(1);
+  afficher(VUES[h] ? h : "tableau");
+});

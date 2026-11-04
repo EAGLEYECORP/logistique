@@ -20,18 +20,48 @@ const PARAMS_DEFAUT = {
   conduiteAvantPause: 4.5, // heures avant une pause
   dureePause: 0.75,        // heures (45 min)
   seuilConso: 15,          // % au-dessus de la moyenne = anomalie
+  tauxEUR: 10.8,           // MAD pour 1 EUR — à mettre à jour
+  tvaDefaut: 14,           // % — à vérifier avec votre comptable (export, transport international…)
+  delaiPaiement: 30,       // jours, si le client n'en a pas
 };
+
+// Documents suivis avec date d'expiration (transport national et international).
+const DOCS_CAMION = [
+  ["assurance", "Assurance"],
+  ["visite", "Visite technique"],
+  ["carteVerte", "Carte verte"],
+  ["tachygraphe", "Tachygraphe"],
+  ["autorisation", "Autorisation internationale"],
+];
+const DOCS_CHAUFFEUR = [
+  ["permis", "Permis"],
+  ["visiteMedicale", "Visite médicale"],
+  ["passeport", "Passeport"],
+  ["visa", "Visa Schengen"],
+  ["carteConducteur", "Carte conducteur"],
+];
+
+const STATUTS_CMD = [
+  ["devis", "Devis"],
+  ["confirme", "Confirmée"],
+  ["charge", "Chargée"],
+  ["transit", "En transit"],
+  ["douane", "En douane"],
+  ["livre", "Livrée"],
+];
+const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "Pays-Bas", "Allemagne", "Royaume-Uni", "Suisse", "Mauritanie", "Sénégal", "Autre"];
 
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    params: { ...PARAMS_DEFAUT }, meta: {},
+    clients: [], commandes: [], factures: [],
+    params: { ...PARAMS_DEFAUT }, meta: {}, entreprise: {},
   };
 }
 
 function normaliser(e) {
   const base = etatVide();
-  return { ...base, ...e, params: { ...PARAMS_DEFAUT, ...(e?.params || {}) }, meta: { ...(e?.meta || {}) } };
+  return { ...base, ...e, params: { ...PARAMS_DEFAUT, ...(e?.params || {}) }, meta: { ...(e?.meta || {}) }, entreprise: { ...(e?.entreprise || {}) } };
 }
 
 let S = etatVide();
@@ -95,7 +125,7 @@ function etatCamion(c) {
   };
   echeanceKm("Vidange", c.kmVidange, c.intervalleVidange, "dépassée");
   echeanceKm("Pneus", c.kmPneus, c.intervallePneus, "usure dépassée");
-  for (const [cle, lib] of [["assurance", "Assurance"], ["visite", "Visite technique"]]) {
+  for (const [cle, lib] of DOCS_CAMION) {
     const j = joursAvant(c[cle]);
     if (j === null) continue;
     out.push({ type: lib, niveau: j < 0 ? "danger" : j <= P.alerteJours ? "warn" : "ok", texte: j < 0 ? `expirée depuis ${-j} j` : `expire dans ${j} j` });
@@ -182,10 +212,11 @@ function alertes() {
   for (const ch of S.chauffeurs) {
     const e = etatChauffeur(ch);
     if (e.niveau === "danger") ajouter("danger", "chauffeurs", `${ch.nom} — ${e.texte}`);
-    const j = joursAvant(ch.permis);
-    if (j !== null && j >= 0 && j <= P.alerteJours) ajouter("warn", "chauffeurs", `${ch.nom} — permis expire dans ${j} j`);
-    const jv = joursAvant(ch.visiteMedicale);
-    if (jv !== null && jv <= P.alerteJours) ajouter(jv < 0 ? "danger" : "warn", "chauffeurs", `${ch.nom} — visite médicale ${jv < 0 ? `expirée depuis ${-jv} j` : `dans ${jv} j`}`);
+    for (const [cle, lib] of DOCS_CHAUFFEUR) {
+      const j = joursAvant(ch[cle]);
+      if (j === null || j > P.alerteJours || (cle === "permis" && j < 0)) continue; // permis expiré : déjà signalé par l'état
+      ajouter(j < 0 ? "danger" : "warn", "chauffeurs", `${ch.nom} — ${lib} : ${j < 0 ? `échéance dépassée de ${-j} j` : `échéance dans ${j} j`}`);
+    }
   }
   const responsables = {};
   for (const ch of S.chauffeurs) if (ch.camionId) (responsables[ch.camionId] ||= []).push(ch.nom);
@@ -200,10 +231,81 @@ function alertes() {
     const jd = joursAvant(d.echeance);
     if (jd !== null && jd <= 3 && faits < items.length) ajouter(jd < 0 ? "danger" : "warn", "douane", `Dossier ${d.ref} — échéance ${jd < 0 ? "dépassée" : jd === 0 ? "aujourd'hui" : `dans ${jd} j`} (${faits}/${items.length} documents)`);
   }
+  for (const f of S.factures) {
+    const e = etatFacture(f);
+    if (e.code === "retard") ajouter("danger", "factures", `Facture ${f.numero} (${nomClient(f.clientId)}) — ${e.texte}, ${fmtDevise(totauxFacture(f).ttc, f.devise)}`);
+  }
+  for (const c of S.commandes) {
+    if (c.statut === "livre" && !c.factureId) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`);
+    const jc = joursAvant(c.dateChargement);
+    if (["devis", "confirme"].includes(c.statut) && jc !== null && jc <= 1 && (!c.chauffeurId || !c.camionId)) {
+      ajouter(jc < 0 ? "danger" : "warn", "commandes", `Commande ${c.ref} — chargement ${jc < 0 ? "en retard" : jc === 0 ? "aujourd'hui" : "demain"}, chauffeur ou camion non affecté`);
+    }
+  }
   const aDesDonnees = S.camions.length || S.chauffeurs.length || S.dossiers.length;
   const js = S.meta.derniereSauvegarde ? -joursAvant(S.meta.derniereSauvegarde.slice(0, 10)) : Infinity;
   if (aDesDonnees && js > 7) ajouter("warn", "parametres", S.meta.derniereSauvegarde ? `Dernière sauvegarde il y a ${js} jours — exportez vos données` : "Aucune sauvegarde de vos données — exportez-les");
 
   const ordre = { danger: 0, warn: 1 };
   return liste.sort((a, b) => ordre[a.niveau] - ordre[b.niveau]);
+}
+
+/* ---------- commercial : commandes, factures, marges ---------- */
+const nomClient = (id) => parId(S.clients, id)?.nom || "—";
+const libStatutCmd = (s) => (STATUTS_CMD.find(([k]) => k === s) || [, s])[1];
+const fmtDevise = (n, devise = "MAD") => `${fmt(n, 2)} ${devise === "EUR" ? "€" : "MAD"}`;
+
+function versMAD(montant, devise) {
+  return devise === "EUR" ? num(montant) * S.params.tauxEUR : num(montant);
+}
+
+/** Coût d'une commande en MAD : trajet lié (gasoil + péages) + ferry + frais chauffeur + autres. */
+function coutCommande(c) {
+  const t = c.trajetId && parId(S.trajets, c.trajetId);
+  return (t ? t.calcul.coutTotal : 0) + num(c.ferry) + num(c.fraisChauffeur) + num(c.autres);
+}
+
+function margeCommande(c) {
+  const prix = versMAD(c.prix, c.devise);
+  const marge = prix - coutCommande(c);
+  return { prix, cout: prix - marge, marge, taux: prix ? (marge / prix) * 100 : 0 };
+}
+
+function totauxFacture(f) {
+  const ht = (f.lignes || []).reduce((s, l) => s + num(l.montant), 0);
+  const tva = (ht * num(f.tva)) / 100;
+  return { ht, tva, ttc: ht + tva };
+}
+
+/** Prochain numéro de pièce : PREFIXE-AAAA-0001, séquentiel par année. */
+function prochainNumero(prefixe, liste, champ, annee = today().slice(0, 4)) {
+  const re = new RegExp(`^${prefixe}-${annee}-(\\d+)$`);
+  const max = liste.reduce((m, x) => { const r = re.exec(x[champ] || ""); return r ? Math.max(m, +r[1]) : m; }, 0);
+  return `${prefixe}-${annee}-${String(max + 1).padStart(4, "0")}`;
+}
+
+function etatFacture(f) {
+  if (f.statut === "payee") return { code: "payee", niveau: "ok", texte: `Payée le ${dateFr(f.datePaiement)}` };
+  const j = joursAvant(f.echeance);
+  if (j !== null && j < 0) return { code: "retard", niveau: "danger", texte: `en retard de ${-j} j` };
+  return { code: "attente", niveau: "warn", texte: j === null ? "En attente" : j === 0 ? "Échéance aujourd'hui" : `Échéance dans ${j} j` };
+}
+
+/** Encours clients en MAD (factures non payées) et part en retard. */
+function encoursClients(clientId = null) {
+  let total = 0, retard = 0;
+  for (const f of S.factures) {
+    if (f.statut === "payee" || (clientId && f.clientId !== clientId)) continue;
+    const m = versMAD(totauxFacture(f).ttc, f.devise);
+    total += m;
+    if (etatFacture(f).code === "retard") retard += m;
+  }
+  return { total, retard };
+}
+
+/** Chiffre d'affaires et marge des commandes livrées depuis une date (MAD). */
+function activiteDepuis(depuis) {
+  const cmds = S.commandes.filter((c) => c.statut === "livre" && (c.dateLivraison || "") >= depuis);
+  const r = cmds.reduce((a, c) => { const m = margeCommande(c); a.ca += m.prix; a.marge += m.marge; return a; }, { ca: 0, marge: 0 });
+  return { ...r, nb: cmds.length, taux: r.ca ? (r.marge / r.ca) * 100 : 0 };
 }

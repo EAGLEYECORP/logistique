@@ -7,7 +7,7 @@ const assert = require("assert");
 const racine = path.join(__dirname, "..");
 const ctx = vm.createContext({ console });
 vm.runInContext(["data.js", "noyau.js", "ia.js"].map((f) => fs.readFileSync(path.join(racine, f), "utf8")).join("\n") +
-  "\n;globalThis.__ = { get S() { return S; }, set S(v) { S = v; }, etatVide, consommations, consoMoyenne, etatCamion, etatChauffeur, calculTrajet, alertes, depensesHebdo, num, joursAvant, today, dateISO, iaInterpreter, iaCout, IA_SCHEMA };", ctx);
+  "\n;globalThis.__ = { get S() { return S; }, set S(v) { S = v; }, etatVide, consommations, consoMoyenne, etatCamion, etatChauffeur, calculTrajet, alertes, depensesHebdo, num, joursAvant, today, dateISO, iaInterpreter, iaCout, IA_SCHEMA, versMAD, coutCommande, margeCommande, totauxFacture, prochainNumero, etatFacture, encoursClients, activiteDepuis };", ctx);
 const N = ctx.__;
 
 let ok = 0;
@@ -152,6 +152,76 @@ test("IA : schéma strict (tous les champs requis, pas de champ libre)", () => {
     if (o.type === "array") verifier(o.items);
   };
   verifier(N.IA_SCHEMA);
+});
+
+test("commande : marge avec trajet lié, frais et conversion EUR", () => {
+  N.S.params.tauxEUR = 10;
+  N.S.trajets = [{ id: "t", calcul: { coutTotal: 5000 } }];
+  const c = { prix: 2000, devise: "EUR", trajetId: "t", ferry: 6000, fraisChauffeur: 2000, autres: 500 };
+  assert.strictEqual(N.versMAD(100, "EUR"), 1000);
+  assert.strictEqual(N.coutCommande(c), 13500);
+  const m = N.margeCommande(c);
+  assert.strictEqual(m.prix, 20000);
+  assert.strictEqual(m.marge, 6500);
+  assert.strictEqual(m.taux, 32.5);
+});
+
+test("facture : totaux HT / TVA / TTC", () => {
+  const t = N.totauxFacture({ tva: 14, lignes: [{ montant: 1000 }, { montant: "500" }] });
+  assert.deepStrictEqual({ ...t }, { ht: 1500, tva: 210, ttc: 1710 });
+});
+
+test("numérotation séquentielle par année", () => {
+  const l = [{ n: "FAC-2026-0007" }, { n: "FAC-2026-0002" }, { n: "FAC-2025-0040" }, { n: "autre" }];
+  assert.strictEqual(N.prochainNumero("FAC", l, "n", "2026"), "FAC-2026-0008");
+  assert.strictEqual(N.prochainNumero("FAC", l, "n", "2027"), "FAC-2027-0001");
+});
+
+test("facture en retard, encours et alertes", () => {
+  N.S.params.tauxEUR = 10;
+  N.S.clients = [{ id: "k", nom: "Client" }];
+  N.S.factures = [
+    { id: "a", numero: "FAC-1", clientId: "k", devise: "EUR", tva: 0, statut: "emise", echeance: jour(-3), lignes: [{ montant: 100 }] },
+    { id: "b", numero: "FAC-2", clientId: "k", devise: "MAD", tva: 0, statut: "emise", echeance: jour(10), lignes: [{ montant: 500 }] },
+    { id: "c", numero: "FAC-3", clientId: "k", devise: "MAD", tva: 0, statut: "payee", echeance: jour(-30), lignes: [{ montant: 9999 }] },
+  ];
+  assert.strictEqual(N.etatFacture(N.S.factures[0]).code, "retard");
+  assert.strictEqual(N.etatFacture(N.S.factures[2]).code, "payee");
+  assert.deepStrictEqual({ ...N.encoursClients() }, { total: 1500, retard: 1000 });
+  N.S.commandes = [
+    { id: "o", ref: "CMD-1", statut: "livre", factureId: null },
+    { id: "p", ref: "CMD-2", statut: "confirme", dateChargement: N.today(), chauffeurId: "", camionId: "" },
+  ];
+  N.S.meta.derniereSauvegarde = new Date().toISOString();
+  const t = N.alertes().map((a) => a.texte).join("\n");
+  assert.match(t, /FAC-1.*en retard de 3 j/);
+  assert.match(t, /CMD-1 livrée — à facturer/);
+  assert.match(t, /CMD-2 — chargement aujourd'hui/);
+  assert.doesNotMatch(t, /FAC-2|FAC-3/);
+});
+
+test("documents internationaux : visa et carte conducteur", () => {
+  N.S.params.alerteJours = 30;
+  N.S.chauffeurs = [{ id: "h", nom: "Ali", visa: jour(5), carteConducteur: jour(-1), permis: jour(-2) }];
+  N.S.camions = [{ id: "c", immat: "X", km: 0, kmVidange: 0, intervalleVidange: 40000, kmPneus: 0, intervallePneus: 100000, carteVerte: jour(-1) }];
+  N.S.meta.derniereSauvegarde = new Date().toISOString();
+  const t = N.alertes().map((a) => a.texte).join("\n");
+  assert.match(t, /Visa Schengen : échéance dans 5 j/);
+  assert.match(t, /Carte conducteur : échéance dépassée de 1 j/);
+  assert.match(t, /Carte verte expirée/);
+  assert.strictEqual((t.match(/ermis/g) || []).length, 1); // permis expiré signalé une seule fois
+});
+
+test("activité : CA et marge des livraisons récentes", () => {
+  N.S.params.tauxEUR = 10;
+  N.S.trajets = [];
+  N.S.commandes = [
+    { statut: "livre", dateLivraison: jour(-5), prix: 100, devise: "EUR", ferry: 400 },
+    { statut: "livre", dateLivraison: jour(-60), prix: 999, devise: "EUR" },
+    { statut: "transit", dateLivraison: jour(-1), prix: 999, devise: "EUR" },
+  ];
+  const a = N.activiteDepuis(jour(-30));
+  assert.strictEqual(a.nb, 1); assert.strictEqual(a.ca, 1000); assert.strictEqual(a.marge, 600);
 });
 
 console.log(`\n${ok} test(s) réussi(s)`);

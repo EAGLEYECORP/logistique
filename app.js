@@ -44,6 +44,7 @@ const P_ = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   print: '<path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7z"/>',
   gauge: '<path d="M12 14 16 9M3.5 18a9 9 0 1 1 17 0"/>',
+  sparkles: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8zM5 2l.6 1.4L7 4l-1.4.6L5 6l-.6-1.4L3 4l1.4-.6z"/>',
   phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
 };
 const ic = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${P_[n] || ""}</svg>`;
@@ -655,6 +656,7 @@ VUES.douane = {
           ${d.notes ? `<p class="hint">${esc(d.notes)}</p>` : ""}
           <div class="row">
             ${btn(d.statut === "clos" ? "rouvrir" : "clore", d.statut === "clos" ? "Rouvrir" : "Clore le dossier", { id: d.id, icone: d.statut === "clos" ? "" : "check", cls: "btn ghost sm" })}
+            ${btn("ia-sh", "Code SH avec l'IA", { id: d.id, icone: "sparkles", cls: "btn ghost sm" })}
             ${btn("imprimer", "Imprimer", { id: d.id, icone: "print", cls: "btn ghost sm" })}
             ${btn("modifier", "Modifier", { id: d.id, icone: "edit", cls: "btn ghost sm" })}
             ${btn("suppr", "Supprimer", { id: d.id, cls: "btn text-danger sm" })}
@@ -709,6 +711,11 @@ VUES.douane = {
     if (act === "clore") { d.statut = "clos"; dossiersOuverts.delete(id); sauver(); toast(`Dossier ${d.ref} clos`); rafraichir(); }
     if (act === "rouvrir") { d.statut = "ouvert"; sauver(); rafraichir(); }
     if (act === "imprimer") imprimerDossier(d);
+    if (act === "ia-sh") {
+      Object.assign(iaEtat, { dossierId: d.id, description: d.marchandise || "", details: "", resultat: null, erreur: "" });
+      afficher("nomenclature");
+      $("#f-ia-sh [name=description]")?.focus();
+    }
     if (act === "suppr" && (await confirmer(`Supprimer le dossier ${d.ref} ?`, "Cette action est définitive."))) { S.dossiers = S.dossiers.filter((x) => x.id !== id); sauver(); rafraichir(); }
   },
 };
@@ -736,15 +743,45 @@ VUES.nomenclature = {
   titre: "Codes SH",
   sous: "Nomenclature du Système Harmonisé et vos codes habituels",
   actions: () => btn("ajouter", "Ajouter un code", { icone: "plus" }),
-  rendu: () => `
+  rendu: () => `${blocIA()}
     <div class="card">
       <div class="search">${ic("search")}<input id="q" type="search" placeholder="Rechercher : pneumatiques, 87, huile, textile…" value="${esc(recherche)}" autocomplete="off"></div>
       <div id="res-nomenclature"></div>
       <p class="hint">Les 2 premiers chiffres du code donnent le chapitre. Le code marocain complet compte 10 chiffres : consultez le tarif officiel de l'ADII avant toute déclaration.</p>
     </div>`,
   apres() { rendreRecherche(); },
-  saisie(e) { if (e.target.id === "q") { recherche = e.target.value; rendreRecherche(); } },
+  saisie(e) {
+    if (e.target.id === "q") { recherche = e.target.value; rendreRecherche(); }
+    if (e.target.form?.id === "f-ia-sh") iaEtat[e.target.name] = e.target.value;
+  },
+  async soumettre(fid, v) {
+    if (fid !== "f-ia-sh" || iaEtat.enCours) return;
+    Object.assign(iaEtat, { description: v.description, details: v.details, enCours: true, erreur: "", resultat: null });
+    rafraichir();
+    try { iaEtat.resultat = await iaClasser(v); }
+    catch (e) { iaEtat.erreur = e.message; }
+    finally {
+      iaEtat.enCours = false;
+      if (ongletActif === "nomenclature") rafraichir();
+      if (iaEtat.resultat) toast(`${iaEtat.resultat.suggestions.length} proposition${iaEtat.resultat.suggestions.length > 1 ? "s" : ""} de classement`);
+    }
+  },
   async agir(act, id) {
+    const sug = iaEtat.resultat?.suggestions?.[+id];
+    if (act === "ia-ajouter" && sug) {
+      const code = sug.code_national || sug.code_sh6;
+      if (S.codes.some((c) => c.code === code)) return toast(`Le code ${code} est déjà dans vos codes.`, "warn");
+      S.codes.push({ id: uid(), code, designation: sug.designation, droit: "", notes: `Proposé par l'assistant IA (confiance ${LIB_CONFIANCE[sug.confiance][0].toLowerCase()}) — à vérifier sur le tarif ADII.${sug.points_a_verifier.length ? " À vérifier : " + sug.points_a_verifier.join(" ; ") : ""}` });
+      sauver(); toast(`Code ${code} ajouté à vos codes`); rafraichir();
+    }
+    if (act === "ia-appliquer" && sug) {
+      const d = parId(S.dossiers, iaEtat.dossierId);
+      if (!d) return;
+      d.codeSH = sug.code_national || sug.code_sh6;
+      sauver(); toast(`Code ${d.codeSH} appliqué au dossier ${d.ref}`);
+      iaEtat.dossierId = null; dossiersOuverts.add(d.id); afficher("douane");
+    }
+    if (act === "ia-effacer") { Object.assign(iaEtat, { description: "", details: "", resultat: null, erreur: "", dossierId: null }); rafraichir(); }
     if (act === "ajouter") {
       const v = await formulaire("Ajouter un code habituel", [
         { name: "code", label: "Code SH (10 chiffres)", required: true, placeholder: "4011.20.00.00" },
@@ -758,6 +795,57 @@ VUES.nomenclature = {
     if (act === "suppr-code" && (await confirmer("Supprimer ce code ?", parId(S.codes, id)?.designation || ""))) { S.codes = S.codes.filter((c) => c.id !== id); sauver(); rendreRecherche(); }
   },
 };
+const iaEtat = { description: "", details: "", enCours: false, resultat: null, erreur: "", dossierId: null };
+const LIB_CONFIANCE = { elevee: ["Confiance élevée", "ok"], moyenne: ["Confiance moyenne", "warn"], faible: ["Confiance faible", "danger"] };
+
+function blocIA() {
+  const conf = iaConfig();
+  if (!conf.cle) {
+    return `<div class="card ia-card"><div class="ia-intro"><span class="ia-ico">${ic("sparkles")}</span>
+      <div><h2>Assistant IA de classement</h2><p class="hint" style="margin:4px 0 0">Décrivez une marchandise : l'assistant propose le code SH, explique son raisonnement (RGI) et signale les contrôles probables. Il faut une clé API Anthropic (paiement à l'usage, quelques centimes par demande).</p></div></div>
+      <div class="row" style="margin-top:14px">${btn("aller", "Configurer l'assistant", { id: "parametres", icone: "settings" })}</div></div>`;
+  }
+  const dossier = iaEtat.dossierId && parId(S.dossiers, iaEtat.dossierId);
+  const r = iaEtat.resultat;
+  const liste = (titre, items) => items?.length ? `<div class="section-title">${titre}</div><ul class="ia-list">${items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+  return `<div class="card ia-card">
+    <div class="card-head"><h2 class="row" style="gap:10px"><span class="ia-ico sm">${ic("sparkles")}</span>Assistant IA de classement</h2>${badge(iaModele(conf.modele).nom.split(" — ")[0], "neutral")}</div>
+    ${dossier ? `<p class="hint" style="margin:0 0 12px">Pour le dossier <strong>${esc(dossier.ref)}</strong> · ${esc(dossier.client)}</p>` : ""}
+    <form id="f-ia-sh">
+      ${champs([
+        { name: "description", label: "Marchandise", type: "textarea", full: true, required: true, value: iaEtat.description },
+        { name: "details", label: "Précisions (matière, usage, présentation, état neuf ou usagé…)", full: true, value: iaEtat.details },
+      ])}
+      <div class="row" style="justify-content:space-between;margin-top:14px">
+        <p class="hint" style="margin:0">Plus la description est précise, plus le classement est fiable. Le coût de chaque demande s'affiche avec la réponse.</p>
+        <div class="row">${r || iaEtat.erreur ? btn("ia-effacer", "Effacer", { cls: "btn ghost" }) : ""}
+          <button class="btn" ${iaEtat.enCours ? "disabled" : ""}>${iaEtat.enCours ? '<span class="spinner"></span>Analyse en cours…' : ic("sparkles") + "Proposer un classement"}</button></div>
+      </div>
+    </form>
+    ${iaEtat.erreur ? `<div class="ia-erreur">${ic("alert")}<span>${esc(iaEtat.erreur)}</span></div>` : ""}
+    ${r ? `<div class="ia-res">
+      <p class="hint" style="margin:0 0 4px">Marchandise comprise : <strong>${esc(r.comprehension)}</strong></p>
+      ${r.suggestions.map((s, i) => {
+        const [lc, nc] = LIB_CONFIANCE[s.confiance] || LIB_CONFIANCE.faible;
+        return `<div class="ia-sug">
+          <div class="row" style="justify-content:space-between">
+            <div class="row"><span class="code-pill lg">${esc(s.code_sh6)}</span>${s.code_national ? `<span class="sub">National proposé : <strong>${esc(s.code_national)}</strong> (à vérifier)</span>` : ""}</div>
+            ${badge(lc, nc)}
+          </div>
+          <div class="ia-des">${esc(s.designation)}</div>
+          <p class="ia-just">${esc(s.justification)}</p>
+          ${s.points_a_verifier.length ? `<ul class="ia-list">${s.points_a_verifier.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : ""}
+          <div class="row">${btn("ia-ajouter", "Ajouter à mes codes", { id: String(i), icone: "plus", cls: "btn ghost sm" })}
+            ${dossier ? btn("ia-appliquer", `Appliquer au dossier ${dossier.ref}`, { id: String(i), icone: "check", cls: "btn sm" }) : ""}</div>
+        </div>`;
+      }).join("")}
+      ${liste("Pour affiner le classement", r.questions)}
+      ${liste("Contrôles et autorisations probables", r.controles)}
+      <p class="hint">${esc(r.modele)}${r.secours ? " (modèle de secours)" : ""} · coût ≈ ${r.cout < 0.01 ? "< 0,01" : fmt(r.cout, 2)} $ · Proposition indicative : vérifiez toujours sur le tarif officiel de l'ADII avant de déclarer.</p>
+    </div>` : ""}
+  </div>`;
+}
+
 function rendreRecherche() {
   const q = sansAccent(recherche).trim();
   const qCode = q.replace(/[\s.]/g, "");
@@ -799,6 +887,7 @@ VUES.parametres = {
         <div class="row" style="justify-content:flex-end;margin-top:12px">${btn("defaut", "Valeurs par défaut", { cls: "btn ghost" })}<button class="btn">Enregistrer</button></div>
       </form>
     </div>
+    ${carteReglagesIA()}
     <div class="grid-2">
       <div class="card">
         <div class="card-head"><h2>Sauvegarde</h2>${ds ? badge(`Dernière : ${dateFr(ds.slice(0, 10))}`, -joursAvant(ds.slice(0, 10)) > 7 ? "warn" : "ok") : badge("Jamais", "warn")}</div>
@@ -831,6 +920,11 @@ VUES.parametres = {
     });
   },
   soumettre(fid, v) {
+    if (fid === "f-ia") {
+      const actuelle = iaConfig();
+      iaSauverConfig({ cle: v.cle || actuelle.cle, modele: v.modele });
+      toast(v.cle || actuelle.cle ? "Assistant IA configuré" : "Modèle enregistré"); return rafraichir();
+    }
     for (const k of Object.keys(PARAMS_DEFAUT)) S.params[k] = num(v[k], PARAMS_DEFAUT[k]);
     sauver(); toast("Réglages enregistrés"); rafraichir();
   },
@@ -847,9 +941,40 @@ VUES.parametres = {
     if (act === "demo" && (!S.camions.length || (await confirmer("Charger l'exemple ?", "Les données actuelles seront remplacées.", "Remplacer")))) {
       S = donneesDemo(); sauver(); toast("Données d'exemple chargées"); afficher("tableau");
     }
+    if (act === "ia-verifier") {
+      const b = $("#app [data-act=ia-verifier]");
+      b.disabled = true; b.innerHTML = '<span class="spinner"></span>Vérification…';
+      try { toast(`Clé valide · ${await iaVerifierCle()} disponible`); }
+      catch (e) { toast(e.message, "danger"); }
+      finally { rafraichir(); }
+    }
+    if (act === "ia-oublier" && (await confirmer("Retirer la clé API ?", "L'assistant IA sera désactivé sur cet appareil.", "Retirer"))) {
+      iaSauverConfig({ ...iaConfig(), cle: "" }); toast("Clé retirée"); rafraichir();
+    }
     if (act === "installer" && invitationInstall) { invitationInstall.prompt(); invitationInstall = null; rafraichir(); }
   },
 };
+
+function carteReglagesIA() {
+  const c = iaConfig();
+  const masque = c.cle ? `${c.cle.slice(0, 10)}…${c.cle.slice(-4)}` : "";
+  return `<div class="card">
+    <div class="card-head"><h2 class="row" style="gap:10px"><span class="ia-ico sm">${ic("sparkles")}</span>Assistant IA</h2>${c.cle ? badge("Activé", "ok") : badge("Non configuré", "neutral")}</div>
+    <form id="f-ia">
+      ${champs([
+        { name: "cle", label: c.cle ? `Clé API Anthropic (actuelle : ${masque})` : "Clé API Anthropic", type: "password", placeholder: c.cle ? "Laisser vide pour garder la clé actuelle" : "sk-ant-…", autocomplete: "off" },
+        { name: "modele", label: "Modèle", type: "select", value: c.modele, options: IA_MODELES.map((m) => [m.id, m.nom]) },
+      ])}
+      <p class="hint">Créez une clé sur <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> (paiement à l'usage).
+        Tarifs par million de jetons : ${IA_MODELES.map((m) => `${m.nom.split(" — ")[0].replace("Claude ", "")} ${fmt(m.entree, 2)} $ / ${fmt(m.sortie, 2)} $`).join(" · ")} (entrée / sortie).
+        La clé reste sur cet appareil et n'est <strong>jamais</strong> incluse dans les sauvegardes exportées. Conseil : utilisez une clé dédiée avec une limite de dépense mensuelle.</p>
+      <div class="row" style="justify-content:flex-end;margin-top:12px">
+        ${c.cle ? btn("ia-oublier", "Retirer la clé", { cls: "btn text-danger" }) + btn("ia-verifier", "Vérifier la clé", { cls: "btn ghost" }) : ""}
+        <button class="btn">Enregistrer</button>
+      </div>
+    </form>
+  </div>`;
+}
 
 /* ---------- données d'exemple ---------- */
 function donneesDemo() {

@@ -6,8 +6,8 @@ const assert = require("assert");
 
 const racine = path.join(__dirname, "..");
 const ctx = vm.createContext({ console });
-vm.runInContext(["data.js", "noyau.js"].map((f) => fs.readFileSync(path.join(racine, f), "utf8")).join("\n") +
-  "\n;globalThis.__ = { get S() { return S; }, set S(v) { S = v; }, etatVide, consommations, consoMoyenne, etatCamion, etatChauffeur, calculTrajet, alertes, depensesHebdo, num, joursAvant, today, dateISO };", ctx);
+vm.runInContext(["data.js", "noyau.js", "ia.js"].map((f) => fs.readFileSync(path.join(racine, f), "utf8")).join("\n") +
+  "\n;globalThis.__ = { get S() { return S; }, set S(v) { S = v; }, etatVide, consommations, consoMoyenne, etatCamion, etatChauffeur, calculTrajet, alertes, depensesHebdo, num, joursAvant, today, dateISO, iaInterpreter, iaCout, IA_SCHEMA };", ctx);
 const N = ctx.__;
 
 let ok = 0;
@@ -114,6 +114,44 @@ test("alertes : anomalie de consommation et double responsable", () => {
 test("alerte de sauvegarde si jamais exporté", () => {
   N.S.camions = [{ id: "c", immat: "X", km: 0, kmVidange: 0, intervalleVidange: 40000, kmPneus: 0, intervallePneus: 100000 }];
   assert.ok(N.alertes().some((a) => a.onglet === "parametres"));
+});
+
+const reponseIA = (extra = {}) => ({
+  model: "claude-opus-5-5", stop_reason: "end_turn",
+  usage: { input_tokens: 1000, output_tokens: 2000 },
+  content: [{ type: "thinking", thinking: "" }, { type: "text", text: JSON.stringify({ comprehension: "Plaquettes de frein", suggestions: [{ code_sh6: "8708.30", code_national: "", designation: "Freins et servo-freins", confiance: "elevee", justification: "RGI 1", points_a_verifier: [] }], questions: [], controles: [] }) }],
+  ...extra,
+});
+
+test("IA : réponse valide interprétée, coût calculé", () => {
+  const r = N.iaInterpreter(reponseIA(), "claude-opus-5-5");
+  assert.strictEqual(r.suggestions[0].code_sh6, "8708.30");
+  assert.strictEqual(r.secours, false);
+  assert.ok(Math.abs(r.cout - (1000 * 4 + 2000 * 20) / 1e6) < 1e-12);
+});
+
+test("IA : réponse servie par le modèle de secours signalée", () => {
+  const r = N.iaInterpreter(reponseIA({ model: "claude-opus-4-8" }), "claude-opus-5-5");
+  assert.strictEqual(r.secours, true);
+  assert.strictEqual(r.modele, "claude-opus-4-8");
+});
+
+test("IA : refus, réponse coupée et JSON invalide donnent une erreur lisible", () => {
+  assert.throws(() => N.iaInterpreter(reponseIA({ stop_reason: "refusal", content: [] }), "x"), /refusé/);
+  assert.throws(() => N.iaInterpreter(reponseIA({ stop_reason: "max_tokens" }), "x"), /coupée/);
+  assert.throws(() => N.iaInterpreter(reponseIA({ content: [{ type: "text", text: "{pas du json" }] }), "x"), /illisible/);
+});
+
+test("IA : schéma strict (tous les champs requis, pas de champ libre)", () => {
+  const verifier = (o) => {
+    if (o.type === "object") {
+      assert.strictEqual(o.additionalProperties, false);
+      assert.deepStrictEqual([...o.required].sort(), Object.keys(o.properties).sort());
+      Object.values(o.properties).forEach(verifier);
+    }
+    if (o.type === "array") verifier(o.items);
+  };
+  verifier(N.IA_SCHEMA);
 });
 
 console.log(`\n${ok} test(s) réussi(s)`);

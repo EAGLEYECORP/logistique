@@ -1,6 +1,6 @@
 // Service worker : l'application fonctionne hors connexion (route, port, zones sans réseau).
-const CACHE = "logistique-v2";
-const FICHIERS = ["./", "index.html", "style.css", "data.js", "noyau.js", "app.js", "icon.svg", "manifest.webmanifest"];
+const CACHE = "logistique-v3";
+const FICHIERS = ["./", "index.html", "style.css", "data.js", "noyau.js", "ia.js", "app.js", "vendor/anthropic-sdk.js", "icon.svg", "manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FICHIERS)).then(() => self.skipWaiting()));

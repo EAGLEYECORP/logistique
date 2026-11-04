@@ -313,6 +313,27 @@ details.dossier .meta { color: var(--muted); font-size: .84rem; }
 .search input { padding-left: 40px; }
 .code-pill { display: inline-block; min-width: 44px; text-align: center; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--primary-soft); color: var(--primary); font-variant-numeric: tabular-nums; }
 
+/* ---------- assistant IA ---------- */
+.ia-card { border-color: color-mix(in srgb, var(--primary) 30%, var(--border)); }
+.ia-intro { display: flex; gap: 14px; align-items: flex-start; }
+.ia-intro h2 { margin: 0; }
+.ia-ico { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; flex: none; background: linear-gradient(135deg, var(--primary), #7c3aed); color: #fff; }
+.ia-ico svg.i { width: 22px; height: 22px; }
+.ia-ico.sm { width: 28px; height: 28px; border-radius: 8px; }
+.ia-ico.sm svg.i { width: 16px; height: 16px; }
+.ia-res { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.ia-sug { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; margin-top: 12px; background: var(--surface-2); }
+.ia-sug:first-of-type { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); }
+.ia-des { font-weight: 600; margin: 10px 0 4px; }
+.ia-just { margin: 0 0 8px; color: var(--text-2); font-size: .9rem; }
+.ia-list { margin: 0 0 10px; padding-left: 20px; color: var(--text-2); font-size: .88rem; }
+.ia-list li { margin: 2px 0; }
+.ia-erreur { display: flex; gap: 10px; align-items: center; margin-top: 14px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--danger); font-weight: 500; }
+.code-pill.lg { font-size: 1.05rem; padding: 4px 12px; }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: tourne .7s linear infinite; }
+@keyframes tourne { to { transform: rotate(360deg); } }
+.btn:disabled { opacity: .7; cursor: progress; }
+
 /* ---------- fenêtre modale ---------- */
 dialog {
   padding: 0; border: 0; border-radius: 18px;

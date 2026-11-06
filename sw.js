@@ -11,7 +11,7 @@ const VERSION = "__VERSION__"; // remplacé par l'identifiant du commit à la pu
 const CACHE = `logistique-${VERSION}`;
 const FICHIERS = [
   "./", "index.html", "style.css",
-  "data.js", "noyau.js", "ia.js", "stockage.js", "sauvegarde.js", "app.js", "commercial.js", "reglages.js", "boot.js",
+  "data.js", "noyau.js", "ia.js", "stockage.js", "sauvegarde.js", "app.js", "commercial.js", "reglages.js", "notifications.js", "boot.js",
   "vendor/anthropic-sdk.js",
   "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "manifest.webmanifest",
 ];
@@ -31,7 +31,11 @@ self.addEventListener("activate", (e) => {
   })());
 });
 
-self.addEventListener("message", (e) => { if (e.data?.type === "SKIP_WAITING") self.skipWaiting(); });
+self.addEventListener("message", (e) => {
+  if (e.data?.type === "SKIP_WAITING") self.skipWaiting();
+  // Même vérification que « periodicsync » ; répond avec ce qui a été calculé (utile aux tests et au diagnostic).
+  if (e.data?.type === "VERIFIER") e.waitUntil(verifierEnArrierePlan().then((r) => e.source?.postMessage({ type: "verifie", ...r })));
+});
 
 // Cache d'abord (l'application est versionnée : le cache est cohérent) ; sinon réseau ; hors ligne, la page d'accueil en dernier recours.
 self.addEventListener("fetch", (e) => {
@@ -68,19 +72,25 @@ self.addEventListener("periodicsync", (e) => {
   if (e.tag === "verifier-alertes") e.waitUntil(verifierEnArrierePlan());
 });
 
+/** Relit la copie interne des données, calcule les rappels dus et les affiche. Renvoie { items, affichees }. */
 async function verifierEnArrierePlan() {
   const miroir = await etatMiroirLire().catch(() => null);
-  if (!miroir?.etat) return;
+  if (!miroir?.etat) return { items: [], affichees: [] };
   S = migrer(miroir.etat).etat; // S : état global déclaré par noyau.js
   const notifies = await notifiesLire().catch(() => ({}));
   const jour = dateISO(Date.now());
   const { items, cles } = notificationsAEnvoyer(alertes(), S.meta.notif, notifies, jour);
+  const affichees = [];
   for (const it of items) {
-    await self.registration.showNotification(it.titre, { body: it.corps, tag: it.tag, icon: "icon-192.png", badge: "icon-192.png", data: { onglet: it.onglet } });
+    try {
+      await self.registration.showNotification(it.titre, { body: it.corps, tag: it.tag, icon: "icon-192.png", badge: "icon-192.png", data: { onglet: it.onglet }, lang: "fr" });
+      affichees.push(it.tag);
+    } catch { /* autorisation retirée entre-temps : rien n'est marqué comme envoyé */ }
   }
-  if (cles.length) {
+  if (affichees.length) { // on ne mémorise que si au moins une notification est réellement partie
     cles.forEach((k) => { notifies[k] = jour; });
     for (const k of Object.keys(notifies)) if (joursEntre(notifies[k], jour) > 30) delete notifies[k];
     await notifiesEcrire(notifies).catch(() => {});
   }
+  return { items: items.map((i) => ({ tag: i.tag, titre: i.titre, corps: i.corps, onglet: i.onglet })), affichees };
 }

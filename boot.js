@@ -107,11 +107,18 @@ function enregistrerServiceWorker() {
     });
     setInterval(() => reg.update().catch(() => {}), 3600000); // cherche une nouvelle version chaque heure
   }).catch(() => {});
+  // On ne recharge que pour une MISE À JOUR (un service worker contrôlait déjà la page) : pas à la toute première visite.
+  const avaitUnControleur = !!navigator.serviceWorker.controller;
   let recharge = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => { if (!recharge) { recharge = true; location.reload(); } });
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (avaitUnControleur && !recharge) { recharge = true; location.reload(); } });
 }
 
 /* ---------- démarrage ---------- */
+/** Les modules optionnels (rappels, mode chauffeur…) s'y accrochent. */
+function demarrageModules() {
+  if (typeof notifDemarrer === "function") notifDemarrer();
+}
+
 function retirerSplash() {
   const s = $("#splash");
   if (!s) return;
@@ -132,7 +139,7 @@ async function demarrer() {
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") miroirVider(); });
   window.addEventListener("pagehide", miroirVider);
   if (!S.meta.onboarde && !contientDonnees(S) && typeof demarrerAssistant === "function") demarrerAssistant();
-  if (typeof demarrageModules === "function") demarrageModules();
+  demarrageModules();
 }
 
 document.addEventListener("DOMContentLoaded", demarrer);

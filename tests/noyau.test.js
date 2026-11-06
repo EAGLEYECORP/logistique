@@ -396,7 +396,7 @@ test("notifications : au plus 3 urgentes + un résumé", () => {
   const r = N.notificationsAEnvoyer(liste, { actif: true }, {}, "2026-11-10");
   assert.strictEqual(r.items.length, 4);
   assert.strictEqual(r.items.filter((i) => i.tag !== "resume").length, 3);
-  assert.match(r.items[3].titre, /3 points/); // 2 urgentes restantes + 1 à surveiller
+  assert.match(r.items[3].titre, /3 autres points à traiter/); // 2 urgentes restantes + 1 à surveiller
   assert.strictEqual(r.cles.length, 6);
 });
 

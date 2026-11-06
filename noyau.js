@@ -322,7 +322,7 @@ function notificationsAEnvoyer(liste, cfg, notifies = {}, jour = today()) {
   const reste = nouvelles.filter((a) => !urgentes.includes(a));
   const items = urgentes.map((a) => ({ tag: a.cle, titre: "Urgent — Logistique Fret", corps: a.texte, onglet: a.onglet }));
   if (reste.length) {
-    items.push({ tag: "resume", titre: `${reste.length} point${reste.length > 1 ? "s" : ""} à surveiller`, corps: reste.slice(0, 3).map((a) => a.texte).join("\n") + (reste.length > 3 ? `\n+ ${reste.length - 3} autre${reste.length > 4 ? "s" : ""}` : ""), onglet: "tableau" });
+    items.push({ tag: "resume", titre: urgentes.length ? `${reste.length} autre${reste.length > 1 ? "s points" : " point"} à traiter` : `${reste.length} point${reste.length > 1 ? "s" : ""} à surveiller`, corps: reste.slice(0, 3).map((a) => a.texte).join("\n") + (reste.length > 3 ? `\n+ ${reste.length - 3} autre${reste.length > 4 ? "s" : ""}` : ""), onglet: "tableau" });
   }
   return { items, cles: [...urgentes, ...reste].map((a) => a.cle) };
 }

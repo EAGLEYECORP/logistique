@@ -80,7 +80,7 @@ VUES.commandes = {
               ${nx ? btn("avancer", libStatutCmd(nx), { id: c.id, icone: "arrow", cls: "btn ghost sm", titre: `Passer à l'étape « ${libStatutCmd(nx)} »` }) : ""}
               ${c.statut === "livre" && !c.factureId ? btn("facturer", "Facturer", { id: c.id, icone: "receipt", cls: "btn sm" }) : ""}
               ${!c.trajetId ? iconBtn("trajet", "route", "Créer le trajet (coût gasoil et péages)", c.id) : ""}
-              ${boutonPhotos("commande:" + c.id, `Photos — ${c.ref} (CMR, livraison, dommages)`)}${iconBtn("suivi", "clock", "Suivi des étapes", c.id)}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}
+              ${iconBtn("imprimer-ordre", "print", "Imprimer l'ordre de transport", c.id)}${boutonPhotos("commande:" + c.id, `Photos — ${c.ref} (CMR, livraison, dommages)`)}${iconBtn("suivi", "clock", "Suivi des étapes", c.id)}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}
             </div></td></tr>`;
         }).join("")}</tbody></table></div>` : vide("check", filtreCmd === "facturer" ? "Tout est facturé" : "Rien ici", filtreCmd === "facturer" ? "Aucune commande livrée en attente de facture." : "Aucune commande dans cette vue.")}
     </div>
@@ -133,6 +133,7 @@ VUES.commandes = {
       await modale({ titre: `Suivi — ${c.ref}`, valider: "Fermer", annuler: "", corps: `<p class="hint" style="margin:0 0 12px">${esc(nomClient(c.clientId))} · ${esc(lieu(c.origine, c.paysOrigine))} → ${esc(lieu(c.destination, c.paysDest))}</p><ol class="timeline">${etapes}</ol>` });
     }
     if (act === "facturer") facturerCommandes([c]);
+    if (act === "imprimer-ordre") imprimerOrdre(c);
     if (act === "suppr" && (await confirmer(`Supprimer ${c.ref} ?`, c.factureId ? "La facture associée est conservée." : "Cette action est définitive."))) {
       supprimerPhotosDe(`commande:${id}`);
       S.commandes = S.commandes.filter((x) => x.id !== id); sauver(); rafraichir();
@@ -300,39 +301,6 @@ VUES.factures = {
   },
 };
 
-function imprimerFacture(f) {
-  const E = S.entreprise, c = parId(S.clients, f.clientId) || {}, t = totauxFacture(f);
-  const w = window.open("", "_blank");
-  if (!w) return toast("Autorisez les fenêtres pop-up pour imprimer.", "warn");
-  const l = (x) => esc(x || "");
-  w.document.write(`<!doctype html><html lang="fr"><meta charset="utf-8"><title>${l(f.numero)}</title>
-  <style>
-    body{font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:#0f172a;margin:0;padding:48px;max-width:820px;margin:auto;font-size:14px}
-    header{display:flex;justify-content:space-between;gap:24px;margin-bottom:40px}
-    h1{font-size:28px;letter-spacing:-.02em;margin:0} .m{color:#64748b} .blk{line-height:1.6}
-    table{width:100%;border-collapse:collapse;margin:28px 0} th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:1px solid #e2e8f0;padding:8px 0}
-    td{padding:12px 0;border-bottom:1px solid #f1f5f9;vertical-align:top} .r{text-align:right}
-    .tot{margin-left:auto;width:300px} .tot div{display:flex;justify-content:space-between;padding:6px 0} .tot .g{font-size:18px;font-weight:700;border-top:2px solid #0f172a;margin-top:6px;padding-top:10px}
-    footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;color:#64748b;font-size:12px;line-height:1.6}
-    @media print{body{padding:0}}
-  </style><body>
-  <header>
-    <div class="blk">${[`<strong style="font-size:18px">${l(E.nom) || "Votre entreprise"}</strong>`, E.adresse && l(E.adresse).replace(/\n/g, "<br>"), E.ville && l(E.ville), E.tel && "Tél. " + l(E.tel), E.email && l(E.email)].filter(Boolean).join("<br>")}</div>
-    <div class="r"><h1>Facture</h1><div class="m" style="margin-top:6px">N° <strong style="color:#0f172a">${l(f.numero)}</strong><br>Date : ${dateFr(f.date)}<br>Échéance : ${dateFr(f.echeance)}</div></div>
-  </header>
-  <div class="blk" style="background:#f8fafc;border-radius:10px;padding:16px 20px;max-width:360px;margin-left:auto">
-    <span class="m">Facturé à</span><br>${[`<strong>${l(c.nom)}</strong>`, c.adresse && l(c.adresse).replace(/\n/g, "<br>"), [c.ville, c.pays].filter(Boolean).map(l).join(", "), c.ice && "ICE / TVA : " + l(c.ice)].filter(Boolean).join("<br>")}
-  </div>
-  <table><thead><tr><th>Désignation</th><th class="r">Montant HT</th></tr></thead><tbody>
-    ${(f.lignes || []).map((x) => `<tr><td>${l(x.designation)}</td><td class="r">${fmtDevise(x.montant, f.devise)}</td></tr>`).join("")}
-  </tbody></table>
-  <div class="tot"><div><span>Total HT</span><span>${fmtDevise(t.ht, f.devise)}</span></div><div><span>TVA ${fmt(f.tva)} %</span><span>${fmtDevise(t.tva, f.devise)}</span></div><div class="g"><span>Total TTC</span><span>${fmtDevise(t.ttc, f.devise)}</span></div></div>
-  ${f.statut === "payee" ? `<p style="color:#15803d;font-weight:600">Payée le ${dateFr(f.datePaiement)}</p>` : ""}
-  <footer>${E.rib ? `Règlement par virement : ${l(E.banque)} — RIB ${l(E.rib)}<br>` : ""}${[E.ice && "ICE " + E.ice, E.rc && "RC " + E.rc, E.if && "IF " + E.if, E.patente && "Patente " + E.patente, E.cnss && "CNSS " + E.cnss].filter(Boolean).map(l).join(" · ")}</footer>
-  <script>onload=()=>print()<\/script></body></html>`);
-  w.document.close();
-}
-
 /* ---------- Réglages : entreprise ---------- */
 function carteEntreprise() {
   const E = S.entreprise;
@@ -352,7 +320,13 @@ function carteEntreprise() {
         { name: "banque", label: "Banque", value: E.banque },
         { name: "rib", label: "RIB", value: E.rib, full: true },
         { name: "adresse", label: "Adresse", type: "textarea", value: E.adresse, full: true },
+        { name: "mentionsFacture", label: "Mentions de bas de facture (conditions de paiement, pénalités de retard…)", type: "textarea", value: E.mentionsFacture, full: true },
       ])}
+      <div class="logo-champ">
+        ${logoSur(E) ? `<img src="${logoSur(E)}" alt="Logo actuel">` : ""}
+        <label class="f">Logo (PNG ou JPEG, affiché sur les documents imprimés)<input type="file" name="logoFichier" accept="image/png,image/jpeg"></label>
+        ${logoSur(E) ? btn("logo-retirer", "Retirer le logo", { cls: "btn text-danger sm" }) : ""}
+      </div>
       <p class="hint">Ces informations apparaissent sur les factures imprimées et les relances.</p>
       <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn">Enregistrer</button></div>
     </form>

@@ -424,3 +424,43 @@ function activiteDepuis(depuis) {
   const r = cmds.reduce((a, c) => { const m = margeCommande(c); a.ca += m.prix; a.marge += m.marge; return a; }, { ca: 0, marge: 0 });
   return { ...r, nb: cmds.length, taux: r.ca ? (r.marge / r.ca) * 100 : 0 };
 }
+
+/* ---------- montants en lettres (français) ---------- */
+const UNITES_FR = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"];
+const DIZAINES_FR = ["", "", "vingt", "trente", "quarante", "cinquante", "soixante"];
+
+/** 0-99. « quatre-vingts » prend son s seulement s'il termine le groupe (pluriel). */
+function moinsDeCentFr(n, pluriel) {
+  if (n < 20) return UNITES_FR[n];
+  const d = Math.floor(n / 10), u = n % 10;
+  if (d === 7) return u === 1 ? "soixante et onze" : `soixante-${UNITES_FR[10 + u]}`;
+  if (d === 9) return `quatre-vingt-${UNITES_FR[10 + u]}`;
+  if (d === 8) return u === 0 ? (pluriel ? "quatre-vingts" : "quatre-vingt") : `quatre-vingt-${UNITES_FR[u]}`;
+  if (u === 0) return DIZAINES_FR[d];
+  return u === 1 ? `${DIZAINES_FR[d]} et un` : `${DIZAINES_FR[d]}-${UNITES_FR[u]}`;
+}
+/** 1-999. pluriel=false devant « mille » (invariable : « deux cent mille », « quatre-vingt mille »). */
+function moinsDeMilleFr(n, pluriel) {
+  const c = Math.floor(n / 100), r = n % 100;
+  let s = c ? (c === 1 ? "cent" : `${UNITES_FR[c]} cent`) + (r === 0 && c > 1 && pluriel ? "s" : "") : "";
+  if (r) s += (s ? " " : "") + moinsDeCentFr(r, pluriel);
+  return s;
+}
+function nombreEnLettres(n) {
+  n = Math.floor(Math.abs(n));
+  if (n === 0) return "zéro";
+  const [mds, mil, k, u] = [Math.floor(n / 1e9) % 1000, Math.floor(n / 1e6) % 1000, Math.floor(n / 1e3) % 1000, n % 1000];
+  const p = [];
+  if (mds) p.push(`${moinsDeMilleFr(mds, true)} milliard${mds > 1 ? "s" : ""}`);
+  if (mil) p.push(`${moinsDeMilleFr(mil, true)} million${mil > 1 ? "s" : ""}`);
+  if (k) p.push(k === 1 ? "mille" : `${moinsDeMilleFr(k, false)} mille`);
+  if (u) p.push(moinsDeMilleFr(u, true));
+  return p.join(" ");
+}
+/** « trois mille six cent quarante-huit dirhams et cinquante centimes » */
+function montantEnLettres(montant, devise = "MAD") {
+  const total = Math.round(Math.abs(montant) * 100);
+  const ent = Math.floor(total / 100), cts = total % 100;
+  const [un, plur] = devise === "EUR" ? ["euro", "euros"] : ["dirham", "dirhams"];
+  return `${nombreEnLettres(ent)} ${ent > 1 ? plur : un}${cts ? ` et ${nombreEnLettres(cts)} centime${cts > 1 ? "s" : ""}` : ""}`;
+}

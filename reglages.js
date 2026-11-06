@@ -150,7 +150,15 @@ VUES.parametres = {
     CARTES_REGLAGES.forEach((c) => c.apres?.());
   },
   soumettre(fid, v) {
-    if (fid === "f-entreprise") { S.entreprise = { ...S.entreprise, ...v }; sauver(); toast("Informations de l'entreprise enregistrées"); return rafraichir(); }
+    if (fid === "f-entreprise") {
+      const { logoFichier, ...infos } = v;
+      S.entreprise = { ...S.entreprise, ...infos };
+      (async () => {
+        if (logoFichier?.length) { try { S.entreprise.logo = await logoDepuisFichier(logoFichier[0]); } catch (e) { toast(e.message, "warn"); } }
+        sauver(); toast("Informations de l'entreprise enregistrées"); rafraichir();
+      })();
+      return;
+    }
     if (fid === "f-ia") {
       const actuelle = iaConfig();
       iaSauverConfig({ cle: v.cle || actuelle.cle, modele: v.modele });
@@ -162,6 +170,7 @@ VUES.parametres = {
   },
   async agir(act, id) {
     if (act === "onglet-reglages") { ongletReglages = id; return rafraichir(); }
+    if (act === "logo-retirer") { delete S.entreprise.logo; sauver(); toast("Logo retiré"); return rafraichir(); }
     for (const c of CARTES_REGLAGES) if (c.agir && (await c.agir(act, id))) return;
     if (act === "defaut") { S.params = { ...PARAMS_DEFAUT }; sauver(); toast("Valeurs par défaut rétablies"); rafraichir(); }
     if (act === "export-maintenant") exporterMaintenant();
@@ -295,4 +304,16 @@ function carteReglagesIA() {
       </div>
     </form>
   </div>`;
+}
+
+/** Réduit un logo à 400×160 px maximum (transparence conservée) : une centaine de Ko au plus, stocké dans les données. */
+async function logoDepuisFichier(fichier) {
+  const bmp = await decoderImage(fichier);
+  try {
+    const k = Math.min(1, 400 / bmp.width, 160 / bmp.height);
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return c.toDataURL("image/png");
+  } finally { bmp.close?.(); }
 }

@@ -1,8 +1,10 @@
 {
   "name": "logistique-fret",
+  "version": "2.0.0",
   "private": true,
-  "description": "Gestion de flotte, gasoil, chauffeurs, trajets et douane pour transporteurs (Maroc).",
+  "description": "Application hors ligne de gestion pour transporteurs routiers : commandes, flotte, chauffeurs, douane, facturation.",
   "scripts": {
+    "start": "python3 -m http.server 8080",
     "test": "node tests/noyau.test.js"
   }
 }

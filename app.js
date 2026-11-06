@@ -73,7 +73,7 @@ function champ(f) {
   if (f.type === "photo") return `<label class="${cls}">${esc(f.label)}<input type="file" name="${f.name}" accept="image/*"></label>`;
   if (f.type === "textarea") return `<label class="${cls}">${esc(f.label)}<textarea name="${f.name}" rows="3">${esc(v)}</textarea></label>`;
   const extra = f.type === "number" ? `step="${f.step || "any"}" inputmode="decimal" ${f.min !== undefined ? `min="${f.min}"` : ""}` : "";
-  return `<label class="${cls}">${esc(f.label)}<input type="${f.type || "text"}" name="${f.name}" value="${esc(v)}" ${extra} ${req} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ""} ${f.autocomplete ? `autocomplete="${f.autocomplete}"` : ""}></label>`;
+  return `<label class="${cls}">${esc(f.label)}<input type="${f.type || "text"}" name="${f.name}" value="${esc(v)}" enterkeyhint="next" ${f.name === "immat" ? 'autocapitalize="characters"' : ""} ${extra} ${req} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ""} ${f.autocomplete ? `autocomplete="${f.autocomplete}"` : ""}></label>`;
 }
 const champs = (liste) => `<div class="form-grid">${liste.map(champ).join("")}</div>`;
 
@@ -114,7 +114,7 @@ function modale({ titre, corps, valider = "Enregistrer", danger = false, annuler
     d.onclose = () => res(d.returnValue === "ok" ? lireForm(f) : null);
     d.onclick = (e) => { if (e.target === d) d.close(); };
     d.showModal();
-    f.querySelector(".modal-body input:not([type=checkbox]), .modal-body select")?.focus();
+    if (!matchMedia("(pointer: coarse)").matches) f.querySelector(".modal-body input:not([type=checkbox]), .modal-body select")?.focus(); // sur mobile, pas de clavier surgissant
   });
 }
 const confirmer = (titre, texte, valider = "Supprimer") =>
@@ -183,6 +183,7 @@ function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   v.apres?.();
   if (typeof majIndicateurs === "function") majIndicateurs();
   if (typeof hydraterPhotos === "function") hydraterPhotos();
+  majFab();
   window.scrollTo(0, garderScroll ? y : 0);
 }
 // Sur mobile, chaque ligne de tableau devient une carte : on recopie l'en-tête de colonne dans chaque cellule.
@@ -196,6 +197,13 @@ function etiqueterTableaux() {
       if (i > 0 && ths[i] && !td.querySelector(":scope > .cell")) { const c = document.createElement("div"); c.className = "cell"; c.append(...td.childNodes); td.append(c); }
     }));
   });
+}
+/** Bouton « + » flottant (mobile) : l'action principale de la page reste sous le pouce. */
+function majFab() {
+  const fab = $("#fab"), ajout = $("#actions [data-act=ajouter]");
+  if (!fab) return;
+  fab.hidden = !ajout;
+  if (ajout) { fab.innerHTML = ic("plus"); fab.setAttribute("aria-label", ajout.textContent.trim() || "Ajouter"); fab.onclick = () => ajout.click(); }
 }
 const rafraichir = () => afficher(ongletActif, { garderScroll: true });
 
@@ -247,12 +255,7 @@ VUES.tableau = {
         ${kpi("file", "Dossiers douane", S.dossiers.filter((d) => d.statut !== "clos").length, "ouverts", "", "douane")}
       </div>
       <div class="grid-2">
-        <div class="card">
-          <div class="card-head"><h2>À traiter${al.length ? ` · ${al.length}` : ""}</h2></div>
-          ${al.length ? `<ul class="alerts">${al.slice(0, 12).map((a) => `<li><span class="ico ${a.niveau}">${ic(a.niveau === "danger" ? "alert" : "flag")}</span>
-            <div class="t">${esc(a.texte)}</div>${btn("aller", "Voir", { id: a.onglet, cls: "btn ghost sm" })}</li>`).join("")}</ul>${al.length > 12 ? `<p class="hint">+ ${al.length - 12} autres</p>` : ""}`
-            : vide("check", "Rien à signaler", "Entretiens, papiers, repos et factures sont à jour.")}
-        </div>
+        ${carteATraiter(al)}
         <div class="card">
           <div class="card-head"><h2>Aujourd'hui et demain</h2>${btn("aller", "Commandes", { id: "commandes", cls: "btn ghost sm" })}</div>
           ${planning.length ? `<ul class="alerts">${planning.map(({ c, type, date }) => `<li><span class="ico ${type === "Chargement" ? "info" : "ok"}">${ic(type === "Chargement" ? "box" : "flag")}</span>
@@ -266,9 +269,28 @@ VUES.tableau = {
       </div>`;
   },
   agir(act) {
+    if (act === "alertes-plus") { alertesDepliees = !alertesDepliees; rafraichir(); }
+    if (act === "export-direct") exporterMaintenant();
     if (act === "demo") { S = donneesDemo(); sauver(); toast("Données d'exemple chargées"); afficher("tableau"); }
   },
 };
+
+/* ---------- « À traiter » : urgent d'abord, puis à surveiller (réductible) ---------- */
+let alertesDepliees = false;
+const ICONES_CAT = { docs: "file", repos: "users", factures: "receipt", commandes: "box", sauvegarde: "shield", autre: "flag" };
+const VERBE_CAT = { docs: "Ouvrir", repos: "Voir", factures: "Relancer", commandes: "Traiter", sauvegarde: "Exporter", autre: "Voir" };
+function carteATraiter(al) {
+  const urgentes = al.filter((a) => a.niveau === "danger"), surveiller = al.filter((a) => a.niveau !== "danger");
+  const ligne = (a) => `<li><span class="ico ${a.niveau}">${ic(ICONES_CAT[a.cat] || "flag")}</span><div class="t">${esc(a.texte)}</div>${
+    a.cat === "sauvegarde" ? btn("export-direct", "Exporter", { cls: "btn ghost sm" }) : btn("aller", VERBE_CAT[a.cat] || "Voir", { id: a.onglet, cls: "btn ghost sm" })}</li>`;
+  const visibles = alertesDepliees ? surveiller : surveiller.slice(0, 4);
+  return `<div class="card"><div class="card-head"><h2>À traiter${al.length ? ` · ${al.length}` : ""}</h2></div>
+    ${!al.length ? vide("check", "Rien à signaler", "Entretiens, papiers, repos et factures sont à jour.") : `
+      ${urgentes.length ? `<div class="groupe urgent">Urgent · ${urgentes.length}</div><ul class="alerts">${urgentes.map(ligne).join("")}</ul>` : ""}
+      ${surveiller.length ? `<div class="groupe">À surveiller · ${surveiller.length}</div><ul class="alerts">${visibles.map(ligne).join("")}</ul>
+        ${surveiller.length > 4 ? `<div class="row" style="margin-top:8px">${btn("alertes-plus", alertesDepliees ? "Réduire la liste" : `Afficher les ${surveiller.length - 4} autres`, { cls: "btn ghost sm" })}</div>` : ""}` : ""}`}
+  </div>`;
+}
 
 function graphiqueDepenses() {
   const sem = depensesHebdo(8);
@@ -774,22 +796,6 @@ VUES.douane = {
 };
 const aideDouane = () => `<p class="hint">Déclarations sur <strong>BADR</strong> (ADII). Les documents exigés varient selon le produit et l'accord commercial : vérifiez sur <a href="https://www.douane.gov.ma" target="_blank" rel="noopener">douane.gov.ma</a>. Les listes sont modifiables dans <code>data.js</code>.</p>`;
 
-function imprimerDossier(d) {
-  const items = CHECKLISTS_DOUANE[d.type] || [];
-  const w = window.open("", "_blank");
-  if (!w) return toast("Autorisez les fenêtres pop-up pour imprimer.", "warn");
-  w.document.write(`<!doctype html><html lang="fr"><meta charset="utf-8"><title>${esc(d.ref)}</title>
-    <body style="font-family:system-ui,sans-serif;padding:32px;max-width:760px;margin:auto;color:#0f172a">
-    <h1 style="margin:0 0 4px">Dossier ${esc(d.ref)}</h1><p style="color:#64748b;margin:0 0 24px">${TYPES_DOSSIER[d.type]} · imprimé le ${dateFr(today())}</p>
-    <table style="border-collapse:collapse;margin-bottom:24px">${[["Client", d.client], ["Marchandise", d.marchandise], ["Code SH", d.codeSH], ["Bureau", d.bureau], ["Échéance", dateFr(d.echeance)]]
-      .map(([k, v]) => `<tr><td style="padding:4px 24px 4px 0;color:#64748b">${k}</td><td style="padding:4px 0;font-weight:600">${esc(v || "—")}</td></tr>`).join("")}</table>
-    <h2 style="font-size:1rem">Documents</h2>
-    <ul style="list-style:none;padding:0">${items.map((it, i) => `<li style="padding:8px 0;border-bottom:1px solid #e2e8f0">${d.coches?.[i] ? "☑" : "☐"}&nbsp; ${esc(it)}</li>`).join("")}</ul>
-    ${d.notes ? `<p><strong>Notes :</strong> ${esc(d.notes)}</p>` : ""}
-    <script>onload=()=>print()<\/script></body></html>`);
-  w.document.close();
-}
-
 /* ---------- Codes SH ---------- */
 let recherche = "";
 VUES.nomenclature = {
@@ -1056,6 +1062,7 @@ function ouvrirRecherche() {
     if (e.key === "ArrowDown") { sel = Math.min(sel + 1, res.length - 1); rendre(); e.preventDefault(); }
     if (e.key === "ArrowUp") { sel = Math.max(sel - 1, 0); rendre(); e.preventDefault(); }
     if (e.key === "Enter") { ouvrir(sel); e.preventDefault(); }
+    if (e.key === "Escape") { d.close(); e.preventDefault(); } // sans cela, Échap commence par vider le champ de recherche
   };
   d.onclick = (e) => { const b = e.target.closest(".pres"); if (b) ouvrir(+b.dataset.i); else if (e.target === d) d.close(); };
   d.showModal(); rendre(); $("#pq").focus();

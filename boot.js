@@ -117,6 +117,7 @@ function enregistrerServiceWorker() {
 /** Les modules optionnels (rappels, mode chauffeur…) s'y accrochent. */
 function demarrageModules() {
   if (typeof notifDemarrer === "function") notifDemarrer();
+  if (typeof demarrageInstallation === "function") demarrageInstallation();
 }
 
 function retirerSplash() {

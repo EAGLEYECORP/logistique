@@ -1,85 +1,150 @@
 # Logistique Fret
 
-Application web **simple, gratuite et hors ligne** pour les entreprises de transport routier international de marchandises au Maroc :
-commandes, clients, facturation, flotte, chauffeurs, trajets, douane et nomenclature.
+Application **gratuite, hors ligne et sans serveur** pour les entreprises de transport routier de marchandises (national et international, Maroc) :
+commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 
-Pas de serveur, pas d'abonnement, pas d'installation obligatoire. Elle s'ouvre dans un navigateur et peut être
-**installée sur le téléphone** comme une application, qui fonctionne ensuite **sans réseau** (route, port, zones blanches).
+- 🆓 **Gratuite** : aucun abonnement, aucun compte, aucun serveur obligatoire.
+- 📴 **100 % hors ligne** : sur la route, au port, en zone blanche. Seul l'assistant IA (facultatif) a besoin d'internet.
+- 🔒 **Vos données restent sur l'appareil**, avec sauvegarde ZIP (photos comprises), chiffrement par mot de passe et copies automatiques.
+- 📱 **Installable** sur téléphone, tablette et ordinateur comme une vraie application.
 
 ## Fonctionnalités
 
 | Module | Ce qu'il fait |
 |---|---|
-| **Accueil** | Chiffre d'affaires et marge 30 jours, encours clients et retards, commandes en cours, chauffeurs, flotte, dépenses, coût gasoil/km. « À traiter » (papiers, entretien, repos, factures en retard, commandes à facturer ou à affecter), « Aujourd'hui et demain » (chargements, livraisons), graphique des dépenses |
-| **Commandes** | Ordres de transport national et international : client, chargement/livraison (ville, pays), poids, palettes, CMR, prix en MAD ou €, équipe. Étapes Devis → Confirmée → Chargée → En transit → En douane → Livrée avec horodatage, création du trajet en un clic, **marge par commande** (gasoil, péages, ferry, frais de route), facturation en un clic |
-| **Clients** | Chargeurs avec ICE, contact, délai de paiement, CA 90 jours et encours |
-| **Factures** | Numérotation FAC-AAAA-0001, HT/TVA/TTC, échéance selon le client, encaissement, relance par e-mail préremplie, facture imprimable/PDF avec vos mentions (ICE, RC, IF, RIB), « Tout facturer » |
-| **Camions** | Jauges d'usure vidange et pneus, papiers (assurance, visite technique, carte verte, tachygraphe, autorisation internationale), conso moyenne, coût d'entretien. Bouton « Entretien » : vidange, pneus, freins, réparation… avec coût et garage. Historique exportable |
-| **Gasoil** | Saisie des pleins, consommation plein à plein, coût par camion et par km, alerte si la conso dépasse la moyenne (fuite, pneus, vol de gasoil) |
-| **Chauffeurs** | Un responsable par camion, prise et fin de service, repos obligatoire après l'amplitude maximale, permis, visite médicale, **passeport, visa Schengen, carte conducteur**, appel en un clic |
-| **Trajets** | Coût et durée **calculés pendant la saisie** (gasoil, péage, coût/km, pauses, repos de nuit, nombre de jours). Seuls les chauffeurs disponibles sont proposés, leur camion est choisi automatiquement, et le compteur est mis à jour à la fin du trajet |
-| **Douane** | Dossiers import / export / transit, liste des documents (facture, colisage, CMR/B/L, EUR.1, DUM BADR, BAE…), progression, échéance, impression |
-| **Codes SH** | Recherche dans les 97 chapitres du Système Harmonisé et dans vos codes habituels (10 chiffres, droit d'importation, notes). **Assistant IA** : propose le classement d'une marchandise (voir ci-dessous) |
-| **Réglages** | Entreprise (mentions légales des factures), prix du gasoil, taux €/MAD, TVA, délais, seuils d'alerte, temps de conduite et de repos, assistant IA, sauvegarde/restauration, installation sur mobile |
+| **Accueil** | CA et marge 30 jours, encours clients, commandes en cours, chauffeurs disponibles, dépenses. **« À traiter »** classé par urgence (papiers, repos, factures en retard, commandes sans équipe), « Aujourd'hui et demain », graphique des dépenses |
+| **Commandes** | Ordres de transport MAD/€, étapes Devis → Confirmée → Chargée → En transit → En douane → Livrée horodatées, marge par commande, facturation en un clic, **ordre de transport imprimable** (signatures expéditeur, transporteur, destinataire), **photos** (CMR, livraison, dommages) |
+| **Clients / Factures** | ICE, délais de paiement, encours ; facture numérotée avec TVA, **montant en lettres**, logo, RIB et mentions, encaissement, relance e-mail préremplie, impression/PDF |
+| **Camions** | Jauges d'usure vidange et pneus, papiers (assurance, visite, carte verte, tachygraphe, autorisation internationale), historique d'entretien avec coûts et photos |
+| **Gasoil** | Pleins, consommation plein à plein, détection d'anomalie (fuite, vol), **photo du ticket** |
+| **Chauffeurs** | Un responsable par camion, service/repos, permis, visa, passeport, carte conducteur |
+| **Trajets** | Coût, durée, pauses et repos calculés pendant la saisie |
+| **Douane** | Dossiers import/export/transit, documents à réunir, scans photo, impression |
+| **Codes SH** | Recherche des 97 chapitres, vos codes habituels, **assistant IA** de classement (facultatif) |
+| **Mode chauffeur** | Écran unique verrouillé par PIN : mission, étapes, service, photos, plein |
+| **Rappels** | Notifications pour papiers, repos, factures, commandes ; même application fermée sur Android (Chrome, installée) |
+| **Données** | Sauvegarde ZIP/JSON/chiffrée, export Excel (CSV), copies automatiques quotidiennes, récupération en cas de perte |
 
-Ergonomie : recherche globale **⌘K / Ctrl+K** (commandes, clients, CMR, factures, camions…), liens directs vers chaque page (`#commandes`, `#factures`…),
-fenêtres de saisie, notifications, mode sombre automatique, tableaux transformés en cartes sur mobile avec menu « Plus »,
-touche **N** pour ajouter un élément sur la page courante.
+Ergonomie : recherche globale **⌘K / Ctrl+K**, touche **N** (nouvel élément), liens directs (`#commandes`, `#factures`…), mode clair/sombre, bouton « + » flottant et menu « Plus » sur mobile, assistant de démarrage.
 
-## Démarrer
+## Lancer l'application
 
-- **Essai rapide** : ouvrir `index.html` (double-clic), puis « Voir avec des données d'exemple ».
-- **Usage réel (recommandé)** : héberger le dossier gratuitement, par exemple avec GitHub Pages
-  (Settings → Pages → branche → dossier racine). L'hébergement permet l'installation sur téléphone et le mode hors ligne.
+Aucune installation de dépendances : ce sont des fichiers statiques.
 
-Les données sont enregistrées **sur l'appareil**. L'application rappelle de faire une sauvegarde chaque semaine
-(Réglages → Exporter), et le fichier peut être importé sur un autre appareil.
-
-## Assistant IA de classement SH
-
-Dans **Codes SH** (ou depuis un dossier douane via « Code SH avec l'IA »), décrivez la marchandise. L'assistant (Claude, d'Anthropic) renvoie :
-
-- 1 à 3 classements, du plus probable au moins probable : code SH à 6 chiffres, code national seulement s'il est sûr, désignation, niveau de confiance ;
-- le raisonnement (règles générales interprétatives, notes de section et de chapitre) et les points à vérifier ;
-- les questions qui permettraient d'affiner, et les contrôles ou autorisations probables au Maroc.
-
-Un clic ajoute le code à « Mes codes » ou l'applique au dossier douane d'origine.
-
-**Mise en route** : Réglages → Assistant IA → collez une clé API créée sur [console.anthropic.com](https://console.anthropic.com) (paiement à l'usage), puis « Vérifier la clé ». Le modèle se choisit au même endroit : Opus 5.5 (le plus précis, par défaut), Sonnet 5.5 ou Haiku 5.5 (le moins cher). Le coût réel de chaque demande s'affiche sous la réponse.
-
-**Sécurité** : la clé reste sur l'appareil, n'est jamais incluse dans les sauvegardes, et part uniquement vers `api.anthropic.com`. Utilisez une clé dédiée avec une limite de dépense mensuelle. Toute personne qui utilise cet appareil peut se servir de la clé.
-
-Les propositions sont **indicatives** : vérifiez toujours le code sur le tarif officiel de l'ADII avant de déclarer. L'assistant ne fonctionne qu'avec une connexion internet ; le reste de l'application marche hors ligne.
-
-Le SDK officiel `@anthropic-ai/sdk` (0.137.0) est regroupé dans `vendor/anthropic-sdk.js` (licence MIT, `vendor/LICENSE-anthropic-sdk`), sans CDN ni étape de compilation.
-
-## Tests
-
-```
-npm test
+```bash
+git clone https://github.com/EAGLEYECORP/logistique && cd logistique
+python3 -m http.server 8080          # ou : npx serve -l 8080
 ```
 
-Les tests vérifient les calculs métier : consommation, échéances, état des chauffeurs, découpage des trajets
-en jours, pauses et repos, dépenses et alertes, et l'interprétation des réponses de l'assistant IA (refus, réponse coupée, modèle de secours, coût).
+Ouvrez **http://localhost:8080**. (Un double-clic sur `index.html` fonctionne aussi, mais sans installation ni mode hors ligne.)
 
-## Avertissements
+> ⚠️ **Gardez toujours la même adresse** (ici `localhost:8080`) : le navigateur range les données par adresse. Une autre adresse ou un autre port affichera une application vide.
 
-- Les listes de documents douaniers et les règles de temps de conduite sont des **modèles de départ** : vérifiez-les avec la
-  réglementation en vigueur (ADII — [douane.gov.ma](https://www.douane.gov.ma), ministère du Transport) et adaptez-les à votre activité.
-- La TVA par défaut (14 %) est un point de départ : le transport international et l'export peuvent relever d'un autre régime. Faites-la valider par votre comptable et ajustez-la par facture.
-- Les codes tarifaires complets (10 chiffres) et les taux changent avec la loi de finances : consultez le tarif officiel avant toute déclaration.
+## Installer comme application (PWA)
 
-## Structure
+| Appareil | Comment |
+|---|---|
+| **Android (Chrome)** | Un bandeau propose l'installation à la 2ᵉ visite, ou menu ⋮ → « Installer l'application ». Les rappels fonctionnent alors application fermée |
+| **iPhone / iPad (Safari)** | Partager → « Sur l'écran d'accueil » (iOS 16.4 ou plus pour les notifications) |
+| **Ordinateur (Chrome, Edge)** | Icône d'installation dans la barre d'adresse |
+
+Après installation, l'application démarre instantanément, sans réseau. Une nouvelle version est proposée par un bandeau « Mettre à jour ».
+
+## Utiliser sur Android avec Termux (sans ordinateur, sans hébergement)
+
+Idéal pour tester ou pour une petite structure : le téléphone sert lui-même de « serveur » le temps de l'installation.
+
+1. Installez **Termux** (depuis F-Droid) et **Chrome**.
+2. Dans Termux :
+   ```bash
+   pkg update && pkg install -y python git
+   git clone https://github.com/EAGLEYECORP/logistique
+   cd logistique
+   python -m http.server 8080 --bind 127.0.0.1
+   ```
+3. Dans Chrome, ouvrez `http://localhost:8080` puis **Installer l'application** (menu ⋮).
+4. C'est terminé : l'application installée fonctionne sans Termux. Relancez le serveur seulement pour récupérer une mise à jour (`git pull`, puis le même port **8080**).
+
+`localhost` est considéré comme une adresse sécurisée : installation, hors ligne et notifications fonctionnent. Pour transférer des données d'un appareil à l'autre, utilisez Réglages → Données → Exporter, puis Importer.
+
+## Hébergement gratuit (GitHub Pages)
+
+Le dépôt contient `.github/workflows/pages.yml` : à chaque envoi, il lance les tests puis publie le site.
+Réglage unique : **Settings → Pages → Source : GitHub Actions** (le dépôt doit être public, ou votre compte GitHub Pro).
+Adresse : `https://<compte>.github.io/logistique/`. La version du cache hors ligne suit l'identifiant du commit : chaque publication déclenche la mise à jour chez les utilisateurs.
+
+## Sauvegardes et sécurité des données
+
+- **Où sont mes données ?** Dans le navigateur de l'appareil : petit état en `localStorage`, photos et copies en `IndexedDB`. Rien n'est envoyé nulle part.
+- **Exporter** (Réglages → Données, ou la pastille « Sauvegardé il y a N j ») :
+  - **ZIP complet** : `donnees.json` + `photos/` (ouvrable avec n'importe quel outil ZIP) ;
+  - **JSON** : données seules ;
+  - **Chiffré** (`.lfs`) : AES-256-GCM, clé dérivée de votre mot de passe (PBKDF2, 200 000 itérations). **Sans le mot de passe, le fichier est irrécupérable.** Format propre à l'application : seul « Importer » sait le rouvrir.
+- **Copies automatiques** : une copie par jour (7 jours) et une avant chaque import/restauration, restaurables depuis Réglages → Données.
+- **Récupération** : si le navigateur efface ou corrompt les données, l'application retrouve une copie interne (miroir IndexedDB) et propose de la restaurer.
+- **Excel** : « Exporter tout en CSV » fournit un ZIP d'un CSV par table (séparateur `;`, virgule décimale, UTF-8).
+- La clé de l'assistant IA et le code PIN du mode chauffeur ne sont **jamais** inclus dans une sauvegarde.
+
+## Rappels (notifications)
+
+Réglages → Rappels → « Activer les rappels ». Tout est calculé sur l'appareil.
+Un point urgent est rappelé chaque jour, un point « à surveiller » tous les 3 jours ; un toucher ouvre la page concernée.
+
+| Situation | Rappels |
+|---|---|
+| Application ouverte (tous navigateurs) | ✅ à l'ouverture, chaque minute, au retour sur l'onglet |
+| Android + Chrome + application installée | ✅ aussi application fermée (synchronisation périodique, quelques fois par jour, à la discrétion du système) |
+| iPhone | ✅ application installée sur l'écran d'accueil, iOS 16.4+ (pas d'arrière-plan) |
+
+## Mode chauffeur
+
+Pour un téléphone ou une tablette laissé dans le camion : Réglages → Appareil → Mode chauffeur → choisir le chauffeur, définir un PIN.
+L'appareil n'affiche plus que la mission du chauffeur (service, étapes, photos, itinéraire, plein) ; clients, factures, marges et réglages sont masqués. La sortie demande le PIN ; un **code de secours** est remis une seule fois au gestionnaire.
+
+> **Limites à connaître** — le PIN verrouille l'interface, il ne chiffre pas les données (utilisez l'export chiffré pour cela). Les données sont **propres à chaque appareil** : pour que le chauffeur voie ses missions, importez dans son appareil une sauvegarde à jour. Il n'y a pas (encore) de synchronisation entre appareils.
+
+## Migration depuis l'ancienne version
+
+Automatique et sans action de votre part.
+
+1. Au premier lancement, vos données sont **mises à niveau** (schéma v1/v2 → v3). **Une copie d'avant la mise à niveau est conservée** (Réglages → Données → Copies automatiques, « Avant import »).
+2. La clé de stockage `logistique-v1` est inchangée : vos données sont retrouvées telles quelles. L'assistant de démarrage ne s'affiche pas si vous avez déjà des données.
+3. Vos anciens fichiers d'export `.json` s'importent toujours (Réglages → Données → Importer).
+4. Des données plus récentes que l'application ne sont jamais « rétrogradées » : l'application avertit au lieu de les modifier.
+
+## Architecture
+
+**Pourquoi du JavaScript pur, sans compilation ?** L'application doit s'ouvrir partout (poste de bureau, téléphone, Termux), se servir avec un simple `python -m http.server` et rester modifiable par n'importe qui sans chaîne d'outils. Un framework et un bundler ajouteraient Node, des dépendances et une étape de build sans bénéfice ici. La logique est séparée de l'interface et testée.
 
 | Fichier | Rôle |
 |---|---|
-| `index.html` | Structure de la page |
-| `style.css` | Système de design (clair/sombre, mobile) |
-| `data.js` | Référentiels modifiables : chapitres SH, listes de documents douaniers |
-| `noyau.js` | État et calculs métier, sans interface (testé) |
-| `ia.js` | Assistant IA : configuration, consigne, schéma de réponse, appel à l'API |
-| `vendor/anthropic-sdk.js` | SDK Anthropic officiel, regroupé en un seul fichier |
+| `noyau.js` | **Logique métier pure** : état, migrations, calculs, alertes, rappels, étapes de commande, montants en lettres (testée) |
+| `stockage.js` | IndexedDB : miroir, copies quotidiennes, photos, compression d'image |
+| `sauvegarde.js` | ZIP, chiffrement AES-GCM, import/export, CSV, verrou PIN (testé) |
 | `app.js` | Interface : vues, fenêtres, navigation, recherche globale |
-| `commercial.js` | Commandes, clients, factures, impression des factures |
-| `sw.js`, `manifest.webmanifest`, `icon.svg` | Application installable et hors ligne |
-| `tests/noyau.test.js` | Tests des calculs |
+| `commercial.js` | Commandes, clients, factures |
+| `photos.js` | Galerie et visionneuse de photos |
+| `impression.js` | Factures, ordres de transport, dossiers de douane (A4/PDF) |
+| `reglages.js` | Réglages en onglets, sauvegarde et restauration |
+| `notifications.js` | Rappels : autorisation, vérification, carte de réglage |
+| `chauffeur.js` | Mode chauffeur |
+| `onboarding.js` | Assistant de démarrage, bandeau d'installation |
+| `boot.js` | Démarrage, récupération, thème, hors ligne, mises à jour |
+| `ia.js`, `vendor/anthropic-sdk.js` | Assistant IA de classement SH (facultatif, clé API de l'utilisateur) |
+| `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
+| `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
+| `tests/noyau.test.js` | 43 tests |
+
+```bash
+npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres
+```
+
+## Assistant IA de classement SH (facultatif)
+
+Réglages → Général → Assistant IA : collez une clé API créée sur [console.anthropic.com](https://console.anthropic.com) (paiement à l'usage, le coût de chaque demande s'affiche). Décrivez une marchandise (Codes SH ou depuis un dossier douane) : l'assistant propose le code SH, son raisonnement, les points à vérifier et les contrôles probables au Maroc. La clé reste sur l'appareil. **Vérifiez toujours le code sur le tarif officiel de l'ADII.**
+
+## Avertissements
+
+- Listes de documents douaniers, règles de temps de conduite et TVA par défaut sont des **valeurs de départ** : vérifiez-les avec la réglementation en vigueur (ADII, ministère du Transport, votre comptable).
+- Les codes tarifaires à 10 chiffres et les droits changent avec la loi de finances : consultez le tarif officiel avant toute déclaration.
+- Les notifications en arrière-plan dépendent du navigateur et du système ; ne vous y fiez pas pour une échéance critique sans la vérifier dans l'application.

@@ -156,6 +156,10 @@ const ONGLETS = [
 const ONGLETS_MOBILE = ["tableau", "commandes", "itineraires", "camions"];
 
 function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
+  if (typeof modeChauffeurActif === "function") {
+    if (modeChauffeurActif()) onglet = "chauffeur"; // l'appareil est verrouillé sur l'écran du chauffeur
+    else if (onglet === "chauffeur") onglet = "tableau";
+  }
   if (onglet !== ongletActif) garderScroll = false;
   ongletActif = onglet;
   const v = VUES[onglet];
@@ -167,13 +171,14 @@ function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   $("#nav").innerHTML = ONGLETS.map((o) => { const t = o[3] !== groupe && o[3] ? `<div class="nav-group">${o[3]}</div>` : ""; groupe = o[3]; return t + item(o); }).join("");
   const horsBarre = !ONGLETS_MOBILE.includes(onglet);
   $("#bottombar").innerHTML = ONGLETS.filter(([id]) => ONGLETS_MOBILE.includes(id)).map(item).join("") +
-    `<button class="nav-item ${horsBarre ? "active" : ""}" data-act-global="plus">${ic("more")}<span>${horsBarre ? ONGLETS.find(([id]) => id === onglet)[1] : "Plus"}</span></button>`;
+    `<button class="nav-item ${horsBarre ? "active" : ""}" data-act-global="plus">${ic("more")}<span>${horsBarre ? ONGLETS.find(([id]) => id === onglet)?.[1] ?? "Menu" : "Plus"}</span></button>`;
   if (location.hash.slice(1) !== onglet) history.replaceState(null, "", "#" + onglet);
-  $("#titre").textContent = v.titre;
+  const titre = typeof v.titre === "function" ? v.titre() : v.titre;
+  $("#titre").textContent = titre;
   $("#soustitre").textContent = typeof v.sous === "function" ? v.sous() : v.sous;
   $("#actions").innerHTML = v.actions?.() || "";
   $("#app").innerHTML = v.rendu();
-  document.title = `${v.titre} · Logistique Fret`;
+  document.title = `${titre} · Logistique Fret`;
   etiqueterTableaux();
   v.apres?.();
   if (typeof majIndicateurs === "function") majIndicateurs();
@@ -420,6 +425,19 @@ VUES.camions = {
 };
 
 /* ---------- Gasoil ---------- */
+/** Enregistre un plein (formulaire v : camionId, date, km, litres, prix, station, plein, ticket[]). Partagé avec le mode chauffeur. */
+function enregistrerPlein(v) {
+  const p = { id: uid(), camionId: v.camionId, date: v.date, km: num(v.km), litres: num(v.litres), prix: num(v.prix), station: v.station, plein: v.plein };
+  S.pleins.push(p);
+  if (v.ticket?.length) photosAjouterFichiers(v.ticket, `plein:${p.id}`).then(hydraterPhotos);
+  const c = parId(S.camions, p.camionId);
+  if (c && p.km > c.km) c.km = p.km;
+  S.params.prixGasoil = p.prix;
+  sauver();
+  const cv = consommations(p.camionId)[p.id];
+  toast(cv ? `Plein enregistré · ${fmt(cv, 1)} L/100 km` : "Plein enregistré");
+  return p;
+}
 VUES.carburant = {
   titre: "Gasoil",
   sous: "Pleins, consommation et détection des anomalies",
@@ -469,15 +487,7 @@ VUES.carburant = {
         { name: "plein", label: "Plein complet (réservoir rempli)", type: "checkbox", value: true, full: true },
       ], { valider: "Ajouter", aide: "La consommation se calcule entre deux pleins complets. Le kilométrage du camion est mis à jour automatiquement." });
       if (!v) return;
-      const p = { id: uid(), camionId: v.camionId, date: v.date, km: num(v.km), litres: num(v.litres), prix: num(v.prix), station: v.station, plein: v.plein };
-      S.pleins.push(p);
-      if (v.ticket?.length) photosAjouterFichiers(v.ticket, `plein:${p.id}`).then(hydraterPhotos);
-      const c = parId(S.camions, p.camionId);
-      if (c && p.km > c.km) c.km = p.km;
-      S.params.prixGasoil = p.prix;
-      sauver();
-      const cv = consommations(p.camionId)[p.id];
-      toast(cv ? `Plein enregistré · ${fmt(cv, 1)} L/100 km` : "Plein enregistré");
+      enregistrerPlein(v);
       rafraichir();
     }
     if (act === "suppr" && (await confirmer("Supprimer ce plein ?", "La consommation sera recalculée."))) { supprimerPhotosDe(`plein:${id}`); S.pleins = S.pleins.filter((p) => p.id !== id); sauver(); rafraichir(); }
@@ -550,12 +560,11 @@ VUES.chauffeurs = {
     if (act === "service") {
       if (c.reposJusqua && new Date(c.reposJusqua) > new Date() &&
         !(await confirmer("Repos non terminé", `${c.nom} est en repos jusqu'à ${dateHeureFr(c.reposJusqua)}. Forcer la prise de service ?`, "Forcer"))) return;
-      c.debutService = new Date().toISOString(); c.reposJusqua = null;
+      prendreService(c);
       sauver(); toast(`Prise de service de ${c.nom}`); rafraichir();
     }
     if (act === "repos") {
-      c.debutService = null;
-      c.reposJusqua = new Date(Date.now() + S.params.reposMinHeures * 3600000).toISOString();
+      finDeService(c);
       sauver(); toast(`${c.nom} en repos jusqu'à ${dateHeureFr(c.reposJusqua)}`); rafraichir();
     }
     if (act === "suppr" && (await confirmer(`Supprimer ${c.nom} ?`, "Ses trajets resteront dans l'historique."))) {
@@ -655,7 +664,7 @@ VUES.itineraires = {
     if (act === "demarrer") {
       t.statut = "encours";
       const ch = parId(S.chauffeurs, t.chauffeurId);
-      if (ch && !ch.debutService) { ch.debutService = new Date().toISOString(); ch.reposJusqua = null; }
+      if (ch && !ch.debutService) prendreService(ch);
       sauver(); toast("Trajet démarré"); rafraichir();
     }
     if (act === "terminer") {
@@ -1003,7 +1012,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 // Rafraîchit les états (repos, service) chaque minute.
-setInterval(() => { if (["tableau", "chauffeurs"].includes(ongletActif) && !$("#modale").open) rafraichir(); }, 60000);
+setInterval(() => { if (["tableau", "chauffeurs", "chauffeur"].includes(ongletActif) && !$("#modale").open) rafraichir(); }, 60000);
 
 function menuPlus() {
   const d = $("#modale");
@@ -1031,7 +1040,7 @@ function indexRecherche() {
 }
 function ouvrirRecherche() {
   const d = $("#palette");
-  if (d.open) return;
+  if (d.open || (typeof modeChauffeurActif === "function" && modeChauffeurActif())) return;
   const index = indexRecherche();
   d.innerHTML = `<div class="palette"><div class="search">${ic("search")}<input id="pq" type="search" placeholder="Commande, client, camion, facture, CMR…" autocomplete="off" aria-label="Rechercher"></div><div id="pres" role="listbox"></div><div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> naviguer</span><span><kbd>↵</kbd> ouvrir</span><span><kbd>esc</kbd> fermer</span></div></div>`;
   let sel = 0, res = [];

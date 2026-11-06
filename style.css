@@ -534,3 +534,25 @@ button, a, label.btn { touch-action: manipulation; }
 .vision .nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: 0; background: rgba(255, 255, 255, .12); color: #fff; font-size: 2rem; cursor: pointer; border-radius: 10px; }
 .vision .nav.prec { left: 8px; } .vision .nav.suiv { right: 8px; }
 .vision-confirm { position: fixed; left: 50%; bottom: calc(60px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; background: #2c2c2e; color: #fff; z-index: 5; font-size: .9rem; }
+
+/* ============================================================
+   Mode chauffeur : gros boutons, un seul écran, tout le reste masqué
+   ============================================================ */
+body.mode-chauffeur .sidebar, body.mode-chauffeur .bottombar, body.mode-chauffeur .mobile-only, body.mode-chauffeur #indic-sauvegarde { display: none !important; }
+body.mode-chauffeur .layout { grid-template-columns: 1fr; }
+body.mode-chauffeur main { margin: 0 auto; max-width: 640px; padding: 20px 16px calc(36px + env(safe-area-inset-bottom)); }
+body.mode-chauffeur .toasts, body.mode-chauffeur #toasts { bottom: calc(24px + env(safe-area-inset-bottom)); }
+.btn.lg { min-height: 58px; padding: 14px 22px; border-radius: 16px; font-size: 1.04rem; width: 100%; }
+.chf-actions { display: grid; gap: 10px; margin-top: 14px; }
+.chf-titre { font-size: 1.6rem; font-weight: 700; letter-spacing: -.025em; line-height: 1.2; }
+.chf-service.service { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); background: color-mix(in srgb, var(--ok-soft) 45%, var(--surface)); }
+.chf-service.repos { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); background: color-mix(in srgb, var(--warn-soft) 45%, var(--surface)); }
+.chf-service.depasse { border-color: var(--danger); background: var(--danger-soft); }
+.chf-mission { display: grid; gap: 8px; }
+.chf-mission.principale { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft), var(--shadow); }
+.chf-ref { display: block; font-size: .95rem; }
+.chf-route { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.25; margin: 6px 0 2px; }
+.chf-route .fl { color: var(--muted); font-weight: 500; }
+.progress.warn > i { background: var(--warn); }
+.progress.danger > i { background: var(--danger); }
+.code-secours { font-size: 2.1rem; font-weight: 800; letter-spacing: .14em; text-align: center; padding: 18px; margin: 0 0 8px; border-radius: 14px; background: var(--surface-2); font-variant-numeric: tabular-nums; user-select: all; }

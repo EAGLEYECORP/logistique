@@ -111,17 +111,7 @@ VUES.commandes = {
         if (!v) return;
         Object.assign(c, v);
       }
-      c.statut = nx;
-      (c.jalons ||= []).push({ statut: nx, date: new Date().toISOString() });
-      if (nx === "livre") {
-        c.dateLivraison ||= today();
-        const t = c.trajetId && parId(S.trajets, c.trajetId);
-        if (t && t.statut !== "termine") { t.statut = "termine"; const cam = parId(S.camions, t.camionId); if (cam) cam.km += t.distance; }
-      }
-      if (nx === "charge") {
-        const t = c.trajetId && parId(S.trajets, c.trajetId);
-        if (t && t.statut === "planifie") t.statut = "encours";
-      }
+      appliquerEtape(c, nx);
       sauver(); toast(`${c.ref} : ${libStatutCmd(nx)}`); rafraichir();
     }
     if (act === "trajet") {

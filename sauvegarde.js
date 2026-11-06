@@ -215,3 +215,32 @@ function csvZipConstruire() {
   const fichiers = Object.entries(tablesCSV()).filter(([, l]) => l.length).map(([nom, l]) => ({ nom: `${nom}.csv`, donnees: _enc.encode(lignesVersCSV(l)) }));
   return fichiers.length ? { octets: zipCreer(fichiers), nom: `logistique-fret-csv-${dateISO(Date.now())}.zip`, type: "application/zip", nbTables: fichiers.length } : null;
 }
+
+/* ---------- verrou du mode chauffeur (code PIN + code de secours) ---------- */
+const octetsVersHex = (o) => [...o].map((b) => b.toString(16).padStart(2, "0")).join("");
+const selAleatoire = () => octetsVersHex(crypto.getRandomValues(new Uint8Array(12)));
+
+/** Empreinte salée (PBKDF2-SHA256, 100 000 itérations) : le code n'est jamais stocké en clair. */
+async function empreinteSecret(secret, sel) {
+  const base = await crypto.subtle.importKey("raw", _enc.encode(secret), "PBKDF2", false, ["deriveBits"]);
+  return octetsVersHex(new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", salt: _enc.encode(sel), iterations: 100000, hash: "SHA-256" }, base, 256)));
+}
+/** Code de secours lisible, sans caractères ambigus (0/O, 1/I) : XXXX-XXXX. */
+function codeSecours() {
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const c = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => alphabet[b % alphabet.length]).join("");
+  return `${c.slice(0, 4)}-${c.slice(4)}`;
+}
+const normaliserCode = (s) => String(s || "").trim().toUpperCase().replace(/[\s-]/g, "");
+
+/** Crée le verrou. Sans PIN, seul le code de secours existe (inutile). Renvoie { verrou, secours } : le code de secours en clair n'est montré qu'une fois. */
+async function verrouCreer(pin) {
+  const sel = selAleatoire(), secours = codeSecours();
+  return { verrou: { sel, hashPin: pin ? await empreinteSecret(normaliserCode(pin), sel) : null, hashSecours: await empreinteSecret(normaliserCode(secours), sel) }, secours };
+}
+async function verrouVerifier(verrou, saisie) {
+  const s = normaliserCode(saisie);
+  if (!s || !verrou) return false;
+  const h = await empreinteSecret(s, verrou.sel);
+  return h === verrou.hashPin || h === verrou.hashSecours;
+}

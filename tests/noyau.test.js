@@ -442,6 +442,22 @@ test("missions d'un chauffeur : tri par avancement, trajets isolés", () => {
   assert.deepStrictEqual(N.trajetsIsoles("h").map((t) => t.id), ["t2"]);
 });
 
+test("verrou du mode chauffeur : PIN, code de secours, refus, empreintes salées", async () => {
+  const { verrou, secours } = await N.verrouCreer("4821");
+  assert.match(secours, /^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$/);
+  assert.ok(verrou.hashPin && verrou.hashPin !== "4821" && !JSON.stringify(verrou).includes("4821"));
+  assert.strictEqual(await N.verrouVerifier(verrou, "4821"), true);
+  assert.strictEqual(await N.verrouVerifier(verrou, " 4821 "), true);
+  assert.strictEqual(await N.verrouVerifier(verrou, "4822"), false);
+  assert.strictEqual(await N.verrouVerifier(verrou, ""), false);
+  assert.strictEqual(await N.verrouVerifier(verrou, secours), true);
+  assert.strictEqual(await N.verrouVerifier(verrou, secours.toLowerCase().replace("-", " ")), true); // casse et séparateur indifférents
+  assert.strictEqual(await N.verrouVerifier(null, "4821"), false);
+  const autre = await N.verrouCreer("4821");
+  assert.notStrictEqual(autre.verrou.hashPin, verrou.hashPin); // sel différent → empreinte différente
+  assert.strictEqual((await N.verrouCreer("")).verrou.hashPin, null);
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

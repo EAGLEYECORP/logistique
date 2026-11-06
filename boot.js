@@ -130,6 +130,7 @@ async function demarrer() {
   try { appliquerTheme(localStorage.getItem("logistique-theme") || "auto"); } catch { /* ignoré */ }
   S = await chargerEtat();
   if (demarrage.sauverApres) sauver();
+  if (typeof chauffeurAppliquerMode === "function") chauffeurAppliquerMode();
   majConnexion();
   enregistrerServiceWorker();
   const h = location.hash.slice(1);

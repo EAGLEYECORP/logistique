@@ -6,10 +6,10 @@
    ============================================================ */
 
 /** Bouton d'accès aux photos d'une cible. texte=true → bouton avec libellé (sinon icône seule). */
-function boutonPhotos(cible, titre, { texte = false } = {}) {
+function boutonPhotos(cible, titre, { texte = false, cls = "btn ghost sm" } = {}) {
   const attrs = `data-photos="${esc(cible)}" data-titre="${esc(titre)}"`;
   return texte
-    ? `<button type="button" class="btn ghost sm" ${attrs}>${ic("camera")}Photos<span class="pbadge" data-pbadge="${esc(cible)}"></span></button>`
+    ? `<button type="button" class="${cls}" ${attrs}>${ic("camera")}Photos<span class="pbadge" data-pbadge="${esc(cible)}"></span></button>`
     : `<button type="button" class="icon-btn" ${attrs} title="Photos" aria-label="${esc(titre)}">${ic("camera")}<span class="pbadge" data-pbadge="${esc(cible)}"></span></button>`;
 }
 

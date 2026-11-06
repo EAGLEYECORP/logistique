@@ -5,13 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Logistique Fret</title>
   <meta name="description" content="Gestion du transport routier international de marchandises : commandes, flotte, chauffeurs, douane, facturation.">
-  <meta name="theme-color" content="#1d4ed8">
+  <meta name="theme-color" content="#f5f5f7">
+  <meta name="color-scheme" content="light dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Fret">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <script>try{var t=localStorage.getItem("logistique-theme");if(t==="clair")document.documentElement.dataset.theme="light";if(t==="sombre")document.documentElement.dataset.theme="dark"}catch(e){}</script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="splash" class="splash" aria-hidden="true"><img src="icon.svg" width="88" height="88" alt=""><strong>Logistique Fret</strong></div>
+  <div id="hors-ligne" class="hors-ligne" role="status" hidden><span class="dot"></span>Mode hors ligne · vos données sont enregistrées sur l'appareil</div>
   <div class="layout">
     <aside class="sidebar">
       <div class="brand">
@@ -31,7 +39,7 @@
           <h1 id="titre"></h1>
           <p id="soustitre"></p>
         </div>
-        <div class="row"><button class="icon-btn mobile-only" data-act-global="recherche" aria-label="Rechercher"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button><div id="actions" class="row"></div></div>
+        <div class="row"><button id="indic-sauvegarde" class="chip" type="button" hidden></button><button class="icon-btn mobile-only" data-act-global="recherche" aria-label="Rechercher"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button><div id="actions" class="row"></div></div>
       </header>
       <div id="app"></div>
     </main>
@@ -46,7 +54,11 @@
   <script src="data.js"></script>
   <script src="noyau.js"></script>
   <script src="ia.js"></script>
+  <script src="stockage.js"></script>
+  <script src="sauvegarde.js"></script>
   <script src="app.js"></script>
   <script src="commercial.js"></script>
+  <script src="reglages.js"></script>
+  <script src="boot.js"></script>
 </body>
 </html>

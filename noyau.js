@@ -23,7 +23,12 @@ const PARAMS_DEFAUT = {
   tauxEUR: 10.8,           // MAD pour 1 EUR — à mettre à jour
   tvaDefaut: 14,           // % — à vérifier avec votre comptable (export, transport international…)
   delaiPaiement: 30,       // jours, si le client n'en a pas
+  rappelSauvegarde: 7,     // jours sans sauvegarde avant rappel
 };
+
+/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos. */
+const VERSION_SCHEMA = 3;
+const COLLECTIONS = ["camions", "pleins", "interventions", "chauffeurs", "trajets", "dossiers", "codes", "clients", "commandes", "factures"];
 
 // Documents suivis avec date d'expiration (transport national et international).
 const DOCS_CAMION = [
@@ -55,13 +60,50 @@ function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
     clients: [], commandes: [], factures: [],
-    params: { ...PARAMS_DEFAUT }, meta: {}, entreprise: {},
+    params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }
 
 function normaliser(e) {
   const base = etatVide();
   return { ...base, ...e, params: { ...PARAMS_DEFAUT, ...(e?.params || {}) }, meta: { ...(e?.meta || {}) }, entreprise: { ...(e?.entreprise || {}) } };
+}
+
+const contientDonnees = (e) => COLLECTIONS.some((k) => (e?.[k] || []).length > 0);
+
+/**
+ * Met à niveau des données d'une version antérieure (ou d'un export). Pure : ne touche pas à S.
+ * Renvoie { etat, depuis, migre, tropRecent }. Des données plus récentes que cette application ne sont jamais « rétrogradées ».
+ */
+function migrer(brut) {
+  const base = brut && typeof brut === "object" && !Array.isArray(brut) ? brut : {};
+  const e = normaliser(base);
+  const depuis = Number(base.meta?.version) || 1;
+  if (depuis > VERSION_SCHEMA) return { etat: e, depuis, migre: false, tropRecent: true };
+  if (depuis < 2) {
+    for (const k of COLLECTIONS) {
+      e[k] = (Array.isArray(e[k]) ? e[k] : []).filter((x) => x && typeof x === "object");
+      e[k].forEach((x) => { if (!x.id) x.id = uid(); });
+    }
+    e.commandes.forEach((c) => { c.jalons ||= []; });
+    e.factures.forEach((f) => { f.lignes ||= []; });
+  }
+  if (depuis < 3) {
+    if (contientDonnees(e)) e.meta.onboarde = true; // un utilisateur existant ne revoit pas l'assistant de démarrage
+    e.meta.notif ||= { actif: false, cats: {} };
+  }
+  e.meta.version = VERSION_SCHEMA;
+  return { etat: e, depuis, migre: depuis < VERSION_SCHEMA };
+}
+
+function resumeDonnees(e) {
+  const n = (k) => (e?.[k] || []).length;
+  return { camions: n("camions"), chauffeurs: n("chauffeurs"), clients: n("clients"), commandes: n("commandes"), factures: n("factures"), trajets: n("trajets"), pleins: n("pleins"), dossiers: n("dossiers") };
+}
+function libResume(r) {
+  const noms = { camions: "camion", chauffeurs: "chauffeur", clients: "client", commandes: "commande", factures: "facture", trajets: "trajet", pleins: "plein", dossiers: "dossier" };
+  const l = Object.entries(r).filter(([, v]) => v).map(([k, v]) => `${v} ${noms[k]}${v > 1 ? "s" : ""}`);
+  return l.length ? l.join(" · ") : "aucune donnée";
 }
 
 let S = etatVide();
@@ -153,7 +195,7 @@ function etatChauffeur(ch, maintenant = Date.now()) {
   if (ch.debutService) {
     const h = (maintenant - new Date(ch.debutService).getTime()) / 3600000;
     if (h >= P.amplitudeMaxHeures) return { dispo: false, niveau: "danger", code: "depasse", texte: `En service depuis ${fmt(h, 1)} h — repos obligatoire` };
-    return { dispo: true, niveau: "ok", code: "service", texte: `En service depuis ${fmt(h, 1)} h · reste ${fmt(P.amplitudeMaxHeures - h, 1)} h` };
+    return { dispo: true, niveau: "ok", code: "service", reste: P.amplitudeMaxHeures - h, texte: `En service depuis ${fmt(h, 1)} h · reste ${fmt(P.amplitudeMaxHeures - h, 1)} h` };
   }
   return { dispo: true, niveau: "ok", code: "libre", texte: "Disponible" };
 }
@@ -195,59 +237,132 @@ function depensesHebdo(nb = 8) {
 }
 
 /* ---------- alertes ---------- */
+/** Catégories de rappels : clé, libellé, détail. « autre » n'est jamais notifiée. */
+const CATS_NOTIF = [
+  ["docs", "Papiers et entretien", "Assurance, visite technique, permis, visa, vidange, pneus…"],
+  ["repos", "Repos des chauffeurs", "Service bientôt trop long ou repos obligatoire"],
+  ["factures", "Factures en retard", "Échéances dépassées"],
+  ["commandes", "Commandes et douane", "Chargements sans équipe, livraisons à facturer, dossiers"],
+  ["sauvegarde", "Rappel de sauvegarde", "Quand la dernière sauvegarde date de plus d'une semaine"],
+];
+
 function alertes() {
   const P = S.params;
   const liste = [];
-  const ajouter = (niveau, onglet, texte) => liste.push({ niveau, onglet, texte });
+  const ajouter = (niveau, onglet, texte, cat = "autre", cle = "") => liste.push({ niveau, onglet, texte, cat, cle });
 
   for (const c of S.camions) {
-    for (const e of etatCamion(c)) if (e.niveau !== "ok") ajouter(e.niveau, "camions", `${c.immat} — ${e.type} ${e.texte}`);
+    for (const e of etatCamion(c)) if (e.niveau !== "ok") ajouter(e.niveau, "camions", `${c.immat} — ${e.type} ${e.texte}`, "docs", `docs:cam:${c.id}:${e.type}`);
     const moy = consoMoyenne(c.id);
     const conso = consommations(c.id);
     const dernier = S.pleins.filter((p) => p.camionId === c.id && conso[p.id]).sort((a, b) => b.km - a.km)[0];
     if (moy && dernier && conso[dernier.id] > moy * (1 + P.seuilConso / 100)) {
-      ajouter("warn", "carburant", `${c.immat} — dernière conso ${fmt(conso[dernier.id], 1)} L/100 (moyenne ${fmt(moy, 1)}) : vérifier fuite, pneus, conduite ou vol de gasoil`);
+      ajouter("warn", "carburant", `${c.immat} — dernière conso ${fmt(conso[dernier.id], 1)} L/100 (moyenne ${fmt(moy, 1)}) : vérifier fuite, pneus, conduite ou vol de gasoil`, "autre", `conso:${c.id}`);
     }
   }
   for (const ch of S.chauffeurs) {
     const e = etatChauffeur(ch);
-    if (e.niveau === "danger") ajouter("danger", "chauffeurs", `${ch.nom} — ${e.texte}`);
+    if (e.niveau === "danger") ajouter("danger", "chauffeurs", `${ch.nom} — ${e.texte}`, e.code === "depasse" ? "repos" : "docs", e.code === "depasse" ? `repos:${ch.id}` : `docs:ch:${ch.id}:permis`);
+    if (e.code === "service" && e.reste <= 1) ajouter("warn", "chauffeurs", `${ch.nom} — repos obligatoire dans ${fmt(Math.max(0, e.reste) * 60)} min`, "repos", `repos:${ch.id}`);
     for (const [cle, lib] of DOCS_CHAUFFEUR) {
       const j = joursAvant(ch[cle]);
       if (j === null || j > P.alerteJours || (cle === "permis" && j < 0)) continue; // permis expiré : déjà signalé par l'état
-      ajouter(j < 0 ? "danger" : "warn", "chauffeurs", `${ch.nom} — ${lib} : ${j < 0 ? `échéance dépassée de ${-j} j` : `échéance dans ${j} j`}`);
+      ajouter(j < 0 ? "danger" : "warn", "chauffeurs", `${ch.nom} — ${lib} : ${j < 0 ? `échéance dépassée de ${-j} j` : `échéance dans ${j} j`}`, "docs", `docs:ch:${ch.id}:${cle}`);
     }
   }
   const responsables = {};
   for (const ch of S.chauffeurs) if (ch.camionId) (responsables[ch.camionId] ||= []).push(ch.nom);
-  for (const [cid, noms] of Object.entries(responsables)) if (noms.length > 1) ajouter("warn", "chauffeurs", `${nomCamion(cid)} a plusieurs responsables : ${noms.join(", ")}`);
+  for (const [cid, noms] of Object.entries(responsables)) if (noms.length > 1) ajouter("warn", "chauffeurs", `${nomCamion(cid)} a plusieurs responsables : ${noms.join(", ")}`, "autre", `resp:${cid}`);
   for (const t of S.trajets) {
-    if (t.statut === "planifie" && t.date && joursAvant(t.date) < 0) ajouter("warn", "itineraires", `Trajet ${t.depart} → ${t.arrivee} prévu le ${dateFr(t.date)} pas encore démarré`);
+    if (t.statut === "planifie" && t.date && joursAvant(t.date) < 0) ajouter("warn", "itineraires", `Trajet ${t.depart} → ${t.arrivee} prévu le ${dateFr(t.date)} pas encore démarré`, "commandes", `traj:${t.id}`);
   }
   for (const d of S.dossiers) {
     if (d.statut === "clos") continue;
     const items = CHECKLISTS_DOUANE[d.type] || [];
     const faits = items.filter((_, i) => d.coches?.[i]).length;
     const jd = joursAvant(d.echeance);
-    if (jd !== null && jd <= 3 && faits < items.length) ajouter(jd < 0 ? "danger" : "warn", "douane", `Dossier ${d.ref} — échéance ${jd < 0 ? "dépassée" : jd === 0 ? "aujourd'hui" : `dans ${jd} j`} (${faits}/${items.length} documents)`);
+    if (jd !== null && jd <= 3 && faits < items.length) ajouter(jd < 0 ? "danger" : "warn", "douane", `Dossier ${d.ref} — échéance ${jd < 0 ? "dépassée" : jd === 0 ? "aujourd'hui" : `dans ${jd} j`} (${faits}/${items.length} documents)`, "commandes", `dossier:${d.id}`);
   }
   for (const f of S.factures) {
     const e = etatFacture(f);
-    if (e.code === "retard") ajouter("danger", "factures", `Facture ${f.numero} (${nomClient(f.clientId)}) — ${e.texte}, ${fmtDevise(totauxFacture(f).ttc, f.devise)}`);
+    if (e.code === "retard") ajouter("danger", "factures", `Facture ${f.numero} (${nomClient(f.clientId)}) — ${e.texte}, ${fmtDevise(totauxFacture(f).ttc, f.devise)}`, "factures", `fac:${f.id}`);
   }
   for (const c of S.commandes) {
-    if (c.statut === "livre" && !c.factureId) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`);
+    if (c.statut === "livre" && !c.factureId) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`, "commandes", `cmd:${c.id}:facturer`);
     const jc = joursAvant(c.dateChargement);
     if (["devis", "confirme"].includes(c.statut) && jc !== null && jc <= 1 && (!c.chauffeurId || !c.camionId)) {
-      ajouter(jc < 0 ? "danger" : "warn", "commandes", `Commande ${c.ref} — chargement ${jc < 0 ? "en retard" : jc === 0 ? "aujourd'hui" : "demain"}, chauffeur ou camion non affecté`);
+      ajouter(jc < 0 ? "danger" : "warn", "commandes", `Commande ${c.ref} — chargement ${jc < 0 ? "en retard" : jc === 0 ? "aujourd'hui" : "demain"}, chauffeur ou camion non affecté`, "commandes", `cmd:${c.id}:equipe`);
     }
   }
-  const aDesDonnees = S.camions.length || S.chauffeurs.length || S.dossiers.length;
   const js = S.meta.derniereSauvegarde ? -joursAvant(S.meta.derniereSauvegarde.slice(0, 10)) : Infinity;
-  if (aDesDonnees && js > 7) ajouter("warn", "parametres", S.meta.derniereSauvegarde ? `Dernière sauvegarde il y a ${js} jours — exportez vos données` : "Aucune sauvegarde de vos données — exportez-les");
+  if (contientDonnees(S) && js > P.rappelSauvegarde) ajouter("warn", "parametres", S.meta.derniereSauvegarde ? `Dernière sauvegarde il y a ${js} jours — exportez vos données` : "Aucune sauvegarde de vos données — exportez-les", "sauvegarde", "sauvegarde");
 
   const ordre = { danger: 0, warn: 1 };
   return liste.sort((a, b) => ordre[a.niveau] - ordre[b.niveau]);
+}
+
+const joursEntre = (a, b) => Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);
+
+/**
+ * Quelles notifications envoyer maintenant ? Pure.
+ *  - liste     : résultat de alertes()
+ *  - cfg       : { actif, cats: { docs: false, … } } (une catégorie absente est activée)
+ *  - notifies  : { clé: "AAAA-MM-JJ" } dernière notification par alerte
+ * Urgent : rappelé chaque jour · à surveiller : tous les 3 jours. Au plus 3 notifications urgentes + 1 résumé.
+ */
+function notificationsAEnvoyer(liste, cfg, notifies = {}, jour = today()) {
+  if (!cfg?.actif) return { items: [], cles: [] };
+  const cats = cfg.cats || {};
+  const nouvelles = liste.filter((a) => {
+    if (!a.cle || a.cat === "autre" || cats[a.cat] === false) return false;
+    const dernier = notifies[a.cle];
+    return !dernier || joursEntre(dernier, jour) >= (a.niveau === "danger" ? 1 : 3);
+  });
+  const urgentes = nouvelles.filter((a) => a.niveau === "danger").slice(0, 3);
+  const reste = nouvelles.filter((a) => !urgentes.includes(a));
+  const items = urgentes.map((a) => ({ tag: a.cle, titre: "Urgent — Logistique Fret", corps: a.texte, onglet: a.onglet }));
+  if (reste.length) {
+    items.push({ tag: "resume", titre: `${reste.length} point${reste.length > 1 ? "s" : ""} à surveiller`, corps: reste.slice(0, 3).map((a) => a.texte).join("\n") + (reste.length > 3 ? `\n+ ${reste.length - 3} autre${reste.length > 4 ? "s" : ""}` : ""), onglet: "tableau" });
+  }
+  return { items, cles: [...urgentes, ...reste].map((a) => a.cle) };
+}
+
+/* ---------- service du chauffeur, étapes de commande, missions ---------- */
+function prendreService(ch, maintenant = Date.now()) {
+  ch.debutService = new Date(maintenant).toISOString();
+  ch.reposJusqua = null;
+}
+function finDeService(ch, maintenant = Date.now()) {
+  ch.debutService = null;
+  ch.reposJusqua = new Date(maintenant + S.params.reposMinHeures * 3600000).toISOString();
+}
+
+/** Fait avancer une commande à l'étape nx : jalon horodaté, trajet lié démarré/terminé, kilométrage du camion. */
+function appliquerEtape(c, nx, maintenant = new Date()) {
+  c.statut = nx;
+  (c.jalons ||= []).push({ statut: nx, date: maintenant.toISOString() });
+  const t = c.trajetId && parId(S.trajets, c.trajetId);
+  if (nx === "charge" && t && t.statut === "planifie") t.statut = "encours";
+  if (nx === "livre") {
+    c.dateLivraison ||= dateISO(maintenant);
+    if (t && t.statut !== "termine") {
+      t.statut = "termine";
+      const cam = parId(S.camions, t.camionId);
+      if (cam) cam.km += t.distance;
+    }
+  }
+}
+
+/** Commandes non livrées d'un chauffeur, la plus avancée d'abord. */
+function missionsChauffeur(id) {
+  const ordre = { douane: 0, transit: 1, charge: 2, confirme: 3, devis: 4 };
+  return S.commandes.filter((c) => c.chauffeurId === id && c.statut !== "livre")
+    .sort((a, b) => (ordre[a.statut] - ordre[b.statut]) || (a.dateChargement || "").localeCompare(b.dateChargement || ""));
+}
+/** Trajets d'un chauffeur qui ne sont rattachés à aucune commande. */
+function trajetsIsoles(id) {
+  const lies = new Set(S.commandes.map((c) => c.trajetId).filter(Boolean));
+  return S.trajets.filter((t) => t.chauffeurId === id && t.statut !== "termine" && !lies.has(t.id));
 }
 
 /* ---------- commercial : commandes, factures, marges ---------- */

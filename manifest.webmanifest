@@ -1,14 +1,26 @@
 {
+  "id": "./",
   "name": "Logistique Fret",
   "short_name": "Fret",
-  "description": "Flotte, gasoil, chauffeurs, itinéraires et douane pour transporteurs.",
+  "description": "Commandes, flotte, chauffeurs, douane et facturation pour transporteurs routiers. Fonctionne sans réseau.",
   "lang": "fr",
+  "dir": "ltr",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f6f7fb",
-  "theme_color": "#1d4ed8",
+  "orientation": "any",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
+  "categories": ["business", "productivity"],
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Commandes", "short_name": "Commandes", "url": "./#commandes", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Factures", "short_name": "Factures", "url": "./#factures", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Camions", "short_name": "Camions", "url": "./#camions", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
   ]
 }

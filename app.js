@@ -5,19 +5,14 @@
    ============================================================ */
 
 /* ---------- persistance ---------- */
-function charger() {
-  try {
-    const brut = localStorage.getItem(STORAGE_KEY);
-    return brut ? normaliser(JSON.parse(brut)) : etatVide();
-  } catch {
-    return etatVide();
-  }
-}
+/** Sauvegarde rapide (synchrone) + copie miroir et instantané quotidien dans IndexedDB (voir stockage.js). */
 function sauver() {
+  let precedent = null;
+  try { precedent = localStorage.getItem(STORAGE_KEY); } catch { /* ignoré */ }
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); }
-  catch { toast("Enregistrement impossible : exportez vos données (Réglages).", "danger"); }
+  catch { toast("Stockage rapide plein : exportez vos données (Réglages → Données).", "danger"); }
+  miroirPlanifier(precedent);
 }
-S = charger();
 
 /* ---------- icônes (SVG en ligne, hors ligne) ---------- */
 const P_ = {
@@ -53,6 +48,9 @@ const P_ = {
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
   more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
   phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
 };
 const ic = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${P_[n] || ""}</svg>`;
@@ -132,13 +130,7 @@ function telecharger(nom, contenu, type) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-function versCSV(lignes) {
-  if (!lignes.length) return "";
-  const cols = Object.keys(lignes[0]);
-  const cel = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  return "﻿" + [cols.map(cel).join(";"), ...lignes.map((l) => cols.map((c) => cel(l[c])).join(";"))].join("\n");
-}
-const exporterCSV = (nom, lignes) => { if (!lignes.length) return toast("Rien à exporter.", "warn"); telecharger(`${nom}-${today()}.csv`, versCSV(lignes), "text/csv;charset=utf-8"); };
+const exporterCSV = (nom, lignes) => { if (!lignes.length) return toast("Rien à exporter.", "warn"); telecharger(`${nom}-${today()}.csv`, lignesVersCSV(lignes), "text/csv;charset=utf-8"); };
 
 const optsCamions = (vide = "— Aucun —") => [["", vide], ...S.camions.map((c) => [c.id, `${c.immat}${c.marque ? " · " + c.marque : ""}`])];
 
@@ -183,6 +175,7 @@ function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   document.title = `${v.titre} · Logistique Fret`;
   etiqueterTableaux();
   v.apres?.();
+  if (typeof majIndicateurs === "function") majIndicateurs();
   window.scrollTo(0, garderScroll ? y : 0);
 }
 // Sur mobile, chaque ligne de tableau devient une carte : on recopie l'en-tête de colonne dans chaque cellule.
@@ -902,124 +895,6 @@ function rendreRecherche() {
       : `<p class="hint">Aucun chapitre ne correspond à « ${esc(recherche)} ».</p>`}`;
 }
 
-/* ---------- Réglages ---------- */
-let invitationInstall = null;
-window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); invitationInstall = e; });
-
-VUES.parametres = {
-  titre: "Réglages",
-  sous: "Paramètres de calcul, sauvegarde et installation",
-  rendu() {
-    const P = S.params;
-    const n = (name, label) => ({ name, label, type: "number", value: P[name] });
-    const ds = S.meta.derniereSauvegarde;
-    return `
-    <div class="card">
-      <div class="card-head"><h2>Calculs</h2></div>
-      <form id="f-params">
-        <div class="section-title" style="margin-top:0">Coûts</div>
-        ${champs([n("prixGasoil", "Prix du gasoil (MAD/L)"), n("consoDefaut", "Consommation par défaut (L/100 km)"), n("vitesseMoyenne", "Vitesse moyenne (km/h)"), n("seuilConso", "Alerte conso au-dessus de la moyenne (%)")])}
-        <div class="section-title">Facturation</div>
-        ${champs([n("tauxEUR", "Taux de change (MAD pour 1 €)"), n("tvaDefaut", "TVA par défaut (%)"), n("delaiPaiement", "Délai de paiement par défaut (jours)")])}
-        <div class="section-title">Entretien</div>
-        ${champs([n("intervalleVidange", "Intervalle vidange par défaut (km)"), n("intervallePneus", "Durée de vie pneus par défaut (km)"), n("alerteKm", "Prévenir avant l'échéance (km)"), n("alerteJours", "Prévenir avant une expiration (jours)")])}
-        <div class="section-title">Temps de conduite et repos</div>
-        ${champs([n("amplitudeMaxHeures", "Service maximum (h)"), n("reposMinHeures", "Repos minimum (h)"), n("conduiteMaxJour", "Conduite max par jour (h)"), n("conduiteAvantPause", "Conduite avant pause (h)"), n("dureePause", "Durée de la pause (h)")])}
-        <p class="hint">Valeurs indicatives : adaptez-les à la réglementation applicable à vos trajets (nationaux ou internationaux).</p>
-        <div class="row" style="justify-content:flex-end;margin-top:12px">${btn("defaut", "Valeurs par défaut", { cls: "btn ghost" })}<button class="btn">Enregistrer</button></div>
-      </form>
-    </div>
-    ${carteEntreprise()}
-    ${carteReglagesIA()}
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-head"><h2>Sauvegarde</h2>${ds ? badge(`Dernière : ${dateFr(ds.slice(0, 10))}`, -joursAvant(ds.slice(0, 10)) > 7 ? "warn" : "ok") : badge("Jamais", "warn")}</div>
-        <p class="hint" style="margin-top:0">Vos données restent sur cet appareil. Exportez-les chaque semaine, et importez le fichier pour les transférer sur un autre appareil.</p>
-        <div class="row" style="margin-top:12px">
-          ${btn("exporter", "Exporter", { icone: "download" })}
-          <label class="btn ghost">${ic("upload")}Importer<input type="file" id="import" accept=".json,application/json" hidden></label>
-        </div>
-        <div class="section-title">Zone sensible</div>
-        <div class="row">${btn("demo", "Charger l'exemple", { cls: "btn ghost" })}${btn("reset", "Tout effacer", { cls: "btn text-danger" })}</div>
-      </div>
-      <div class="card">
-        <div class="card-head"><h2>Application mobile</h2></div>
-        <p class="hint" style="margin-top:0">Installez Logistique Fret sur l'écran d'accueil : elle s'ouvre comme une application et fonctionne sans réseau.</p>
-        ${invitationInstall ? btn("installer", "Installer sur cet appareil", { icone: "phone" })
-          : `<p class="hint">Sur Android (Chrome) : menu ⋮ → « Installer l'application ». Sur iPhone (Safari) : Partager → « Sur l'écran d'accueil ».${location.protocol === "file:" ? " L'installation nécessite que l'application soit hébergée (ex. GitHub Pages)." : ""}</p>`}
-      </div>
-    </div>`;
-  },
-  apres() {
-    $("#import").addEventListener("change", async (e) => {
-      const f = e.target.files[0];
-      e.target.value = "";
-      if (!f) return;
-      let d;
-      try { d = JSON.parse(await f.text()); if (!Array.isArray(d.camions)) throw 0; }
-      catch { return toast("Fichier invalide : choisissez une sauvegarde Logistique Fret (.json).", "danger"); }
-      if (!(await confirmer("Importer la sauvegarde ?", `Toutes les données actuelles seront remplacées par celles du fichier (${d.camions.length} camions, ${(d.chauffeurs || []).length} chauffeurs).`, "Remplacer"))) return;
-      S = normaliser(d); sauver(); toast("Sauvegarde importée"); afficher("tableau");
-    });
-  },
-  soumettre(fid, v) {
-    if (fid === "f-entreprise") { S.entreprise = { ...v }; sauver(); toast("Informations de l'entreprise enregistrées"); return rafraichir(); }
-    if (fid === "f-ia") {
-      const actuelle = iaConfig();
-      iaSauverConfig({ cle: v.cle || actuelle.cle, modele: v.modele });
-      toast(v.cle || actuelle.cle ? "Assistant IA configuré" : "Modèle enregistré"); return rafraichir();
-    }
-    for (const k of Object.keys(PARAMS_DEFAUT)) S.params[k] = num(v[k], PARAMS_DEFAUT[k]);
-    sauver(); toast("Réglages enregistrés"); rafraichir();
-  },
-  async agir(act) {
-    if (act === "exporter") {
-      S.meta.derniereSauvegarde = new Date().toISOString(); sauver();
-      telecharger(`logistique-sauvegarde-${today()}.json`, JSON.stringify(S, null, 2), "application/json");
-      toast("Sauvegarde téléchargée"); rafraichir();
-    }
-    if (act === "defaut") { S.params = { ...PARAMS_DEFAUT }; sauver(); toast("Valeurs par défaut rétablies"); rafraichir(); }
-    if (act === "reset" && (await confirmer("Tout effacer ?", "Camions, chauffeurs, pleins, trajets et dossiers seront supprimés définitivement. Exportez d'abord une sauvegarde.", "Tout effacer"))) {
-      S = etatVide(); sauver(); toast("Données effacées"); afficher("tableau");
-    }
-    if (act === "demo" && (!S.camions.length || (await confirmer("Charger l'exemple ?", "Les données actuelles seront remplacées.", "Remplacer")))) {
-      S = donneesDemo(); sauver(); toast("Données d'exemple chargées"); afficher("tableau");
-    }
-    if (act === "ia-verifier") {
-      const b = $("#app [data-act=ia-verifier]");
-      b.disabled = true; b.innerHTML = '<span class="spinner"></span>Vérification…';
-      try { toast(`Clé valide · ${await iaVerifierCle()} disponible`); }
-      catch (e) { toast(e.message, "danger"); }
-      finally { rafraichir(); }
-    }
-    if (act === "ia-oublier" && (await confirmer("Retirer la clé API ?", "L'assistant IA sera désactivé sur cet appareil.", "Retirer"))) {
-      iaSauverConfig({ ...iaConfig(), cle: "" }); toast("Clé retirée"); rafraichir();
-    }
-    if (act === "installer" && invitationInstall) { invitationInstall.prompt(); invitationInstall = null; rafraichir(); }
-  },
-};
-
-function carteReglagesIA() {
-  const c = iaConfig();
-  const masque = c.cle ? `${c.cle.slice(0, 10)}…${c.cle.slice(-4)}` : "";
-  return `<div class="card">
-    <div class="card-head"><h2 class="row" style="gap:10px"><span class="ia-ico sm">${ic("sparkles")}</span>Assistant IA</h2>${c.cle ? badge("Activé", "ok") : badge("Non configuré", "neutral")}</div>
-    <form id="f-ia">
-      ${champs([
-        { name: "cle", label: c.cle ? `Clé API Anthropic (actuelle : ${masque})` : "Clé API Anthropic", type: "password", placeholder: c.cle ? "Laisser vide pour garder la clé actuelle" : "sk-ant-…", autocomplete: "off" },
-        { name: "modele", label: "Modèle", type: "select", value: c.modele, options: IA_MODELES.map((m) => [m.id, m.nom]) },
-      ])}
-      <p class="hint">Créez une clé sur <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> (paiement à l'usage).
-        Tarifs par million de jetons : ${IA_MODELES.map((m) => `${m.nom.split(" — ")[0].replace("Claude ", "")} ${fmt(m.entree, 2)} $ / ${fmt(m.sortie, 2)} $`).join(" · ")} (entrée / sortie).
-        La clé reste sur cet appareil et n'est <strong>jamais</strong> incluse dans les sauvegardes exportées. Conseil : utilisez une clé dédiée avec une limite de dépense mensuelle.</p>
-      <div class="row" style="justify-content:flex-end;margin-top:12px">
-        ${c.cle ? btn("ia-oublier", "Retirer la clé", { cls: "btn text-danger" }) + btn("ia-verifier", "Vérifier la clé", { cls: "btn ghost" }) : ""}
-        <button class="btn">Enregistrer</button>
-      </div>
-    </form>
-  </div>`;
-}
-
 /* ---------- données d'exemple ---------- */
 function donneesDemo() {
   const e = etatVide();
@@ -1119,8 +994,6 @@ document.addEventListener("keydown", (e) => {
 // Rafraîchit les états (repos, service) chaque minute.
 setInterval(() => { if (["tableau", "chauffeurs"].includes(ongletActif) && !$("#modale").open) rafraichir(); }, 60000);
 
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
-
 function menuPlus() {
   const d = $("#modale");
   const groupes = {};
@@ -1177,9 +1050,3 @@ document.addEventListener("click", (e) => {
   if (g.dataset.actGlobal === "recherche") ouvrirRecherche();
 });
 window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (VUES[h] && h !== ongletActif) afficher(h); });
-
-// Démarrage après le chargement de tous les scripts (commercial.js ajoute ses vues).
-document.addEventListener("DOMContentLoaded", () => {
-  const h = location.hash.slice(1);
-  afficher(VUES[h] ? h : "tableau");
-});

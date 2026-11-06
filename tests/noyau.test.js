@@ -1,17 +1,25 @@
-// Tests des calculs métier : node tests/noyau.test.js
+// Tests de la logique métier et des modules purs : npm test
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const assert = require("assert");
 
 const racine = path.join(__dirname, "..");
-const ctx = vm.createContext({ console });
-vm.runInContext(["data.js", "noyau.js", "ia.js"].map((f) => fs.readFileSync(path.join(racine, f), "utf8")).join("\n") +
-  "\n;globalThis.__ = { get S() { return S; }, set S(v) { S = v; }, etatVide, consommations, consoMoyenne, etatCamion, etatChauffeur, calculTrajet, alertes, depensesHebdo, num, joursAvant, today, dateISO, iaInterpreter, iaCout, IA_SCHEMA, versMAD, coutCommande, margeCommande, totauxFacture, prochainNumero, etatFacture, encoursClients, activiteDepuis };", ctx);
-const N = ctx.__;
+// Le contexte reçoit les constructeurs de Node : les octets circulent sans conflit entre « royaumes » JavaScript.
+const ctx = vm.createContext({
+  console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
+  setTimeout, clearTimeout, indexedDB: undefined,
+});
+for (const f of ["data.js", "noyau.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
+// N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
+const N = new Proxy({}, {
+  get: (_, k) => vm.runInContext(k, ctx),
+  set: (_, k, v) => { ctx.__valeur = v; vm.runInContext(`${k} = __valeur`, ctx); return true; },
+});
 
-let ok = 0;
-const test = (nom, fn) => { N.S = N.etatVide(); try { fn(); ok++; console.log("✓", nom); } catch (e) { console.error("✗", nom, "\n ", e.message); process.exitCode = 1; } };
+const tests = [];
+const test = (nom, fn) => tests.push([nom, fn]);
 const jour = (n) => N.dateISO(Date.now() + n * 86400000);
 
 test("num accepte la virgule et les espaces", () => {
@@ -224,4 +232,221 @@ test("activité : CA et marge des livraisons récentes", () => {
   assert.strictEqual(a.nb, 1); assert.strictEqual(a.ca, 1000); assert.strictEqual(a.marge, 600);
 });
 
-console.log(`\n${ok} test(s) réussi(s)`);
+
+
+/* ============================================================
+   Sécurité des données : migration, ZIP, chiffrement, sauvegarde, CSV
+   ============================================================ */
+test("migration : données de la v1 (sans version ni identifiants)", () => {
+  const brut = { camions: [{ immat: "A" }, null, { immat: "B", id: "x" }], chauffeurs: [{ nom: "Ali" }], params: { prixGasoil: 12 } };
+  const r = N.migrer(brut);
+  assert.strictEqual(r.depuis, 1); assert.strictEqual(r.migre, true);
+  assert.strictEqual(r.etat.meta.version, N.VERSION_SCHEMA);
+  assert.strictEqual(r.etat.camions.length, 2); // l'entrée nulle est écartée
+  assert.ok(r.etat.camions.every((c) => c.id) && r.etat.chauffeurs[0].id);
+  assert.strictEqual(r.etat.params.prixGasoil, 12);
+  assert.strictEqual(r.etat.params.rappelSauvegarde, 7); // nouveau paramètre complété
+  assert.strictEqual(r.etat.meta.onboarde, true); // un utilisateur existant ne revoit pas l'assistant
+  assert.deepStrictEqual([r.etat.clients, r.etat.commandes, r.etat.factures].map((x) => x.length), [0, 0, 0]);
+});
+
+test("migration : idempotente, vide, absurde, trop récente", () => {
+  const une = N.migrer({ camions: [{ immat: "A" }] }).etat;
+  const deux = N.migrer(JSON.parse(JSON.stringify(une)));
+  assert.strictEqual(deux.migre, false); assert.strictEqual(deux.etat.camions[0].id, une.camions[0].id);
+  assert.strictEqual(N.migrer({}).etat.meta.onboarde, undefined); // nouvel utilisateur : l'assistant s'affichera
+  for (const x of [null, undefined, "texte", 12, [1, 2]]) assert.strictEqual(N.migrer(x).etat.meta.version, N.VERSION_SCHEMA);
+  const futur = N.migrer({ meta: { version: 99 }, camions: [{ id: "c", immat: "A" }] });
+  assert.strictEqual(futur.tropRecent, true); assert.strictEqual(futur.etat.meta.version, 99); // jamais rétrogradé
+});
+
+test("résumé des données", () => {
+  assert.strictEqual(N.libResume(N.resumeDonnees({ camions: [1, 2, 3], commandes: [1] })), "3 camions · 1 commande");
+  assert.strictEqual(N.libResume(N.resumeDonnees({})), "aucune donnée");
+});
+
+test("CRC32 de référence", () => assert.strictEqual(N.crc32(new TextEncoder().encode("123456789")), 0xcbf43926));
+
+test("ZIP : aller-retour, noms accentués, contenu binaire", async () => {
+  const bin = new Uint8Array(70000).map((_, i) => (i * 7) % 256);
+  const z = N.zipCreer([{ nom: "donnees.json", donnees: new TextEncoder().encode('{"é":"à"}') }, { nom: "photos/été.jpg", donnees: bin }, { nom: "vide.txt", donnees: new Uint8Array(0) }]);
+  assert.strictEqual(z[0], 0x50); assert.strictEqual(z[1], 0x4b);
+  const l = await N.zipLire(z);
+  assert.deepStrictEqual([...l.map((x) => x.nom)], ["donnees.json", "photos/été.jpg", "vide.txt"]);
+  assert.strictEqual(new TextDecoder().decode(l[0].donnees), '{"é":"à"}');
+  assert.ok(l[1].donnees.every((v, i) => v === bin[i]) && l[1].donnees.length === 70000);
+  assert.strictEqual(l[2].donnees.length, 0);
+  await assert.rejects(() => N.zipLire(new Uint8Array(100)), /ZIP invalide/);
+});
+
+test("chiffrement : aller-retour, mauvais mot de passe, altération", async () => {
+  const clair = new TextEncoder().encode("données confidentielles");
+  const c = await N.chiffrer(clair, "secret-123");
+  assert.ok(N.estChiffre(c) && !N.estChiffre(clair));
+  assert.strictEqual(new TextDecoder().decode(await N.dechiffrer(c, "secret-123")), "données confidentielles");
+  await assert.rejects(() => N.dechiffrer(c, "autre"), /Mot de passe incorrect/);
+  const abime = c.slice(); abime[abime.length - 1] ^= 1;
+  await assert.rejects(() => N.dechiffrer(abime, "secret-123"), /Mot de passe incorrect|endommagé/);
+  assert.notDeepStrictEqual([...(await N.chiffrer(clair, "secret-123"))], [...c]); // sel et IV aléatoires
+});
+
+test("sauvegarde : JSON, enveloppe, et import d'un ancien export brut", async () => {
+  N.S = N.migrer({ camions: [{ id: "c1", immat: "123-A-4" }], entreprise: { nom: "Atlas" } }).etat;
+  const r = await N.sauvegardeConstruire({ photos: false });
+  assert.ok(r.nom.endsWith(".json") && !r.chiffre);
+  const txt = JSON.parse(new TextDecoder().decode(r.octets));
+  assert.strictEqual(txt.format, "logistique-fret"); assert.strictEqual(txt.etat.camions[0].immat, "123-A-4");
+  const lu = await N.sauvegardeLire(r.octets);
+  assert.strictEqual(lu.etat.entreprise.nom, "Atlas"); assert.strictEqual(lu.avecPhotos, false);
+  const ancien = await N.sauvegardeLire(new TextEncoder().encode(JSON.stringify({ camions: [{ immat: "X" }], chauffeurs: [] })));
+  assert.strictEqual(ancien.depuis, 1); assert.strictEqual(ancien.etat.camions[0].immat, "X"); assert.ok(ancien.etat.camions[0].id);
+});
+
+test("sauvegarde chiffrée : mot de passe exigé", async () => {
+  N.S = N.migrer({ camions: [{ id: "c1", immat: "Z" }] }).etat;
+  const r = await N.sauvegardeConstruire({ photos: false, mdp: "motdepasse" });
+  assert.ok(r.chiffre && r.nom.endsWith(".lfs") && N.estChiffre(r.octets));
+  await assert.rejects(() => N.sauvegardeLire(r.octets), (e) => e.chiffre === true);
+  await assert.rejects(() => N.sauvegardeLire(r.octets, "faux"), /Mot de passe incorrect/);
+  assert.strictEqual((await N.sauvegardeLire(r.octets, "motdepasse")).etat.camions[0].immat, "Z");
+});
+
+test("sauvegarde : fichiers invalides refusés avec un message clair", async () => {
+  const t = (x) => new TextEncoder().encode(x);
+  await assert.rejects(() => N.sauvegardeLire(t("pas du json")), /illisible/);
+  await assert.rejects(() => N.sauvegardeLire(t('{"a":1}')), /invalide/);
+  await assert.rejects(() => N.sauvegardeLire(N.zipCreer([{ nom: "autre.txt", donnees: t("x") }])), /donnees\.json/);
+});
+
+test("clé de l'assistant IA jamais dans la sauvegarde", async () => {
+  N.S = N.etatVide();
+  const r = await N.sauvegardeConstruire({ photos: false });
+  assert.doesNotMatch(new TextDecoder().decode(r.octets), /sk-ant|"cle"/);
+});
+
+test("CSV Excel : BOM, séparateur ;, virgule décimale, guillemets", () => {
+  const c = N.lignesVersCSV([{ nom: 'Dupont "Jr"', montant: 12.5, n: 3, vide: null }]);
+  assert.strictEqual(c.charCodeAt(0), 0xfeff);
+  assert.strictEqual(c.slice(1), '"nom";"montant";"n";"vide"\r\n"Dupont ""Jr""";"12,5";"3";""'.replace('"12,5"', '"12,5"'));
+  assert.strictEqual(N.lignesVersCSV([]), "");
+});
+
+test("tables CSV et ZIP : commandes avec marge, factures, noms lisibles", async () => {
+  N.S = N.etatVide();
+  N.S.params.tauxEUR = 10;
+  N.S.clients = [{ id: "k", nom: "Souss Export", delai: 30 }];
+  N.S.commandes = [{ id: "o", ref: "CMD-1", clientId: "k", statut: "livre", prix: 100, devise: "EUR", ferry: 400, origine: "Agadir", destination: "Paris", jalons: [] }];
+  N.S.factures = [{ id: "f", numero: "FAC-1", clientId: "k", devise: "EUR", tva: 20, statut: "emise", echeance: jour(10), lignes: [{ montant: 100 }] }];
+  const t = N.tablesCSV();
+  assert.strictEqual(t.commandes[0].client, "Souss Export"); assert.strictEqual(t.commandes[0].marge_mad, 600); assert.strictEqual(t.commandes[0].statut, "Livrée");
+  assert.strictEqual(t.factures[0].total_ttc, 120); assert.strictEqual(t.factures[0].statut, "à encaisser");
+  const z = N.csvZipConstruire();
+  assert.strictEqual(z.nbTables, 3);
+  assert.deepStrictEqual([...(await N.zipLire(z.octets)).map((f) => f.nom)].sort(), ["clients.csv", "commandes.csv", "factures.csv"]);
+});
+
+/* ============================================================
+   Rappels (notifications), service du chauffeur, étapes de commande
+   ============================================================ */
+test("alertes : catégorie et clé stables pour chaque alerte", () => {
+  N.S = N.etatVide();
+  N.S.camions = [{ id: "c1", immat: "X", km: 100, kmVidange: 100, intervalleVidange: 40000, kmPneus: 100, intervallePneus: 100000, assurance: jour(-2) }];
+  N.S.chauffeurs = [{ id: "h1", nom: "Ali", visa: jour(5) }];
+  N.S.factures = [{ id: "f1", numero: "FAC-1", clientId: "", devise: "MAD", tva: 0, statut: "emise", echeance: jour(-4), lignes: [{ montant: 1 }] }];
+  const a = N.alertes();
+  const par = (cle) => a.find((x) => x.cle === cle);
+  assert.strictEqual(par("docs:cam:c1:Assurance").cat, "docs");
+  assert.strictEqual(par("docs:ch:h1:visa").niveau, "warn");
+  assert.strictEqual(par("fac:f1").cat, "factures");
+  assert.strictEqual(par("sauvegarde").cat, "sauvegarde");
+  assert.ok(a.every((x) => x.cle && x.cat));
+  const apres = N.alertes().map((x) => x.cle).sort().join();
+  assert.strictEqual(apres, a.map((x) => x.cle).sort().join()); // clés identiques d'un appel à l'autre
+});
+
+test("chauffeur bientôt en repos obligatoire", () => {
+  N.S = N.etatVide();
+  N.S.chauffeurs = [{ id: "h1", nom: "Ali", debutService: new Date(Date.now() - 12.5 * 3600000).toISOString() }];
+  const a = N.alertes().find((x) => x.cat === "repos");
+  assert.ok(a && a.niveau === "warn" && /repos obligatoire dans/.test(a.texte));
+});
+
+test("notifications : désactivées, catégories, déduplication", () => {
+  const liste = [
+    { niveau: "danger", cat: "factures", cle: "fac:1", texte: "Facture 1", onglet: "factures" },
+    { niveau: "warn", cat: "docs", cle: "docs:1", texte: "Assurance", onglet: "camions" },
+    { niveau: "warn", cat: "autre", cle: "conso:1", texte: "Conso", onglet: "carburant" },
+  ];
+  const J = "2026-11-10";
+  assert.strictEqual(N.notificationsAEnvoyer(liste, { actif: false }, {}, J).items.length, 0);
+  const r = N.notificationsAEnvoyer(liste, { actif: true }, {}, J);
+  assert.strictEqual(r.items.length, 2); // 1 urgente + 1 résumé ; la catégorie « autre » n'est jamais notifiée
+  assert.deepStrictEqual([...r.cles].sort(), ["docs:1", "fac:1"]);
+  assert.strictEqual(r.items[0].tag, "fac:1"); assert.strictEqual(r.items[1].tag, "resume");
+  assert.strictEqual(N.notificationsAEnvoyer(liste, { actif: true, cats: { factures: false } }, {}, J).items.length, 1);
+  // déjà notifié aujourd'hui : rien ; urgent rappelé le lendemain, « à surveiller » seulement au bout de 3 jours
+  const deja = { "fac:1": J, "docs:1": J };
+  assert.strictEqual(N.notificationsAEnvoyer(liste, { actif: true }, deja, J).items.length, 0);
+  assert.deepStrictEqual(N.notificationsAEnvoyer(liste, { actif: true }, deja, "2026-11-11").items.map((i) => i.tag), ["fac:1"]);
+  assert.deepStrictEqual(N.notificationsAEnvoyer(liste, { actif: true }, deja, "2026-11-13").items.map((i) => i.tag), ["fac:1", "resume"]);
+});
+
+test("notifications : au plus 3 urgentes + un résumé", () => {
+  const liste = Array.from({ length: 6 }, (_, i) => ({ niveau: i < 5 ? "danger" : "warn", cat: "commandes", cle: `c${i}`, texte: `Texte ${i}`, onglet: "commandes" }));
+  const r = N.notificationsAEnvoyer(liste, { actif: true }, {}, "2026-11-10");
+  assert.strictEqual(r.items.length, 4);
+  assert.strictEqual(r.items.filter((i) => i.tag !== "resume").length, 3);
+  assert.match(r.items[3].titre, /3 points/); // 2 urgentes restantes + 1 à surveiller
+  assert.strictEqual(r.cles.length, 6);
+});
+
+test("service du chauffeur : prise de service puis repos", () => {
+  N.S = N.etatVide(); N.S.params.reposMinHeures = 11;
+  const ch = { id: "h", nom: "Ali" };
+  const t0 = Date.parse("2026-11-10T06:00:00Z");
+  N.prendreService(ch, t0);
+  assert.strictEqual(ch.debutService, "2026-11-10T06:00:00.000Z"); assert.strictEqual(ch.reposJusqua, null);
+  N.finDeService(ch, t0 + 9 * 3600000);
+  assert.strictEqual(ch.debutService, null); assert.strictEqual(ch.reposJusqua, "2026-11-11T02:00:00.000Z");
+  assert.strictEqual(N.etatChauffeur(ch, t0 + 10 * 3600000).code, "repos");
+  assert.strictEqual(N.etatChauffeur(ch, t0 + 21 * 3600000).dispo, true);
+});
+
+test("commande : étapes, jalons horodatés, trajet lié et kilométrage", () => {
+  N.S = N.etatVide();
+  N.S.camions = [{ id: "c", immat: "X", km: 1000 }];
+  N.S.trajets = [{ id: "t", camionId: "c", distance: 500, statut: "planifie" }];
+  const c = { id: "o", statut: "confirme", trajetId: "t", jalons: [] };
+  N.appliquerEtape(c, "charge", new Date("2026-11-10T08:00:00Z"));
+  assert.strictEqual(N.S.trajets[0].statut, "encours");
+  N.appliquerEtape(c, "transit"); N.appliquerEtape(c, "douane");
+  N.appliquerEtape(c, "livre", new Date("2026-11-12T16:00:00Z"));
+  assert.strictEqual(c.statut, "livre"); assert.strictEqual(c.dateLivraison, "2026-11-12");
+  assert.strictEqual(N.S.trajets[0].statut, "termine"); assert.strictEqual(N.S.camions[0].km, 1500);
+  assert.deepStrictEqual(c.jalons.map((j) => j.statut), ["charge", "transit", "douane", "livre"]);
+  N.appliquerEtape(c, "livre"); // une livraison répétée ne double pas le kilométrage
+  assert.strictEqual(N.S.camions[0].km, 1500);
+});
+
+test("missions d'un chauffeur : tri par avancement, trajets isolés", () => {
+  N.S = N.etatVide();
+  N.S.commandes = [
+    { id: "a", chauffeurId: "h", statut: "confirme", dateChargement: "2026-11-12" },
+    { id: "b", chauffeurId: "h", statut: "transit", dateChargement: "2026-11-09" },
+    { id: "c", chauffeurId: "h", statut: "livre" },
+    { id: "d", chauffeurId: "autre", statut: "charge" },
+    { id: "e", chauffeurId: "h", statut: "confirme", dateChargement: "2026-11-11", trajetId: "t1" },
+  ];
+  assert.deepStrictEqual(N.missionsChauffeur("h").map((c) => c.id), ["b", "e", "a"]);
+  N.S.trajets = [{ id: "t1", chauffeurId: "h", statut: "planifie" }, { id: "t2", chauffeurId: "h", statut: "planifie" }, { id: "t3", chauffeurId: "h", statut: "termine" }];
+  assert.deepStrictEqual(N.trajetsIsoles("h").map((t) => t.id), ["t2"]);
+});
+
+(async () => {
+  let ok = 0;
+  for (const [nom, fn] of tests) {
+    N.S = N.etatVide();
+    try { await fn(); ok++; console.log("✓", nom); } catch (e) { console.error("✗", nom, "\n ", e.message); process.exitCode = 1; }
+  }
+  console.log(`\n${ok}/${tests.length} test(s) réussi(s)`);
+})();

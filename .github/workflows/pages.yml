@@ -37,8 +37,10 @@ jobs:
       - name: Préparer le site (fichiers de l'application uniquement)
         run: |
           mkdir _site
-          cp index.html style.css data.js noyau.js ia.js app.js commercial.js sw.js manifest.webmanifest icon.svg _site/
+          cp *.html *.css *.js *.webmanifest *.svg *.png _site/
           cp -r vendor _site/
+          # Version du cache hors ligne = commit : chaque publication déclenche la mise à jour chez les utilisateurs.
+          sed -i "s/__VERSION__/${GITHUB_SHA::10}/" _site/sw.js
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

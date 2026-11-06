@@ -80,7 +80,7 @@ VUES.commandes = {
               ${nx ? btn("avancer", libStatutCmd(nx), { id: c.id, icone: "arrow", cls: "btn ghost sm", titre: `Passer à l'étape « ${libStatutCmd(nx)} »` }) : ""}
               ${c.statut === "livre" && !c.factureId ? btn("facturer", "Facturer", { id: c.id, icone: "receipt", cls: "btn sm" }) : ""}
               ${!c.trajetId ? iconBtn("trajet", "route", "Créer le trajet (coût gasoil et péages)", c.id) : ""}
-              ${iconBtn("suivi", "clock", "Suivi des étapes", c.id)}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}
+              ${boutonPhotos("commande:" + c.id, `Photos — ${c.ref} (CMR, livraison, dommages)`)}${iconBtn("suivi", "clock", "Suivi des étapes", c.id)}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}
             </div></td></tr>`;
         }).join("")}</tbody></table></div>` : vide("check", filtreCmd === "facturer" ? "Tout est facturé" : "Rien ici", filtreCmd === "facturer" ? "Aucune commande livrée en attente de facture." : "Aucune commande dans cette vue.")}
     </div>
@@ -144,6 +144,7 @@ VUES.commandes = {
     }
     if (act === "facturer") facturerCommandes([c]);
     if (act === "suppr" && (await confirmer(`Supprimer ${c.ref} ?`, c.factureId ? "La facture associée est conservée." : "Cette action est définitive."))) {
+      supprimerPhotosDe(`commande:${id}`);
       S.commandes = S.commandes.filter((x) => x.id !== id); sauver(); rafraichir();
     }
   },

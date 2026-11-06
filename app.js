@@ -70,6 +70,7 @@ function champ(f) {
     return `<label class="${cls}">${esc(f.label)}<select name="${f.name}" ${req}>${opts}</select></label>`;
   }
   if (f.type === "checkbox") return `<label class="check ${f.full ? "full" : ""}"><input type="checkbox" name="${f.name}" ${v ? "checked" : ""}><span>${esc(f.label)}</span></label>`;
+  if (f.type === "photo") return `<label class="${cls}">${esc(f.label)}<input type="file" name="${f.name}" accept="image/*"></label>`;
   if (f.type === "textarea") return `<label class="${cls}">${esc(f.label)}<textarea name="${f.name}" rows="3">${esc(v)}</textarea></label>`;
   const extra = f.type === "number" ? `step="${f.step || "any"}" inputmode="decimal" ${f.min !== undefined ? `min="${f.min}"` : ""}` : "";
   return `<label class="${cls}">${esc(f.label)}<input type="${f.type || "text"}" name="${f.name}" value="${esc(v)}" ${extra} ${req} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ""} ${f.autocomplete ? `autocomplete="${f.autocomplete}"` : ""}></label>`;
@@ -80,7 +81,7 @@ function lireForm(form) {
   const o = {};
   for (const el of form.elements) {
     if (!el.name) continue;
-    o[el.name] = el.type === "checkbox" ? el.checked : el.value.trim();
+    o[el.name] = el.type === "checkbox" ? el.checked : el.type === "file" ? [...el.files] : el.value.trim();
   }
   return o;
 }
@@ -176,6 +177,7 @@ function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   etiqueterTableaux();
   v.apres?.();
   if (typeof majIndicateurs === "function") majIndicateurs();
+  if (typeof hydraterPhotos === "function") hydraterPhotos();
   window.scrollTo(0, garderScroll ? y : 0);
 }
 // Sur mobile, chaque ligne de tableau devient une carte : on recopie l'en-tête de colonne dans chaque cellule.
@@ -345,7 +347,7 @@ VUES.camions = {
             <td><div class="actions">
               ${btn("entretien", "Entretien", { id: c.id, icone: "wrench", cls: "btn ghost sm" })}
               ${btn("km", "Km", { id: c.id, cls: "btn ghost sm", titre: "Mettre à jour le kilométrage" })}
-              ${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}
+              ${boutonPhotos("camion:" + c.id, "Photos — " + c.immat)}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}
             </div></td></tr>`;
         }).join("")}</tbody></table></div>
     </div>
@@ -354,7 +356,7 @@ VUES.camions = {
       ${hist.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Camion</th><th>Intervention</th><th class="r">Km</th><th>Garage / notes</th><th class="r">Coût</th><th></th></tr></thead><tbody>
         ${hist.map((i) => `<tr><td>${dateFr(i.date)}</td><td>${esc(nomCamion(i.camionId))}</td><td>${badge(libIntervention(i.type))}</td><td class="r num">${fmt(i.km)}</td>
           <td>${esc(i.garage)}${i.notes ? `<span class="sub">${esc(i.notes)}</span>` : ""}</td><td class="r num">${mad(i.cout)}</td>
-          <td><div class="actions">${iconBtn("suppr-int", "trash", "Supprimer", i.id, true)}</div></td></tr>`).join("")}
+          <td><div class="actions">${boutonPhotos("intervention:" + i.id, `Photos — ${libIntervention(i.type)} ${nomCamion(i.camionId)}`)}${iconBtn("suppr-int", "trash", "Supprimer", i.id, true)}</div></td></tr>`).join("")}
       </tbody></table></div>` : `<p class="hint" style="margin:0">Cliquez sur « Entretien » sur un camion pour enregistrer une vidange, un changement de pneus ou une réparation, avec son coût.</p>`}
     </div>`;
   },
@@ -386,10 +388,13 @@ VUES.camions = {
         { name: "garage", label: "Garage / prestataire" },
         { name: "visite", label: "Prochaine visite technique (si visite)", type: "date" },
         { name: "notes", label: "Notes", type: "textarea", full: true },
+        { name: "photo", label: "Photo (facture, état des pièces…)", type: "photo", full: true },
       ], { aide: "Une vidange ou un changement de pneus remet le compteur d'usure à zéro à ce kilométrage." });
       if (!v) return;
       const km = num(v.km, c.km);
-      S.interventions.push({ id: uid(), camionId: c.id, type: v.type, date: v.date, km, cout: num(v.cout), garage: v.garage, notes: v.notes });
+      const interv = { id: uid(), camionId: c.id, type: v.type, date: v.date, km, cout: num(v.cout), garage: v.garage, notes: v.notes };
+      S.interventions.push(interv);
+      if (v.photo?.length) photosAjouterFichiers(v.photo, `intervention:${interv.id}`).then(hydraterPhotos);
       if (v.type === "vidange") c.kmVidange = km;
       if (v.type === "pneus") c.kmPneus = km;
       if (v.type === "visite" && v.visite) c.visite = v.visite;
@@ -398,6 +403,7 @@ VUES.camions = {
     }
     if (act === "suppr") {
       if (!(await confirmer(`Supprimer ${c.immat} ?`, "Son historique de gasoil et d'entretien sera aussi supprimé. Cette action est définitive."))) return;
+      [`camion:${id}`, ...S.pleins.filter((p) => p.camionId === id).map((p) => `plein:${p.id}`), ...S.interventions.filter((p) => p.camionId === id).map((p) => `intervention:${p.id}`)].forEach(supprimerPhotosDe);
       S.camions = S.camions.filter((x) => x.id !== id);
       S.pleins = S.pleins.filter((p) => p.camionId !== id);
       S.interventions = S.interventions.filter((p) => p.camionId !== id);
@@ -406,6 +412,7 @@ VUES.camions = {
     }
     if (act === "suppr-int") {
       if (!(await confirmer("Supprimer cette intervention ?", "Elle sera retirée de l'historique et des coûts."))) return;
+      supprimerPhotosDe(`intervention:${id}`);
       S.interventions = S.interventions.filter((x) => x.id !== id); sauver(); rafraichir();
     }
     if (act === "csv") exporterCSV("entretien", S.interventions.map((i) => ({ date: i.date, camion: nomCamion(i.camionId), intervention: libIntervention(i.type), km: i.km, cout: i.cout, garage: i.garage, notes: i.notes })));
@@ -445,7 +452,7 @@ VUES.carburant = {
           return `<tr><td>${dateFr(p.date)}</td><td>${esc(nomCamion(p.camionId))}</td><td class="r num">${fmt(p.km)}</td>
             <td class="r num">${fmt(p.litres, 1)}${p.plein ? "" : '<span class="sub">partiel</span>'}</td><td class="r num">${mad(p.litres * p.prix)}</td>
             <td class="r num">${cv ? (anormal ? badge(fmt(cv, 1) + " ⚠", "warn") : fmt(cv, 1)) : "—"}</td><td>${esc(p.station)}</td>
-            <td><div class="actions">${iconBtn("suppr", "trash", "Supprimer", p.id, true)}</div></td></tr>`;
+            <td><div class="actions">${boutonPhotos("plein:" + p.id, `Photos — plein du ${dateFr(p.date)} ${nomCamion(p.camionId)}`)}${iconBtn("suppr", "trash", "Supprimer", p.id, true)}</div></td></tr>`;
         }).join("")}</tbody></table></div>` : vide("fuel", "Aucun plein", "Saisissez vos pleins pour suivre la consommation et repérer les anomalies.", btn("ajouter", "Saisir un plein", { icone: "plus" }))}
     </div>`;
   },
@@ -458,11 +465,13 @@ VUES.carburant = {
         { name: "litres", label: "Litres", type: "number", required: true, min: 0 },
         { name: "prix", label: "Prix au litre (MAD)", type: "number", value: S.params.prixGasoil, required: true, min: 0 },
         { name: "station", label: "Station / lieu" },
+        { name: "ticket", label: "Photo du ticket", type: "photo" },
         { name: "plein", label: "Plein complet (réservoir rempli)", type: "checkbox", value: true, full: true },
       ], { valider: "Ajouter", aide: "La consommation se calcule entre deux pleins complets. Le kilométrage du camion est mis à jour automatiquement." });
       if (!v) return;
       const p = { id: uid(), camionId: v.camionId, date: v.date, km: num(v.km), litres: num(v.litres), prix: num(v.prix), station: v.station, plein: v.plein };
       S.pleins.push(p);
+      if (v.ticket?.length) photosAjouterFichiers(v.ticket, `plein:${p.id}`).then(hydraterPhotos);
       const c = parId(S.camions, p.camionId);
       if (c && p.km > c.km) c.km = p.km;
       S.params.prixGasoil = p.prix;
@@ -471,7 +480,7 @@ VUES.carburant = {
       toast(cv ? `Plein enregistré · ${fmt(cv, 1)} L/100 km` : "Plein enregistré");
       rafraichir();
     }
-    if (act === "suppr" && (await confirmer("Supprimer ce plein ?", "La consommation sera recalculée."))) { S.pleins = S.pleins.filter((p) => p.id !== id); sauver(); rafraichir(); }
+    if (act === "suppr" && (await confirmer("Supprimer ce plein ?", "La consommation sera recalculée."))) { supprimerPhotosDe(`plein:${id}`); S.pleins = S.pleins.filter((p) => p.id !== id); sauver(); rafraichir(); }
     if (act === "csv") exporterCSV("gasoil", S.pleins.map((p) => ({ date: p.date, camion: nomCamion(p.camionId), km: p.km, litres: p.litres, prix_litre: p.prix, montant: (p.litres * p.prix).toFixed(2), plein_complet: p.plein ? "oui" : "non", station: p.station })));
   },
 };
@@ -512,7 +521,7 @@ VUES.chauffeurs = {
           <td class="r num">${termines.length}<span class="sub">${fmt(termines.reduce((s, t) => s + t.distance, 0))} km</span></td>
           <td><div class="actions">
             ${c.conge ? "" : c.debutService ? btn("repos", "Fin de service", { id: c.id, cls: "btn sm" }) : btn("service", "Prise de service", { id: c.id, icone: "play", cls: "btn ghost sm" })}
-            ${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}
+            ${boutonPhotos("chauffeur:" + c.id, "Photos — " + c.nom)}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}
           </div></td></tr>`;
       }).join("")}</tbody></table></div></div>`;
   },
@@ -550,6 +559,7 @@ VUES.chauffeurs = {
       sauver(); toast(`${c.nom} en repos jusqu'à ${dateHeureFr(c.reposJusqua)}`); rafraichir();
     }
     if (act === "suppr" && (await confirmer(`Supprimer ${c.nom} ?`, "Ses trajets resteront dans l'historique."))) {
+      supprimerPhotosDe(`chauffeur:${id}`);
       S.chauffeurs = S.chauffeurs.filter((x) => x.id !== id); sauver(); toast("Chauffeur supprimé"); rafraichir();
     }
   },
@@ -690,6 +700,7 @@ VUES.douane = {
           <div class="row">
             ${btn(d.statut === "clos" ? "rouvrir" : "clore", d.statut === "clos" ? "Rouvrir" : "Clore le dossier", { id: d.id, icone: d.statut === "clos" ? "" : "check", cls: "btn ghost sm" })}
             ${btn("ia-sh", "Code SH avec l'IA", { id: d.id, icone: "sparkles", cls: "btn ghost sm" })}
+            ${boutonPhotos("dossier:" + d.id, `Documents — ${d.ref}`, { texte: true })}
             ${btn("imprimer", "Imprimer", { id: d.id, icone: "print", cls: "btn ghost sm" })}
             ${btn("modifier", "Modifier", { id: d.id, icone: "edit", cls: "btn ghost sm" })}
             ${btn("suppr", "Supprimer", { id: d.id, cls: "btn text-danger sm" })}
@@ -749,7 +760,7 @@ VUES.douane = {
       afficher("nomenclature");
       $("#f-ia-sh [name=description]")?.focus();
     }
-    if (act === "suppr" && (await confirmer(`Supprimer le dossier ${d.ref} ?`, "Cette action est définitive."))) { S.dossiers = S.dossiers.filter((x) => x.id !== id); sauver(); rafraichir(); }
+    if (act === "suppr" && (await confirmer(`Supprimer le dossier ${d.ref} ?`, "Cette action est définitive."))) { supprimerPhotosDe(`dossier:${id}`); S.dossiers = S.dossiers.filter((x) => x.id !== id); sauver(); rafraichir(); }
   },
 };
 const aideDouane = () => `<p class="hint">Déclarations sur <strong>BADR</strong> (ADII). Les documents exigés varient selon le produit et l'accord commercial : vérifiez sur <a href="https://www.douane.gov.ma" target="_blank" rel="noopener">douane.gov.ma</a>. Les listes sont modifiables dans <code>data.js</code>.</p>`;

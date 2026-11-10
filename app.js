@@ -53,6 +53,7 @@ const P_ = {
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
   ship: '<path d="M3 17l2 3c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1l-1-3M5 17l-2-5 9-3 9 3-2 5M12 9V4h4M7 11V8h3"/>',
   pin: '<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  radar: '<circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19a10 10 0 0 1 0-14"/>',
   phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
 };
 const ic = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${P_[n] || ""}</svg>`;
@@ -145,6 +146,7 @@ let ongletActif = "tableau";
 const ONGLETS = [
   ["tableau", "Accueil", "home", ""],
   ["commandes", "Commandes", "box", "Exploitation"],
+  ["direct", "Suivi en direct", "radar", "Exploitation"],
   ["voyages", "Voyages", "ship", "Exploitation"],
   ["gps", "Traces GPS", "pin", "Exploitation"],
   ["itineraires", "Trajets", "route", "Exploitation"],
@@ -342,6 +344,7 @@ const champsCamion = (c = {}) => [
   { name: "carteVerte", label: "Carte verte (assurance internationale)", type: "date", value: c.carteVerte },
   { name: "tachygraphe", label: "Prochain contrôle tachygraphe", type: "date", value: c.tachygraphe },
   { name: "autorisation", label: "Autorisation de transport international", type: "date", value: c.autorisation },
+  { name: "balise", label: "Identifiant de la balise GPS (IMEI ou nom dans la plateforme)", value: c.balise, full: true, placeholder: "ex. 865432100123456" },
   { name: "essieux", label: "Essieux (tracteur + semi-remorque)", type: "number", step: 1, min: 2, value: c.essieux, placeholder: "5" },
   { name: "hauteurBasse", label: "Hauteur de l'essieu avant ≤ 1,30 m (rare : véhicule léger)", type: "checkbox", value: c.hauteurBasse, full: true },
 ];
@@ -351,7 +354,7 @@ function lireCamion(v) {
     kmVidange: num(v.kmVidange, num(v.km)), intervalleVidange: num(v.intervalleVidange, S.params.intervalleVidange),
     kmPneus: num(v.kmPneus, num(v.km)), intervallePneus: num(v.intervallePneus, S.params.intervallePneus),
     ...Object.fromEntries(DOCS_CAMION.map(([k]) => [k, v[k]])),
-    essieux: num(v.essieux) || undefined, hauteurBasse: !!v.hauteurBasse,
+    essieux: num(v.essieux) || undefined, hauteurBasse: !!v.hauteurBasse, balise: (v.balise || "").trim() || undefined,
   };
 }
 

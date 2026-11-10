@@ -1,10 +1,12 @@
 {
   "name": "logistique-fret",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "description": "Application hors ligne de gestion pour transporteurs routiers : commandes, flotte, chauffeurs, douane, facturation.",
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "test": "node tests/noyau.test.js"
+    "test": "node tests/noyau.test.js && node tests/relais.test.js",
+    "relais": "node serveur/relais.js",
+    "simulateur": "node serveur/simulateur.js"
   }
 }

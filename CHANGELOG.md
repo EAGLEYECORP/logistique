@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.0 — Suivi en direct (phase 3)
+
+- **Page « Suivi en direct »** : carte de la flotte (fond OpenStreetMap facultatif, fond uni hors ligne), état de chaque camion (en route, à l'arrêt, arrêt prolongé, au port, en douane, au dépôt, **en traversée**, signal perdu), vitesse, âge de la dernière position, conduite sans pause de 45 min, alertes.
+- **Le silence après un port est une traversée, jamais une alerte** : pas de couverture en mer, le signal revient à l'arrivée. Un silence ailleurs devient « signal perdu » au bout de 30 min.
+- **Étapes du voyage automatiques** : un voyage « en cours » reçoit en direct l'entrée au port, l'embarquement et le débarquement du détroit (marqués « GPS »), et la traversée passe à « effectuée ».
+- **Alertes** : signal perdu, arrêt de plus de 45 min hors zone connue, conduite continue (4 h 15 prévenir, 4 h 30 alerter, estimation GPS), excès de vitesse ; notification de l'appareil pour les alertes urgentes si les rappels sont activés.
+- **Sources** : relais fourni (`serveur/relais.js`, sans dépendance : JSON, OsmAnd/Traccar Client, renvoi Traccar), API d'un **Traccar** existant, ou **démonstration** sans serveur. Jeton et adresse conservés sur l'appareil, jamais dans les sauvegardes.
+- Fiche camion : identifiant de la balise (IMEI). 80 tests (75 application + 5 relais), documentation de déploiement dans `serveur/README.md`.
+
 ## 2.3.0 — Péages mesurés par GPS et rapprochement Jawaz Pro (phase 2)
 
 - **Gares de péage localisées** : ADM ne publie pas leurs coordonnées. Trois façons de les renseigner, une seule fois : (1) **« Relever les gares » sur une trace** — l'application repère les ralentissements isolés en pleine conduite (typiques d'un péage), vous les affectez à une gare ADM sur une carte ; (2) **import OpenStreetMap** (GeoJSON exporté d'overpass-turbo, requête fournie, correspondances à valider) ; (3) saisie manuelle.

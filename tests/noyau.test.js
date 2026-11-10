@@ -742,6 +742,55 @@ test("import OpenStreetMap : GeoJSON d'overpass-turbo et JSON d'Overpass", () =>
   assert.strictEqual(N.osmGaresParse("pas du json").ok, false); assert.strictEqual(N.osmGaresParse("{}").ok, false);
 });
 
+/* ---------- Phase 3 : suivi en direct ---------- */
+const NOW = Date.UTC(2026, 10, 10, 12, 0) / 1000;
+const marche = (n, v = 80, fin = NOW) => Array.from({ length: n }, (_, i) => [fin - (n - 1 - i) * 300, 33 + (i + 1) * 0.04, -7, v]);
+
+test("Traccar : positions normalisées (nœuds → km/h, identifiant de la balise)", () => {
+  const r = N.directDepuisTraccar([{ id: 7, uniqueId: "IMEI-123", name: "Volvo 12345-A-6" }], [
+    { deviceId: 7, fixTime: "2026-11-10T11:59:30.000+00:00", latitude: 33.6, longitude: -7.6, speed: 43.2, course: 90 }, { deviceId: 9, fixTime: "2026-11-10T11:59:30.000+00:00", latitude: 1, longitude: 2, speed: 0 }, { deviceId: 7, fixTime: "pas une date", latitude: 1, longitude: 2 }]);
+  assert.strictEqual(r.length, 2); assert.strictEqual(r[0].id, "IMEI-123"); assert.strictEqual(r[0].v, 80); assert.strictEqual(r[0].t, NOW - 30); assert.strictEqual(r[1].id, "traccar:9");
+});
+
+test("direct : en route, à l'arrêt, arrêt prolongé, au port, signal perdu", () => {
+  const Z = [...N.ZONES_DEFAUT];
+  assert.strictEqual(N.directEtat(marche(10), NOW, Z).code, "en_route");
+  const arret = (min) => [...marche(10, 80, NOW - min * 60), ...Array.from({ length: Math.floor(min / 5) + 1 }, (_, i) => [NOW - min * 60 + i * 300, 33.4, -7, 0])];
+  assert.strictEqual(N.directEtat(arret(20), NOW, Z).code, "arret");
+  const long = N.directEtat(arret(60), NOW, Z); assert.strictEqual(long.code, "arret_long"); assert.ok(long.arretMin >= 55);
+  assert.strictEqual(N.directEtat([[NOW - 60, 35.889, -5.5, 0]], NOW, Z).code, "au_port");
+  assert.strictEqual(N.directEtat(marche(10, 80, NOW - 3 * 3600), NOW, Z).code, "hors_ligne");
+  assert.strictEqual(N.directEtat([], NOW, Z).code, "inconnu");
+});
+
+test("direct : silence après un port = traversée, jamais une alerte de signal perdu", () => {
+  const Z = [...N.ZONES_DEFAUT];
+  const apresPort = [[NOW - 5400, 35.889, -5.5, 0]]; // dernière position dans le port de Tanger Med, silence depuis 1 h 30
+  const e = N.directEtat(apresPort, NOW, Z); assert.strictEqual(e.code, "traversee");
+  assert.strictEqual(N.directAlertes("Camion A", e, apresPort).length, 0);
+  assert.strictEqual(N.directEtat([[NOW - 12 * 3600, 35.889, -5.5, 0]], NOW, Z).code, "hors_ligne"); // 12 h de silence : plus une traversée
+});
+
+test("direct : conduite continue, pause de 45 min, alertes", () => {
+  const c = N.conduiteCourante(marche(54)); // 54 intervalles de 5 min = 4 h 30 environ
+  assert.ok(c.serieH > 4.4 && c.serieH < 4.6, "série " + c.serieH);
+  const pause = [...marche(30, 80, NOW - 3600), ...Array.from({ length: 11 }, (_, i) => [NOW - 3300 + i * 300, 35, -7, 0]), ...marche(4, 80, NOW)];
+  assert.ok(N.conduiteCourante(pause, NOW).serieH < 1, "la pause de 50 min remet la série à zéro");
+  const h = marche(56), e = N.directEtat(h, NOW, []);
+  const a = N.directAlertes("Camion A", e, h);
+  assert.ok(a.some((x) => x.niveau === "danger" && /conduite/.test(x.texte)));
+  assert.ok(N.directAlertes("B", N.directEtat([[NOW - 60, 33, -7, 110]], NOW, []), [[NOW - 60, 33, -7, 110]]).some((x) => /110 km\/h/.test(x.texte)));
+});
+
+test("carte : cadrage Mercator et tuiles", () => {
+  const v = N.directVue([[30.4, -9.6], [36.1, -5.4]], { largeur: 640, hauteur: 380 });
+  assert.ok(v.z >= 5 && v.z <= 7, "zoom " + v.z); assert.ok(v.tuiles.length >= 2 && v.tuiles.length <= 30);
+  const [x, y] = v.vers(30.4, -9.6); assert.ok(x >= 0 && x <= 640 && y >= 0 && y <= 380);
+  const [x2, y2] = v.vers(36.1, -5.4); assert.ok(x2 > x && y2 < y); // Algeciras est au nord-est d'Agadir
+  assert.strictEqual(N.directVue([]), null);
+  assert.deepStrictEqual([...N.mercPx(0, 0, 0)], [128, 128]);
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

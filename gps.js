@@ -472,3 +472,92 @@ function osmGaresParse(texte) {
   });
   return { ok: gares.length > 0, gares, erreur: gares.length ? "" : "Aucune gare de péage dans ce fichier." };
 }
+
+/* ============================================================
+   Phase 3 : suivi en direct
+   Position normalisée : { id, t (secondes UTC), lat, lon, v (km/h ou null), cap (° ou null) }
+   ============================================================ */
+
+/** Positions « Traccar » (API /api/positions + /api/devices) → positions normalisées. Vitesse Traccar en nœuds. */
+function directDepuisTraccar(appareils, positions) {
+  const noms = new Map((appareils || []).map((d) => [d.id, d]));
+  const res = [];
+  for (const p of positions || []) {
+    const t = gpsTemps(String(p.fixTime || p.deviceTime || "").replace(/\.\d+(?=Z|[+-]|$)/, ""));
+    if (!Number.isFinite(t) || !Number.isFinite(p.latitude) || !Number.isFinite(p.longitude)) continue;
+    const d = noms.get(p.deviceId);
+    res.push({ id: d?.uniqueId || `traccar:${p.deviceId}`, nom: d?.name || "", t, lat: p.latitude, lon: p.longitude, v: Number.isFinite(p.speed) ? Math.round(p.speed * 1.852 * 10) / 10 : null, cap: Number.isFinite(p.course) ? p.course : null });
+  }
+  return res;
+}
+
+/** Série de conduite en cours : heures de conduite depuis la dernière pause de 45 min, et durée de l'arrêt actuel. (Estimation GPS, pas le tachygraphe.) */
+function conduiteCourante(points, maintenant = null) {
+  let serie = 0, arret = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i], dt = b[0] - a[0];
+    const v = b[3] ?? (dt > 0 ? (gpsDistance(a, b) / dt) * 3.6 : 0);
+    if (dt > 15 * 60) { arret = dt; if (dt >= PAUSE_REGLEMENTAIRE_S) serie = 0; continue; }
+    if (v >= SEUIL_MARCHE_KMH) { serie += dt; arret = 0; }
+    else { arret += dt; if (arret >= PAUSE_REGLEMENTAIRE_S) serie = 0; }
+  }
+  if (maintenant !== null && points.length) { const trou = maintenant - points[points.length - 1][0]; if (trou > 15 * 60) { arret += trou; if (arret >= PAUSE_REGLEMENTAIRE_S) serie = 0; } }
+  return { serieH: serie / 3600, arretMin: Math.round(arret / 60) };
+}
+
+const ETATS_DIRECT = {
+  en_route: ["En route", "ok"], arret: ["À l'arrêt", "neutral"], arret_long: ["Arrêt prolongé", "warn"], au_port: ["Au port", "neutral"], en_douane: ["En douane / contrôle", "neutral"],
+  depot: ["Au dépôt", "neutral"], client: ["Chez le client", "neutral"], traversee: ["En traversée", "ok"], hors_ligne: ["Signal perdu", "danger"], inconnu: ["Aucune position", "neutral"],
+};
+/**
+ * État d'un camion à l'instant donné d'après son historique récent (points [t, lat, lon, v], triés).
+ * Une absence de signal juste après un port est une TRAVERSÉE (pas de couverture en mer), jamais une alerte.
+ */
+function directEtat(hist, maintenant, zones = [], { signalMin = 30, arretMin = 45, traverseeMaxH = 8 } = {}) {
+  if (!hist.length) return { code: "inconnu", ...libEtat("inconnu"), zone: null, ageMin: null, arretMin: 0 };
+  const last = hist[hist.length - 1], age = maintenant - last[0], zone = gpsZoneDe(last, zones);
+  const base = { zone, ageMin: Math.round(age / 60), arretMin: conduiteCourante(hist, maintenant).arretMin };
+  const fin = (code, extra = {}) => ({ code, ...libEtat(code), ...base, ...extra });
+  if (age > signalMin * 60) {
+    if (zone && (zone.type === "port_maroc" || zone.type === "port_europe") && age <= traverseeMaxH * 3600) return fin("traversee", { attendu: true });
+    return fin("hors_ligne");
+  }
+  const v = last[3] ?? (hist.length > 1 && last[0] > hist[hist.length - 2][0] ? (gpsDistance(hist[hist.length - 2], last) / (last[0] - hist[hist.length - 2][0])) * 3.6 : 0);
+  if (zone) { const c = { port_maroc: "au_port", port_europe: "au_port", douane: "en_douane", depot: "depot", client: "client", frontiere: v >= SEUIL_MARCHE_KMH ? "en_route" : "arret" }[zone.type]; if (c && !(v >= SEUIL_MARCHE_KMH && c !== "en_route")) return fin(c); }
+  if (v >= SEUIL_MARCHE_KMH) return fin("en_route", { v });
+  return fin(base.arretMin >= arretMin && !zone ? "arret_long" : "arret", { v });
+}
+const libEtat = (c) => ({ libelle: ETATS_DIRECT[c][0], niveau: ETATS_DIRECT[c][1] });
+
+/** Alertes en direct pour un camion. Renvoie [{ niveau, cle, texte }]. */
+function directAlertes(nom, etat, hist, { vitesseMax = 90 } = {}) {
+  const r = [], last = hist[hist.length - 1];
+  if (etat.code === "hors_ligne") r.push({ niveau: "danger", cle: `signal:${nom}`, texte: `${nom} — aucun signal depuis ${etat.ageMin} min (hors port : à vérifier)` });
+  if (etat.code === "arret_long") r.push({ niveau: "warn", cle: `arret:${nom}`, texte: `${nom} — à l'arrêt depuis ${etat.arretMin} min hors zone connue` });
+  const c = conduiteCourante(hist, last ? last[0] : null);
+  if (c.serieH >= 4.5) r.push({ niveau: "danger", cle: `conduite:${nom}`, texte: `${nom} — ${c.serieH.toFixed(1).replace(".", ",")} h de conduite sans pause de 45 min (estimation GPS)` });
+  else if (c.serieH >= 4.25) r.push({ niveau: "warn", cle: `conduite:${nom}`, texte: `${nom} — ${c.serieH.toFixed(1).replace(".", ",")} h de conduite continue : pause à prévoir (estimation GPS)` });
+  if (last && last[3] != null && last[3] > vitesseMax + 5) r.push({ niveau: "warn", cle: `vitesse:${nom}`, texte: `${nom} — ${Math.round(last[3])} km/h (limite ${vitesseMax})` });
+  return r;
+}
+
+/* ---------- carte : projection Web Mercator et tuiles OpenStreetMap (facultatives, hors ligne = fond vide) ---------- */
+const mercPx = (lat, lon, z) => { const n = 256 * 2 ** z, s = Math.sin(gpsRad(Math.max(-85, Math.min(85, lat)))); return [((lon + 180) / 360) * n, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n]; };
+/** Cadrage : zoom et décalage pour afficher tous les points dans largeur × hauteur, et liste des tuiles utiles. */
+function directVue(points, { largeur = 640, hauteur = 380, marge = 40, zMax = 14, zMin = 3 } = {}) {
+  if (!points.length) return null;
+  let z = zMax, bb;
+  for (; z >= zMin; z--) {
+    const px = points.map((p) => mercPx(p[0], p[1], z)), xs = px.map((p) => p[0]), ys = px.map((p) => p[1]);
+    bb = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    if (bb.x1 - bb.x0 <= largeur - 2 * marge && bb.y1 - bb.y0 <= hauteur - 2 * marge) break;
+  }
+  z = Math.max(z, zMin);
+  const cx = (bb.x0 + bb.x1) / 2, cy = (bb.y0 + bb.y1) / 2, ox = cx - largeur / 2, oy = cy - hauteur / 2;
+  const tuiles = [], n = 2 ** z;
+  for (let tx = Math.floor(ox / 256); tx <= Math.floor((ox + largeur) / 256); tx++) for (let ty = Math.floor(oy / 256); ty <= Math.floor((oy + hauteur) / 256); ty++) {
+    if (ty < 0 || ty >= n) continue;
+    tuiles.push({ x: ((tx % n) + n) % n, y: ty, px: tx * 256 - ox, py: ty * 256 - oy });
+  }
+  return { z, ox, oy, largeur, hauteur, tuiles, vers: (lat, lon) => { const p = mercPx(lat, lon, z); return [p[0] - ox, p[1] - oy]; } };
+}

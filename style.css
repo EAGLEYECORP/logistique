@@ -628,3 +628,8 @@ table.plain td { padding: 8px 10px; }
 [dir="rtl"] th, [dir="rtl"] td { text-align: right; } [dir="rtl"] .r, [dir="rtl"] td.r, [dir="rtl"] th.r { text-align: left; }
 [dir="rtl"] .search svg.i { left: auto; right: 14px; } [dir="rtl"] .search input { padding-left: 14px; padding-right: 44px; }
 [dir="rtl"] .num { direction: ltr; unicode-bidi: isolate; }
+
+/* suivi en direct */
+.direct-carte { display: block; width: 100%; height: auto; max-height: 62vh; }
+.direct-camion { cursor: pointer; }
+.direct-camion.sel { outline: 2px solid var(--primary); }

@@ -934,6 +934,60 @@ test("GPS : température lue dans le CSV et réduite pour le stockage", () => {
   assert.strictEqual(tr[0].temp, 3.2);
 });
 
+/* ---------- fichier .ddd (carte conducteur) construit d'après la spécification ---------- */
+function construireDDD({ bufferTaille = 600, jours, nom = "BENALI", prenoms = "KARIM", signature = true, gen = 0 }) {
+  const rec = (j, prevLen) => { const o = []; const len = 12 + 2 * j.changes.length; o.push(prevLen >> 8, prevLen & 255, len >> 8, len & 255, (j.date >>> 24) & 255, (j.date >>> 16) & 255, (j.date >>> 8) & 255, j.date & 255, 0, 1, (j.distance >> 8) & 255, j.distance & 255);
+    for (const [slot, equipe, sans, act, min] of j.changes) { const v = (slot << 15) | (equipe << 14) | (sans << 13) | (act << 11) | min; o.push(v >> 8, v & 255); } return o; };
+  let prev = 0; const recs = jours.map((j) => { const r = rec(j, prev); prev = r.length; return r; });
+  const total = recs.reduce((s, r) => s + r.length, 0); assert.ok(total <= bufferTaille);
+  const debut = bufferTaille - Math.floor(recs[0].length / 2); // le plus ancien commence vers la fin du tampon : la chaîne boucle
+  const tampon = new Array(bufferTaille).fill(0); let p = debut, dernier = debut;
+  for (const r of recs) { dernier = p; for (const b of r) { tampon[p] = b; p = (p + 1) % bufferTaille; } }
+  const donnees = [debut >> 8, debut & 255, dernier >> 8, dernier & 255, ...tampon];
+  const tlv = (fid, type, d) => [fid >> 8, fid & 255, type, d.length >> 8, d.length & 255, ...d];
+  const texte = (s, n) => { const b = new Array(n).fill(32); b[0] = 1; [...s].forEach((c, i) => { b[1 + i] = c.charCodeAt(0); }); return b; };
+  const ident = [...new Array(65).fill(0).map((_, i) => (i >= 1 && i < 17 ? "12345678901234".padEnd(16, " ").charCodeAt(i - 1) : 0)), ...texte(nom, 36), ...texte(prenoms, 36), 0, 0, 0, 0, 0, 0];
+  return new Uint8Array([...tlv(0x0520, gen, ident), ...tlv(0x0520, gen + 1, [1, 2, 3]), ...tlv(0x0504, gen, donnees), ...(signature ? tlv(0x0504, gen + 1, [9, 9, 9]) : [])]);
+}
+const midnight = (j) => Date.UTC(2026, 10, j) / 1000;
+test("tachygraphe .ddd : TLV, tampon circulaire avec bouclage, bits des changements d'activité, identité", () => {
+  // jour 1 : repos 00:00, conduite 05:00, repos 09:00 (45 min), conduite 09:45, repos 14:00 ; jour 2 : repos puis travail 06:00 et conduite 07:00
+  const ddd = construireDDD({ jours: [
+    { date: midnight(10), distance: 600, changes: [[0, 0, 0, 0, 0], [0, 0, 0, 3, 300], [0, 0, 0, 0, 540], [0, 0, 0, 3, 585], [0, 0, 0, 0, 840]] },
+    { date: midnight(11), distance: 100, changes: [[0, 0, 0, 0, 0], [0, 0, 0, 2, 360], [0, 0, 0, 3, 420], [0, 0, 0, 0, 600]] }] });
+  const r = N.tachyParseDDD(ddd);
+  assert.strictEqual(r.ok, true); assert.strictEqual(r.generation, 1); assert.strictEqual(r.jours, 2);
+  assert.strictEqual(r.conducteur.nom, "BENALI"); assert.strictEqual(r.conducteur.prenoms, "KARIM"); assert.ok(/^1234567890/.test(r.conducteur.carte));
+  const c = r.activites.filter((a) => a.type === "conduite"); assert.strictEqual(c.length, 3);
+  assert.strictEqual(c[0].debut, midnight(10) + 300 * 60); assert.strictEqual(c[0].fin, midnight(10) + 540 * 60);
+  assert.strictEqual(c[1].fin - c[1].debut, (840 - 585) * 60);
+  assert.strictEqual(r.activites.find((a) => a.type === "travail").debut, midnight(11) + 360 * 60);
+  // le dernier changement du jour 2 se prolonge jusqu'à minuit
+  assert.strictEqual(r.activites[r.activites.length - 1].fin, midnight(12));
+  // la sortie alimente l'analyse comme un CSV
+  assert.strictEqual(N.tachyAnalyser(r.activites).infractions.filter((i) => i.type === "conduite_continue").length, 0);
+});
+
+test("tachygraphe .ddd : carte retirée = repos, 2ᵉ génération, fichiers refusés", () => {
+  const ddd = construireDDD({ gen: 2, jours: [{ date: midnight(10), distance: 1, changes: [[0, 0, 0, 3, 0], [0, 0, 1, 0, 600], [0, 0, 0, 3, 700]] }] });
+  const r = N.tachyParseDDD(ddd); assert.strictEqual(r.generation, 2);
+  assert.strictEqual(r.activites[0].type, "conduite"); assert.strictEqual(r.activites[1].type, "repos"); assert.strictEqual(r.activites[1].fin - r.activites[1].debut, 100 * 60);
+  assert.strictEqual(N.tachyParseDDD(new Uint8Array([1, 2, 3])).ok, false);
+  assert.strictEqual(N.tachyParseDDD(new TextEncoder().encode("Conducteur;Début;Fin;Activité\nA;1;2;C")).ok, false);
+  const sansActivite = N.tachyParseDDD(new Uint8Array([0x05, 0x20, 0, 0, 3, 1, 2, 3])); assert.strictEqual(sansActivite.ok, false); assert.ok(/Aucune donnée d'activité/.test(sansActivite.erreur));
+  const tronque = construireDDD({ jours: [{ date: midnight(10), distance: 1, changes: [[0, 0, 0, 3, 0]] }] }); assert.strictEqual(N.tachyParseDDD(tronque.subarray(0, tronque.length - 30)).ok, false);
+});
+
+test("relevé de télépéage européen : colonnes, période du voyage, devises", () => {
+  const csv = "Date;Description;Pays;Montant;Devise;Plaque\n09/11/2026 18:00;A7 Orange;FR;41,20;EUR;12345-A-6\n10/11/2026 09:15;AP-7;ES;22,10;EUR;12345-A-6\n11/11/2026 14:00;Mautstelle;DE;80,00;EUR;12345-A-6\n11/11/2026 15:00;Gotthard;CH;30,00;CHF;12345-A-6\n20/12/2026 10:00;Hors période;FR;99,00;EUR;12345-A-6\nerreur;;;;;\n";
+  const r = N.releveEuParse(csv); assert.strictEqual(r.ok, true); assert.strictEqual(r.lignes.length, 5); assert.strictEqual(r.rejetes, 1); assert.strictEqual(r.lignes[0].pays, "FR");
+  const v = N.peagesEuDepuisReleve(r.lignes, "2026-11-10", "2026-11-11");
+  assert.strictEqual(v.eur, 102.1); assert.strictEqual(v.nb, 2); assert.strictEqual(v.autresDevises, 1); assert.deepStrictEqual({ ...v.pays }, { ES: 22.1, DE: 80 }); // 9/11 avant le départ, 20/12 après le retour : exclus
+  assert.strictEqual(N.releveEuParse("a;b\n1;2").ok, false);
+  N.S.params.tauxEUR = 10; N.S.camions = [];
+  assert.strictEqual(N.coutVoyage({ peagesEurReel: 102.1, kmPays: "DE 1000", peagesEur: 5 }).parts.peagesEurope, 1021); // le relevé réel passe avant l'estimation
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

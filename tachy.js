@@ -33,12 +33,12 @@ VUES.tachy = {
       <div class="form-grid">
         <label class="f">Conducteur<select id="tachy-chauffeur">${S.chauffeurs.map((c) => `<option value="${c.id}" ${e?.chauffeurId === c.id ? "selected" : ""}>${esc(c.nom)}</option>`).join("")}</select></label>
         <label class="f">Fuseau horaire des heures<select id="tachy-fuseau">${FUSEAUX.map(([k, l]) => `<option value="${k}" ${String(e?.offH ?? 0) === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-        <label class="f full">Export d'activités (CSV)<input type="file" id="tachy-fichier" accept=".csv,.txt,text/csv,text/plain"></label>
+        <label class="f full">Carte conducteur (.ddd, .c1b) ou export d'activités (CSV)<input type="file" id="tachy-fichier" accept=".ddd,.c1b,.tgd,.esm,.bin,.csv,.txt,text/csv,text/plain"></label>
       </div>
       ${!S.chauffeurs.length ? `<p class="hint">Ajoutez d'abord des chauffeurs (page Chauffeurs).</p>` : ""}
       ${tachyMessage ? `<p class="hint" style="color:var(--danger)">${esc(tachyMessage)}</p>` : ""}
       ${apercu ? `<div class="trav"><div><strong>${esc(e.nom)}</strong><span class="sub">${lu.activites.length} activité(s) · ${hFrT(apercu.debut)} → ${hFrT(apercu.fin)} · ${fmt(apercu.conduiteTotalH, 1)} h de conduite · ${apercu.infractions.length} dépassement(s)${lu.rejetes ? ` · ${lu.rejetes} ligne(s) ignorée(s)` : ""}</span></div><div class="r">${btn("tachy-enregistrer", "Analyser et enregistrer", { icone: "check", cls: "btn" })}</div></div>` : ""}
-      <p class="hint">Colonnes attendues : <strong>début</strong>, <strong>fin</strong> (ou <strong>durée</strong>) et <strong>activité</strong> (conduite, repos, travail, disponibilité ; ou C, R, W, A). Les fichiers bruts du tachygraphe (.ddd) ne sont pas lus : exportez-les en CSV depuis votre logiciel de téléchargement. Le fichier est lu sur cet appareil, rien n'est envoyé.</p>
+      <p class="hint"><strong>Fichier de carte conducteur (.ddd / .c1b)</strong> : lu directement (activités des 28 derniers jours, identité du conducteur) ; les signatures ne sont pas vérifiées et seuls les fichiers de <strong>carte conducteur</strong> sont lus (pas les fichiers de véhicule). <strong>Export CSV</strong> — colonnes attendues : <strong>début</strong>, <strong>fin</strong> (ou <strong>durée</strong>) et <strong>activité</strong> (conduite, repos, travail, disponibilité ; ou C, R, W, A). Le fichier est lu sur cet appareil, rien n'est envoyé.</p>
     </div>
     ${S.chauffeurs.filter((c) => c.tachy).map((c) => { const t = c.tachy; return `<div class="card">
       <div class="card-head"><h2>${esc(c.nom)}</h2>${t.infractions.length ? badge(`${t.infractions.length} dépassement(s)`, t.infractions.some((i) => i.gravite === "grave") ? "danger" : "warn") : badge("Aucun dépassement", "ok")}</div>
@@ -61,11 +61,20 @@ VUES.tachy = {
 document.addEventListener("change", async (e) => {
   if (ongletActif !== "tachy") return;
   if (e.target.id === "tachy-chauffeur" && tachyEnCours) { tachyEnCours.chauffeurId = e.target.value; return; }
+  if (e.target.id === "tachy-fuseau" && tachyEnCours?.binaire) return; // les fichiers .ddd sont en UTC
   if (e.target.id === "tachy-fuseau" && tachyEnCours) { const off = Number(e.target.value); tachyEnCours = { ...tachyEnCours, offH: off, lu: tachyParseCSV(tachyEnCours.texte, { offH: off, colonnes: tachyEnCours.colonnes }) }; return rafraichir(); }
   if (e.target.id === "tachy-fichier" && e.target.files?.[0]) {
     const f = e.target.files[0], chauffeurId = $("#tachy-chauffeur")?.value, off = Number($("#tachy-fuseau")?.value || 0);
     tachyMessage = "";
     if (f.size > 20 * 1024 * 1024) { tachyMessage = "Fichier trop volumineux (20 Mo maximum)."; return rafraichir(); }
+    if (/\.(ddd|c1b|tgd|esm|bin)$/i.test(f.name)) {
+      const lu = tachyParseDDD(new Uint8Array(await f.arrayBuffer()));
+      if (!lu.ok) { tachyMessage = lu.erreur; tachyEnCours = null; return rafraichir(); }
+      const nomF = lu.conducteur ? sansAccent(lu.conducteur.nom) : "", cible = nomF && S.chauffeurs.find((c) => sansAccent(c.nom).includes(nomF)) || parId(S.chauffeurs, chauffeurId);
+      tachyEnCours = { chauffeurId: cible?.id || chauffeurId, nom: lu.conducteur ? `${f.name} — ${lu.conducteur.prenoms} ${lu.conducteur.nom}` : f.name, texte: "", offH: 0, lu, colonnes: null, binaire: true };
+      if (lu.conducteur && !cible) toast(`Conducteur du fichier : ${lu.conducteur.prenoms} ${lu.conducteur.nom} — choisissez le chauffeur correspondant.`, "warn");
+      return rafraichir();
+    }
     const texte = await f.text();
     let lu = tachyParseCSV(texte, { offH: off }), colonnes = lu.colonnes;
     if (!lu.ok && lu.entetes?.length > 1) { const col = await choisirColonnesTachy(lu); if (col) { colonnes = col; lu = tachyParseCSV(texte, { offH: off, colonnes: col }); } }

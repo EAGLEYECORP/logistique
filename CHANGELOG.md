@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.0 — Fichiers du tachygraphe, alertes automatiques, CMR, télépéage européen
+
+- **Lecture des fichiers de carte conducteur (.ddd, .c1b)** : activités des 28 derniers jours et identité du conducteur lues directement (format TLV, tampon circulaire d'activité, changements d'activité sur 16 bits, selon le règlement (CE) 1360/2002, annexe 1B). Le conducteur est reconnu et le chauffeur correspondant présélectionné. Les signatures ne sont pas vérifiées ; seules les cartes conducteur sont lues (pas les fichiers de véhicule). Testé sur des fichiers construits d'après la spécification : essayez avec un vrai fichier et signalez tout écart.
+- **Alertes automatiques par le relais** : le relais diffuse chaque alerte sur ses canaux (**ntfy, Telegram, WhatsApp Cloud API** — texte ou modèle approuvé —, **webhook**). Les secrets restent sur le serveur, jamais dans l'application. Pas de doublon pendant 6 h, 60 alertes par heure au plus.
+- **Lettre de voiture CMR imprimable** : les 24 rubriques (français / anglais), préremplie depuis le voyage, conservée avec lui. Ce n'est pas une lettre de voiture électronique.
+- **Relevés de télépéage européen** (DKV, UTA, Eurowag, Telepass…) : import CSV, montant des péages d'Europe du voyage calculé d'après les lignes réelles (en euros, entre le départ et le retour), par pays ; prioritaire sur l'estimation.
+- 102 tests (93 application + 9 relais).
+
 ## 3.0.0 — Feuille de route terminée (phases 5 à 8)
 
 - **Alertes sur le téléphone du bureau** (ntfy, gratuit) et **boutons WhatsApp / SMS** prêts à l'emploi vers le chauffeur concerné, sur chaque alerte du suivi en direct. Rien n'est envoyé sans geste de l'utilisateur côté WhatsApp / SMS ; l'envoi automatique par WhatsApp Business exige un compte et des frais, il n'est pas inclus.

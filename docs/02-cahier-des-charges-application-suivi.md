@@ -313,7 +313,16 @@ Le **suivi en temps réel exige un serveur** : une application hors ligne sans s
 | 4 | ETA et lien client | ✅ v2.5 |
 | 5 à 8 | Alertes ntfy / WhatsApp / SMS, balise du téléphone, preuve de livraison, tachygraphe (CSV), chaîne du froid, péages d'Europe | ✅ v3.0 |
 
-**Volontairement non réalisé** (dépend d'un tiers, d'un coût ou d'une information non confirmée) : lecture des fichiers bruts `.ddd` et téléchargement à distance du tachygraphe (matériel ou service du fournisseur) ; API Jawaz Pro et télépéage européen EETS (aucune API documentée) ; envoi automatique WhatsApp (compte professionnel payant) ; valeur juridique d'un e-CMR (non confirmée) ; tarifs de péage de France, d'Espagne et d'Italie préremplis (grilles officielles à saisir) ; synchronisation entre appareils (hors du périmètre hors ligne).
+| 9 | Fichiers `.ddd` de carte conducteur, alertes automatiques (Telegram, WhatsApp Cloud API, webhook), CMR imprimable, relevés de télépéage européen | ✅ v3.1 |
+
+**Reste hors de portée d'une application autonome** (dépend d'un tiers ou d'une information non confirmée) :
+
+- **Téléchargement à distance du tachygraphe** : il se fait par le matériel du véhicule ou le service de votre fournisseur ; l'application lit les fichiers que vous en obtenez (`.ddd` carte conducteur, CSV). Les fichiers de **véhicule (VU)** ne sont pas lus.
+- **API Jawaz Pro et EETS** : aucune API documentée publiquement ; on passe par les relevés CSV (Jawaz Pro : rapprochement avec les passages GPS ; télépéage européen : montant réel du voyage).
+- **e-CMR** : le protocole additionnel à la convention CMR est en vigueur depuis 2011 et l'Espagne y a adhéré, mais **aucune adhésion du Maroc n'a pu être confirmée** (à vérifier auprès du [dépositaire ONU](https://treaties.un.org) ou du ministère marocain des Transports ; voir aussi [le texte de la convention](https://maroctl.com/routier/transport-de-marchandises/lois-et-reglements-transport-de-marchandises/convention-cmr-transport-international-de-marchandises/)). Un vrai e-CMR passe par une plateforme agréée : l'application fournit un CMR papier préparé et une preuve de livraison signée, qui n'en sont pas.
+- **Tarifs de péage de France, d'Espagne et d'Italie** : les péages se facturent par section, il n'existe pas de tarif au kilomètre officiel ; les sources trouvées se contredisent. Utilisez le relevé de télépéage (montant réel) ou saisissez le tarif moyen de votre concessionnaire.
+- **Envoi WhatsApp** : l'intégration est faite, mais elle exige un compte Meta Business, un jeton et, hors fenêtre de 24 h, un modèle approuvé : à créer par vous.
+- **Synchronisation entre appareils** : hors du périmètre hors ligne (les alertes et le lien client passent par le relais).
 
 ## 12. Critères d'acceptation (extraits)
 

@@ -432,7 +432,7 @@ function coutVoyage(v) {
   const taux = S.params.tauxEUR;
   const trav = (v.traversees || []).reduce((s, t) => s + coutTraversee(t), 0) * taux;
   const parts = {
-    peagesMaroc: peagesMarocVoyage(v), peagesEurope: (v.kmPays && peagesEuropeVoyage(v).eur > 0 ? peagesEuropeVoyage(v).eur : num(v.peagesEur)) * taux, traversees: trav, carburant: num(v.carburantMad),
+    peagesMaroc: peagesMarocVoyage(v), peagesEurope: (num(v.peagesEurReel) > 0 ? num(v.peagesEurReel) : v.kmPays && peagesEuropeVoyage(v).eur > 0 ? peagesEuropeVoyage(v).eur : num(v.peagesEur)) * taux, traversees: trav, carburant: num(v.carburantMad),
     fraisRoute: num(v.fraisRouteMad), douane: num(v.douaneMad), autres: num(v.autresMad),
   };
   const total = Object.values(parts).reduce((a, b) => a + b, 0);

@@ -170,3 +170,106 @@ function baliseTelRetenir(precedente, p) {
   const dt = p.t - precedente.t;
   return dt >= 20 && (dt >= 60 || gpsDistance([0, precedente.lat, precedente.lon], [0, p.lat, p.lon]) >= 50);
 }
+
+/* ============================================================
+   Fichiers du tachygraphe (carte conducteur .ddd / .c1b)
+   Format : suite d'objets TLV — étiquette de 3 octets (identifiant de fichier sur 2 octets + « 00 » données / « 01 » signature, « 02 » / « 03 » pour la 2ᵉ génération),
+   longueur sur 2 octets, valeur. On lit EF Driver_Activity_Data (0504) et EF Identification (0520).
+   Structure de l'activité : 2 pointeurs (plus ancien jour, plus récent jour) puis un tampon circulaire d'enregistrements journaliers :
+   longueur précédente (2) · longueur (2) · date TimeReal (4) · compteur de présence (2) · distance (2) · changements d'activité (2 octets chacun, bits « scpaattttttttttt »).
+   Référence : règlement (CE) 1360/2002, annexe 1B, appendices 1, 2 et 7. Les signatures ne sont pas vérifiées.
+   ============================================================ */
+const CODES_ACTIVITE = ["repos", "disponibilite", "travail", "conduite"];
+function tachyLireTLV(o) {
+  const fichiers = [];
+  for (let p = 0; p + 5 <= o.length; ) {
+    const fid = (o[p] << 8) | o[p + 1], type = o[p + 2], len = (o[p + 3] << 8) | o[p + 4];
+    if (len === 0xffff || p + 5 + len > o.length) break;
+    if (type === 0 || type === 2) fichiers.push({ fid, gen: type === 0 ? 1 : 2, donnees: o.subarray(p + 5, p + 5 + len) });
+    p += 5 + len;
+  }
+  return fichiers;
+}
+const u16 = (o, i) => (o[i] << 8) | o[i + 1];
+const u32 = (o, i) => ((o[i] << 24) | (o[i + 1] << 16) | (o[i + 2] << 8) | o[i + 3]) >>> 0;
+/** Enregistrements journaliers du tampon circulaire : [{ date (s), distance, changements: [{ slot, equipe, sansCarte, activite, minutes }] }], du plus ancien au plus récent. */
+function tachyActiviteCarte(d) {
+  if (d.length < 4 + 12) return null;
+  const tampon = d.subarray(4), n = tampon.length, ancien = u16(d, 0), recent = u16(d, 2);
+  if (ancien >= n || recent >= n) return null;
+  const lire = (i, k) => tampon[(i + k) % n]; // lecture circulaire
+  const jours = []; let p = ancien, garde = 0;
+  while (garde++ < 400) {
+    const prec = (lire(p, 0) << 8) | lire(p, 1), len = (lire(p, 2) << 8) | lire(p, 3);
+    if (len < 12 || len > n || (len - 12) % 2 !== 0) return null; // chaîne incohérente : ce n'est pas le bon fichier
+    const date = (((lire(p, 4) << 24) | (lire(p, 5) << 16) | (lire(p, 6) << 8) | lire(p, 7)) >>> 0), distance = (lire(p, 10) << 8) | lire(p, 11);
+    const changements = [];
+    for (let k = 12; k + 1 < len; k += 2) { const v = (lire(p, k) << 8) | lire(p, k + 1), minutes = v & 0x7ff; if (minutes <= 1440) changements.push({ slot: (v >> 15) & 1, equipe: (v >> 14) & 1, sansCarte: (v >> 13) & 1, activite: (v >> 11) & 3, minutes }); }
+    jours.push({ date, distance, changements, prec });
+    if (p === recent) break;
+    p = (p + len) % n;
+  }
+  return garde > 400 ? null : jours;
+}
+/** Lit un fichier de carte conducteur (octets). Renvoie { ok, activites, conducteur: { nom, prenoms, carte }, generation, rejetes, erreur }. */
+function tachyParseDDD(octets) {
+  const o = octets instanceof Uint8Array ? octets : new Uint8Array(octets);
+  const fichiers = tachyLireTLV(o);
+  if (!fichiers.length) return { ok: false, activites: [], conducteur: null, erreur: "Ce fichier n'est pas un téléchargement de carte conducteur (.ddd).", rejetes: 0 };
+  const choix = fichiers.filter((f) => f.fid === 0x0504).map((f) => ({ f, jours: tachyActiviteCarte(f.donnees) })).filter((x) => x.jours).sort((a, b) => b.jours.length - a.jours.length)[0];
+  if (!choix) return { ok: false, activites: [], conducteur: null, erreur: "Aucune donnée d'activité exploitable : fichier de véhicule (VU) ou de carte incomplet ? Seules les cartes conducteur sont lues.", rejetes: 0 };
+  const latin = (b) => String.fromCharCode(...b).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+  let conducteur = null; const id = fichiers.find((f) => f.fid === 0x0520 && f.gen === choix.f.gen) || fichiers.find((f) => f.fid === 0x0520);
+  if (id && id.donnees.length >= 65 + 72) { const d = id.donnees; conducteur = { carte: latin(d.subarray(1, 17)), nom: latin(d.subarray(66, 101)), prenoms: latin(d.subarray(102, 137)) }; }
+  const brut = []; let rejetes = 0;
+  for (const j of choix.jours) {
+    const debutJour = j.date, ch = j.changements;
+    ch.forEach((c, i) => {
+      const t0 = debutJour + c.minutes * 60, t1 = debutJour + (i + 1 < ch.length ? ch[i + 1].minutes : 1440) * 60;
+      if (t1 <= t0) { rejetes++; return; }
+      brut.push({ debut: t0, fin: t1, type: c.sansCarte ? "repos" : CODES_ACTIVITE[c.activite] });
+    });
+  }
+  brut.sort((a, b) => a.debut - b.debut);
+  const activites = [];
+  for (const a of brut) { const l = activites[activites.length - 1]; if (l && l.type === a.type && a.debut <= l.fin) l.fin = Math.max(l.fin, a.fin); else activites.push({ ...a }); }
+  return { ok: activites.length > 0, activites, conducteur, generation: choix.f.gen, jours: choix.jours.length, rejetes, erreur: activites.length ? "" : "Aucune activité dans ce fichier." };
+}
+
+/* ============================================================
+   Relevés de télépéage européen (fournisseurs EETS : DKV, UTA, Eurowag, Telepass…) : aucun accès par API, import des relevés CSV.
+   ============================================================ */
+const RELEVE_EU_COLONNES = {
+  temps: ["date et heure", "date/heure", "datetime", "date transaction", "transaction date", "date", "datum"],
+  montant: ["montant ht", "montant", "amount", "betrag", "net amount", "total", "prix"],
+  devise: ["devise", "currency", "waehrung", "monnaie"],
+  pays: ["pays", "country", "land", "pays de transaction"],
+  plaque: ["plaque", "immatriculation", "vehicle", "vehicule", "kennzeichen", "licence plate", "license plate"],
+  libelle: ["description", "libelle", "libellé", "product", "produit", "route", "tronçon", "troncon", "autoroute"],
+};
+function releveEuParse(texte, { offH = 0, colonnes = null } = {}) {
+  const lignes = gpsLignesCSV(texte);
+  if (lignes.length < 2) return { ok: false, lignes: [], entetes: lignes[0] || [], colonnes: null, rejetes: 0, erreur: "Fichier vide ou sans ligne de données." };
+  const entetes = lignes[0], h = entetes.map(gpsNorm);
+  const trouver = (cands) => { for (const c of cands) { const i = h.indexOf(gpsNorm(c)); if (i >= 0) return i; } for (const c of cands) { if (c.length < 4) continue; const i = h.findIndex((x) => x.includes(gpsNorm(c))); if (i >= 0) return i; } return -1; };
+  const col = colonnes || Object.fromEntries(Object.entries(RELEVE_EU_COLONNES).map(([k, v]) => [k, trouver(v)]));
+  if (col.temps < 0 || col.montant < 0) return { ok: false, lignes: [], entetes, colonnes: col, rejetes: 0, erreur: "Colonnes introuvables (date et montant)." };
+  const res = []; let rejetes = 0;
+  for (const l of lignes.slice(1)) {
+    const t = gpsTemps(l[col.temps], offH), eur = gpsNombre(l[col.montant]);
+    if (!Number.isFinite(t) || !Number.isFinite(eur)) { rejetes++; continue; }
+    res.push({ t, montant: eur, devise: (col.devise >= 0 && l[col.devise] ? l[col.devise] : "EUR").toUpperCase().trim().slice(0, 3), pays: col.pays >= 0 ? l[col.pays].toUpperCase().trim().slice(0, 2) : "", plaque: col.plaque >= 0 ? l[col.plaque] : "", libelle: col.libelle >= 0 ? l[col.libelle] : "" });
+  }
+  return { ok: res.length > 0, lignes: res, entetes, colonnes: col, rejetes, erreur: res.length ? "" : "Aucune ligne exploitable (date ou montant illisible)." };
+}
+/** Péages d'un voyage d'après un relevé : lignes en euros dont la date tombe entre le départ et le retour prévu (+ 2 jours). Autres devises : comptées à part, jamais converties. */
+function peagesEuDepuisReleve(lignes, debutISO, finISO) {
+  const a = Date.parse(debutISO + "T00:00:00Z") / 1000, b = Date.parse(finISO + "T00:00:00Z") / 1000 + 3 * 86400;
+  let eur = 0, nb = 0, autres = 0; const pays = {};
+  for (const l of lignes) {
+    if (l.t < a || l.t >= b) continue;
+    if (l.devise !== "EUR") { autres++; continue; }
+    eur += l.montant; nb++; const k = l.pays || "??"; pays[k] = Math.round(((pays[k] || 0) + l.montant) * 100) / 100;
+  }
+  return { eur: Math.round(eur * 100) / 100, nb, autresDevises: autres, pays };
+}

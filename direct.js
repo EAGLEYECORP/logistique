@@ -139,7 +139,11 @@ function directMajVoyages(flotte) {
 }
 /** Envoi gratuit sur le téléphone du bureau via ntfy (https://ntfy.sh/<sujet>) — le sujet est un secret : choisissez un nom long et imprévisible. */
 async function alerteExterne(a) {
-  const url = directCfg().ntfy; if (!/^https:\/\//.test(url || "")) return;
+  const c = directCfg();
+  if (c.mode === "relais" && baseUrl(c.url) && c.jeton) { // le relais diffuse sur ses canaux (ntfy, Telegram, WhatsApp, webhook) : les secrets restent sur le serveur
+    try { const r = await (await fetch(`${baseUrl(c.url)}/api/alertes`, { method: "POST", headers: { Authorization: `Bearer ${c.jeton}`, "Content-Type": "application/json" }, body: JSON.stringify({ texte: a.texte, niveau: a.niveau, cle: a.cle }) })).json(); if (r.envoyes?.length || r.note) return; } catch { /* repli ci-dessous */ }
+  }
+  const url = c.ntfy; if (!/^https:\/\//.test(url || "")) return;
   try { await fetch(url, { method: "POST", body: a.texte, headers: { Title: "Logistique Fret", Priority: a.niveau === "danger" ? "high" : "default", Tags: a.niveau === "danger" ? "rotating_light" : "warning" } }); } catch { /* ignoré */ }
 }
 function directNotifier(flotte) {

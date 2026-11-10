@@ -69,6 +69,21 @@ Dans Traccar, créez un **jeton d'API** (profil utilisateur) et autorisez l'orig
 
 Mode chauffeur → « Partager ma position » : le téléphone envoie sa position à `POST /api/positions` avec le **jeton d'écriture** (saisi une fois par le gestionnaire dans les réglages de la carte). Liez l'identifiant envoyé (par défaut `TEL-<chauffeur>`) au camion dans sa fiche (champ « balise »). Le navigateur ne localise plus quand l'écran s'éteint : gardez-le allumé (l'application le demande).
 
+## Alertes automatiques (ntfy, Telegram, WhatsApp, webhook)
+
+Le relais transmet chaque alerte de l'application (`POST /api/alertes`, jeton de lecture) aux canaux configurés **sur le serveur** par variables d'environnement. Les secrets ne passent jamais par l'application.
+
+| Canal | Variables |
+|---|---|
+| ntfy | `NTFY_URL` (https://ntfy.sh/<sujet-secret>) |
+| Telegram | `TELEGRAM_TOKEN`, `TELEGRAM_CHAT` (identifiant de la conversation ou du groupe), `TELEGRAM_API` (facultatif) |
+| WhatsApp (Cloud API de Meta) | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_DEST` (numéros internationaux séparés par des virgules, sans « + »), `WHATSAPP_MODELE` et `WHATSAPP_LANGUE` (facultatifs), `WHATSAPP_API` (facultatif) |
+| Webhook | `WEBHOOK_URL` (reçoit `{ texte, niveau, cle, t }` en JSON) |
+
+**WhatsApp** : il faut un compte WhatsApp Business, un numéro et un jeton Meta (à créer chez Meta, conditions et tarifs à vérifier de votre côté). Un message libre n'est livré que si le destinataire vous a écrit dans les 24 dernières heures ; sinon, créez et faites approuver un **modèle** de message à un seul paramètre texte et indiquez son nom dans `WHATSAPP_MODELE`. *Cette intégration suit la documentation de l'API, sans compte Meta pour l'essayer : testez-la avec un seul destinataire d'abord.* Telegram est gratuit et plus simple pour démarrer.
+
+Une même alerte (même clé) n'est transmise qu'une fois par 6 heures ; 60 alertes par heure au plus ; un canal en échec n'empêche pas les autres.
+
 ## Alertes sur le téléphone du bureau
 
 Suivi en direct → Réglages de la source → « Alertes sur le téléphone du bureau » : adresse d'un sujet [ntfy](https://ntfy.sh) (`https://ntfy.sh/<sujet-long-et-secret>`). Installez l'application ntfy sur le téléphone du bureau et abonnez-vous au sujet. Chaque nouvelle alerte du suivi (signal perdu, conduite continue, température, retard…) y est envoyée. Le sujet fait office de mot de passe : choisissez un nom long et imprévisible, ou hébergez votre propre serveur ntfy.

@@ -12,7 +12,7 @@ const crypto = require("crypto");
 const { charger } = require("./moteur.js");
 const { page } = require("./page-client.js");
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -34,7 +34,7 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null, ...(temp !== null ? { temp } : {}) };
 }
 
-function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") } = {}) {
+function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a) } = {}) {
   if (!jetonEcriture || !jetonLecture) throw new Error("JETON_ECRITURE et JETON_LECTURE sont obligatoires.");
   const historique = new Map(); // id -> [positions triées]
   const noms = new Map();
@@ -78,6 +78,21 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
   const jetonDe = (req, url) => { const h = req.headers.authorization || ""; return h.startsWith("Bearer ") ? h.slice(7).trim() : url.searchParams.get("token") || url.searchParams.get("key") || ""; };
   const corps = (req) => new Promise((ok, ko) => { let n = 0; const b = []; req.on("data", (c) => { n += c.length; if (n > 262144) { ko(new Error("trop gros")); req.destroy(); } else b.push(c); }); req.on("end", () => ok(Buffer.concat(b).toString("utf8"))); req.on("error", ko); });
 
+  /* ---------- alertes : transmises aux canaux configurés SUR LE SERVEUR (les secrets ne passent jamais par l'application) ---------- */
+  const alertesVues = new Map(); let alertesHeure = { h: 0, n: 0 };
+  async function diffuserAlerte({ texte, niveau, cle }) {
+    const envoyes = [], erreurs = [];
+    const poste = async (nom, url, opts) => { try { const r = await http_(url, { method: "POST", ...opts }); if (r.ok) envoyes.push(nom); else erreurs.push(`${nom} : réponse ${r.status}`); } catch (e) { erreurs.push(`${nom} : ${e.message}${e.cause?.code ? " (" + e.cause.code + ")" : ""}`); } };
+    const urgent = niveau === "danger";
+    if (canaux.ntfy?.url) await poste("ntfy", canaux.ntfy.url, { body: texte, headers: { Title: "Logistique Fret", Priority: urgent ? "high" : "default", Tags: urgent ? "rotating_light" : "warning" } });
+    if (canaux.telegram?.token && canaux.telegram?.chat) await poste("telegram", `${canaux.telegram.api || "https://api.telegram.org"}/bot${canaux.telegram.token}/sendMessage`, { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: canaux.telegram.chat, text: `${urgent ? "🚨 " : "⚠️ "}${texte}` }) });
+    if (canaux.whatsapp?.token && canaux.whatsapp?.phoneId) for (const dest of canaux.whatsapp.destinataires || []) {
+      const corps = canaux.whatsapp.modele ? { messaging_product: "whatsapp", to: dest, type: "template", template: { name: canaux.whatsapp.modele, language: { code: canaux.whatsapp.langue || "fr" }, components: [{ type: "body", parameters: [{ type: "text", text: texte.slice(0, 900) }] }] } } : { messaging_product: "whatsapp", to: dest, type: "text", text: { body: texte.slice(0, 3800) } };
+      await poste(`whatsapp:${dest}`, `${canaux.whatsapp.api || "https://graph.facebook.com/v20.0"}/${canaux.whatsapp.phoneId}/messages`, { headers: { Authorization: `Bearer ${canaux.whatsapp.token}`, "Content-Type": "application/json" }, body: JSON.stringify(corps) });
+    }
+    if (canaux.webhook?.url) await poste("webhook", canaux.webhook.url, { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texte, niveau, cle, t: Math.floor(Date.now() / 1000) }) });
+    return { envoyes, erreurs };
+  }
   const nombre = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
   const textes = (v, max = 120) => String(v ?? "").slice(0, max).trim();
   /** Champs d'un partage acceptés depuis l'application (tout le reste est ignoré). */
@@ -186,7 +201,19 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           if (id && req.method === "DELETE") { partages.delete(id); sauverPartages(); return json(res, 200, { ok: true }); }
           if (id && req.method === "GET") return json(res, 200, donneesPartage(part));
         }
-        if (p === "/api/etat") return json(res, 200, { version: VERSION, appareils: historique.size, positions: total, retentionJours, partages: partages.size, moteur: moteur.disponible, maintenant: Math.floor(Date.now() / 1000) });
+        if (p === "/api/alertes" && req.method === "POST") {
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          let b; try { b = JSON.parse(await corps(req)); } catch { return json(res, 400, { erreur: "JSON invalide." }); }
+          const texte = textes(b.texte, 500), cle = textes(b.cle, 120) || texte, niveau = b.niveau === "danger" ? "danger" : "warn", maintenant = Date.now();
+          if (!texte) return json(res, 400, { erreur: "texte obligatoire." });
+          if (!Object.keys(canaux).length) return json(res, 200, { ok: true, envoyes: [], erreurs: [], note: "Aucun canal configuré sur le serveur." });
+          const h = Math.floor(maintenant / 3600000); if (alertesHeure.h !== h) alertesHeure = { h, n: 0 };
+          if (alertesHeure.n >= 60) return json(res, 429, { erreur: "60 alertes par heure au plus." });
+          if (alertesVues.get(cle) > maintenant - 6 * 3600000) return json(res, 200, { ok: true, envoyes: [], erreurs: [], note: "Déjà transmise il y a moins de 6 h." });
+          alertesVues.set(cle, maintenant); alertesHeure.n++; if (alertesVues.size > 500) for (const [k, t] of alertesVues) if (t < maintenant - 6 * 3600000) alertesVues.delete(k);
+          return json(res, 200, { ok: true, ...(await diffuserAlerte({ texte, niveau, cle })) });
+        }
+        if (p === "/api/etat") return json(res, 200, { version: VERSION, appareils: historique.size, positions: total, retentionJours, partages: partages.size, moteur: moteur.disponible, canaux: Object.keys(canaux), maintenant: Math.floor(Date.now() / 1000) });
       }
       return json(res, 404, { erreur: "Introuvable." });
     } catch (e) { return json(res, 500, { erreur: "Erreur du serveur." }); }
@@ -208,12 +235,18 @@ if (require.main === module) {
     fs.writeFileSync(f, JSON.stringify(jetons, null, 2), { mode: 0o600 });
     console.log(`Jetons enregistrés dans ${f}`);
   }
-  const { serveur } = creer({ ...jetons, dossier, retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*" });
+  const canaux = {};
+  if (e.NTFY_URL) canaux.ntfy = { url: e.NTFY_URL };
+  if (e.TELEGRAM_TOKEN && e.TELEGRAM_CHAT) canaux.telegram = { token: e.TELEGRAM_TOKEN, chat: e.TELEGRAM_CHAT, api: e.TELEGRAM_API || undefined };
+  if (e.WHATSAPP_TOKEN && e.WHATSAPP_PHONE_ID) canaux.whatsapp = { token: e.WHATSAPP_TOKEN, phoneId: e.WHATSAPP_PHONE_ID, destinataires: String(e.WHATSAPP_DEST || "").split(",").map((x) => x.trim()).filter(Boolean), modele: e.WHATSAPP_MODELE || "", langue: e.WHATSAPP_LANGUE || "fr", api: e.WHATSAPP_API || undefined };
+  if (e.WEBHOOK_URL) canaux.webhook = { url: e.WEBHOOK_URL };
+  const { serveur } = creer({ ...jetons, dossier, retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux });
   const port = Number(e.PORT || 8787);
   serveur.listen(port, e.HOTE || "0.0.0.0", () => {
     console.log(`Relais de positions ${VERSION} sur le port ${port}`);
     console.log(`  Jeton d'écriture (balises, Traccar) : ${jetons.jetonEcriture}`);
     console.log(`  Jeton de lecture (application)      : ${jetons.jetonLecture}`);
+    if (Object.keys(canaux).length) console.log(`  Alertes transmises à : ${Object.keys(canaux).join(", ")}`);
     console.log(`  Réception : POST /api/positions · GET /osmand · POST /traccar    Lecture : /api/derniere · /api/trace`);
   });
 }

@@ -165,7 +165,7 @@ function carteVoyage(v) {
       <div class="section-title">Coût et marge</div>
       <div class="table-wrap"><table class="plain"><tbody>
         ${v.kmPays && peagesEuropeVoyage(v).manquants.length ? `<tr><td colspan="2" class="sub">Péages d'Europe : tarif au km non renseigné pour ${peagesEuropeVoyage(v).manquants.join(", ")} (Réglages → calculs) — ces pays ne sont pas comptés.</td></tr>` : ""}
-        ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
+        ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages Europe" && v.peagesEurReel ? `<span class="sub">relevé de télépéage : ${Object.entries(v.peagesEurPays || {}).map(([p, m]) => `${p} ${fmt(m, 2)} €`).join(", ") || "total du relevé"}</span>` : ""}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
         <tr><td><strong>Coût total</strong></td><td class="r num"><strong>${fmt(c.total)} MAD</strong></td></tr>
         <tr><td>Prix de vente</td><td class="r num">${c.prix ? fmt(c.prix) + " MAD" : "—"}</td></tr>
         <tr><td><strong>Marge</strong></td><td class="r num ${c.marge < 0 ? "neg" : ""}"><strong>${c.prix ? `${fmt(c.marge)} MAD · ${fmt(c.taux, 1)} %` : "—"}</strong></td></tr>
@@ -184,6 +184,8 @@ function carteVoyage(v) {
       <div class="row">
         ${v.statut === "termine" ? "" : btn("terminer", "Terminer le voyage", { id: v.id, icone: "check", cls: "btn ghost sm" })}
         ${v.statut === "annule" ? "" : btn("preuve", v.pod ? "Refaire la preuve de livraison" : "Preuve de livraison", { id: v.id, icone: "check", cls: "btn ghost sm" })}
+        ${v.statut === "annule" ? "" : btn("cmr", "CMR (impression)", { id: v.id, icone: "print", cls: "btn ghost sm" })}
+        ${btn("releve-eu", "Relevé péages Europe", { id: v.id, icone: "upload", cls: "btn ghost sm", titre: "Importer le relevé CSV de votre fournisseur de télépéage (DKV, UTA, Eurowag, Telepass…)" })}
         ${btn("partager", v.partage ? "Lien client" : "Partager le suivi", { id: v.id, icone: "mail", cls: "btn ghost sm" })}
         ${boutonPhotos("voyage:" + v.id, `Documents — ${v.ref}`, { texte: true })}
         ${btn("modifier", "Modifier", { id: v.id, icone: "edit", cls: "btn ghost sm" })}

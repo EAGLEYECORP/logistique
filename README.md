@@ -21,8 +21,9 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Voyages** | Maroc ⇄ Europe : aller, **traversée Tanger Med ⇄ Algeciras (aller et retour)**, étapes, contrôles avant départ (visa, passeport, papiers, autorisation, Schengen, poids), coût complet, marge, retour à vide, listes de contrôle |
 | **Autorisations & visas** | Autorisations bilatérales « E » / « MA », comptes-rendus de voyage, **compteur Schengen 90/180** par chauffeur |
 | **Suivi en direct** | Carte de la flotte, état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques, **heure d'arrivée estimée** ; nécessite le relais ou Traccar (`serveur/`) |
-| **Tachygraphe** | Import CSV des activités d'un conducteur, dépassements des temps de conduite et de repos (CE 561/2006, version simplifiée), alertes |
+| **Tachygraphe** | Import de la **carte conducteur (.ddd)** ou d'un CSV d'activités, dépassements des temps de conduite et de repos (CE 561/2006, version simplifiée), alertes |
 | **Chaîne du froid** | Température des balises, consigne par voyage, excursions, alerte et rapport (fiche voyage) |
+| **CMR** | Lettre de voiture CMR (24 rubriques, français / anglais) préremplie et imprimable ; relevés de télépéage européen importés |
 | **Preuve de livraison** | Signature du destinataire, réserves, position et heure, imprimable (ce n'est pas un e-CMR) |
 | **Lien client** | Page publique de suivi (état, ETA, position approximative, étapes) en 4 langues, révocable, fonctionne application fermée ; nécessite le relais |
 | **Traces GPS** | Import CSV/GPX de vos balises, tracé hors ligne, traversées et étapes détectées, conduite estimée, zones modifiables |
@@ -154,7 +155,7 @@ Automatique et sans action de votre part.
 | `ia.js`, `vendor/anthropic-sdk.js` | Assistant IA de classement SH (facultatif, clé API de l'utilisateur) |
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 98 tests |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 102 tests |
 
 ```bash
 npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres

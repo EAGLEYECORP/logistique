@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -544,9 +544,9 @@ test("alertes : autorisation expirée, compte-rendu manquant, Schengen épuisé"
   assert.ok(/E-1.*expirée/.test(t)); assert.ok(/MA-2.*compte-rendu/.test(t)); assert.ok(/Karim.*Schengen/.test(t));
 });
 
-test("migration v3 → v4 : voyages et autorisations ajoutés, données conservées", () => {
+test("migration v3 → v5 : voyages, autorisations, traces ajoutés, données conservées", () => {
   const r = N.migrer({ meta: { version: 3 }, camions: [{ id: "c", immat: "X" }], chauffeurs: [{ id: "h", nom: "A" }] });
-  assert.strictEqual(r.etat.meta.version, 4); assert.deepStrictEqual([...r.etat.voyages], []); assert.deepStrictEqual([...r.etat.autorisations], []);
+  assert.strictEqual(r.etat.meta.version, N.VERSION_SCHEMA); assert.deepStrictEqual([...r.etat.traces], []); assert.deepStrictEqual([...r.etat.voyages], []); assert.deepStrictEqual([...r.etat.autorisations], []);
   assert.strictEqual(r.etat.camions[0].immat, "X"); assert.deepStrictEqual([...r.etat.chauffeurs[0].sejours], []);
 });
 
@@ -555,6 +555,93 @@ test("interdictions de circuler : dimanche concerne tous les pays, samedi la Fra
   const sam = N.interdictionsLe("2026-11-14", N.INTERDICTIONS).map((i) => i.pays);
   assert.strictEqual(dim.length, 6); assert.deepStrictEqual([...sam], ["France", "Autriche"]);
   assert.strictEqual(N.interdictionsLe("2026-11-12", N.INTERDICTIONS).length, 0);
+});
+
+/* ---------- GPS ---------- */
+const trace = (pts) => pts.map(([t, la, lo, v]) => [N.gpsTemps(t), la, lo, v ?? null]);
+const zonesT = () => [...N.ZONES_DEFAUT, { id: "z-dep", nom: "Dépôt Agadir", type: "depot", lat: 30.42, lon: -9.6, rayon: 1500 }];
+
+test("GPS : heures ISO, françaises, UNIX, avec décalage", () => {
+  assert.strictEqual(N.gpsTemps("2026-11-10T10:00:00Z"), Date.UTC(2026, 10, 10, 10) / 1000);
+  assert.strictEqual(N.gpsTemps("10/11/2026 10:00:00"), Date.UTC(2026, 10, 10, 10) / 1000);
+  assert.strictEqual(N.gpsTemps("10/11/2026 11:00:00", 1), Date.UTC(2026, 10, 10, 10) / 1000); // données en UTC+1
+  assert.strictEqual(N.gpsTemps("2026-11-10 10:00:00+01:00"), Date.UTC(2026, 10, 10, 9) / 1000);
+  assert.strictEqual(N.gpsTemps("1789000000"), 1789000000); assert.strictEqual(N.gpsTemps("1789000000000"), 1789000000);
+  assert.ok(Number.isNaN(N.gpsTemps("n'importe quoi")));
+});
+
+test("GPS : CSV français (point-virgule, virgule décimale, colonnes françaises)", () => {
+  const csv = "Horodatage;Latitude;Longitude;Vitesse (km/h);Contact\n10/11/2026 08:00:00;35,889;-5,500;0;ON\n10/11/2026 08:05:00;35,9;-5,49;42,5;ON\nligne;cassée;;;\n";
+  const r = N.gpsParseCSV(csv);
+  assert.strictEqual(r.ok, true); assert.strictEqual(r.points.length, 2); assert.strictEqual(r.rejetes, 1);
+  assert.strictEqual(r.points[0][1], 35.889); assert.strictEqual(r.points[1][3], 42.5);
+});
+
+test("GPS : CSV anglais (virgule), date et heure séparées, colonnes manquantes", () => {
+  const r = N.gpsParseCSV("date,time,lat,lng,speed\n2026-11-10,08:00:00,35.88,-5.50,10\n2026-11-10,08:01:00,35.89,-5.50,20");
+  assert.strictEqual(r.ok, true); assert.strictEqual(r.points.length, 2); assert.strictEqual(r.points[0][0], Date.UTC(2026, 10, 10, 8) / 1000);
+  const x = N.gpsParseCSV("a;b;c\n1;2;3");
+  assert.strictEqual(x.ok, false); assert.deepStrictEqual([...x.entetes], ["a", "b", "c"]);
+  const m = N.gpsParseCSV("a;b;c\n10/11/2026 08:00:00;35,8;-5,5", { colonnes: { temps: 0, lat: 1, lon: 2, vitesse: -1, date: -1 } });
+  assert.strictEqual(m.ok, true); assert.strictEqual(m.points.length, 1);
+});
+
+test("GPS : GPX (heure, vitesse en m/s convertie)", () => {
+  const gpx = '<?xml version="1.0"?><gpx><trk><trkseg><trkpt lat="35.889" lon="-5.5"><time>2026-11-10T08:00:00Z</time><extensions><speed>10</speed></extensions></trkpt><trkpt lat="35.9" lon="-5.49"><time>2026-11-10T08:01:00.000Z</time></trkpt><trkpt lat="1" lon="2"></trkpt></trkseg></trk></gpx>';
+  const r = N.gpsLire(gpx, "trace.gpx");
+  assert.strictEqual(r.format, "gpx"); assert.strictEqual(r.points.length, 2); assert.strictEqual(r.rejetes, 1); assert.strictEqual(Math.round(r.points[0][3]), 36);
+});
+
+test("GPS : distance haversine et nettoyage des sauts", () => {
+  const d = N.gpsDistance([0, 35.889, -5.5], [0, 36.13, -5.44]);
+  assert.ok(d > 26000 && d < 29000, "Tanger Med → Algeciras ≈ 27 km à vol d'oiseau : " + d);
+  const pts = trace([["2026-11-10T08:00:00Z", 35.889, -5.5], ["2026-11-10T08:01:00Z", 50, 10], ["2026-11-10T08:02:00Z", 35.89, -5.5], ["2026-11-10T08:02:00Z", 35.89, -5.5]]);
+  const r = N.gpsNettoyer(pts);
+  assert.strictEqual(r.points.length, 2); assert.strictEqual(r.ecartes, 2);
+});
+
+test("GPS : traversée du détroit détectée, jalons aller et retour déduits", () => {
+  const pts = trace([
+    ["2026-11-10T05:00:00Z", 30.42, -9.6, 0], ["2026-11-10T05:30:00Z", 30.6, -9.55, 80],
+    ["2026-11-10T14:00:00Z", 35.889, -5.5, 0], ["2026-11-10T16:00:00Z", 35.89, -5.5, 2],   // port de Tanger Med
+    ["2026-11-10T18:00:00Z", 36.13, -5.44, 0], ["2026-11-10T18:10:00Z", 36.13, -5.44, 0],   // Algeciras (trou en mer)
+    ["2026-11-14T08:00:00Z", 36.13, -5.44, 0], ["2026-11-14T09:00:00Z", 36.13, -5.44, 1],   // retour à Algeciras
+    ["2026-11-14T11:00:00Z", 35.889, -5.5, 0],                                               // Tanger Med
+    ["2026-11-14T20:00:00Z", 30.42, -9.6, 0],                                                // dépôt
+  ]);
+  const an = N.gpsAnalyser(pts, zonesT());
+  assert.strictEqual(an.traversees.length, 2);
+  assert.strictEqual(an.traversees[0].sens, "aller"); assert.strictEqual(an.traversees[0].embarque, N.gpsTemps("2026-11-10T16:00:00Z")); assert.strictEqual(an.traversees[0].debarque, N.gpsTemps("2026-11-10T18:00:00Z"));
+  assert.strictEqual(an.traversees[1].sens, "retour");
+  const types = an.jalons.map((j) => j.type).join(",");
+  assert.strictEqual(types, "depart,port_tmed,embarque_aller,debarque_alg,embarque_retour,debarque_tmed,retour");
+  assert.ok(an.trous.length >= 2);
+  const sj = N.gpsSejourSchengen(an);
+  assert.deepStrictEqual({ ...sj }, { entree: "2026-11-10", sortie: "2026-11-14" });
+});
+
+test("GPS : conduite estimée, pause de 45 min, arrêts", () => {
+  // 3 h de route, arrêt de 50 min, 3 h de route : aucune période de plus de 4 h 30 sans pause
+  const p = []; let t = Date.UTC(2026, 10, 10, 6) / 1000, lat = 33;
+  const marche = (min) => { for (let i = 0; i < min; i += 5) { t += 300; lat += 0.04; p.push([t, lat, -7, 80]); } };
+  const arret = (min) => { for (let i = 0; i < min; i += 5) { t += 300; p.push([t, lat, -7, 0]); } };
+  p.push([t, lat, -7, 0]); marche(180); arret(50); marche(180);
+  let an = N.gpsAnalyser(p, []);
+  assert.ok(Math.abs(an.conduiteH - 6) < 0.1, "conduite " + an.conduiteH); assert.ok(an.conduiteMaxSansPauseH < 3.2);
+  assert.strictEqual(an.arrets.length, 1); assert.ok(an.arrets[0].dureeMin >= 45);
+  // sans pause : 5 h de route
+  const q = []; t = Date.UTC(2026, 10, 10, 6) / 1000; lat = 33; q.push([t, lat, -7, 0]);
+  for (let i = 0; i < 60; i++) { t += 300; lat += 0.04; q.push([t, lat, -7, 80]); }
+  an = N.gpsAnalyser(q, []);
+  assert.ok(an.conduiteMaxSansPauseH > 4.9);
+});
+
+test("GPS : réduction de trace et dessin SVG", () => {
+  const pts = Array.from({ length: 5000 }, (_, i) => [1789000000 + i * 10, 33 + i * 1e-4, -7 + i * 1e-4, 50]);
+  const r = N.gpsReduire(pts, 800);
+  assert.strictEqual(r.length, 800); assert.strictEqual(r[0][0], pts[0][0]); assert.strictEqual(r[799][0], pts[4999][0]);
+  assert.ok(/^<svg[\s\S]*<path/.test(N.gpsSVG(r, N.ZONES_DEFAUT, [])));
+  assert.strictEqual(N.gpsSVG([[0, 1, 1]], []), "");
 });
 
 (async () => {

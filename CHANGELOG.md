@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.0 — Traces GPS (phase 1)
+
+- Nouvelle page **Traces GPS** : import de l'export de vos balises en **CSV ou GPX**, lu sur l'appareil. Colonnes reconnues automatiquement (français ou anglais, `;` ou `,`, virgule décimale, dates `JJ/MM/AAAA` ou ISO, date et heure séparées) ; sinon choix manuel des colonnes. Fuseau horaire du fichier au choix.
+- **Analyse** : distance, durée, vitesse moyenne, **conduite estimée** et plus longue période sans pause de 45 min (estimation d'après la vitesse, pas le tachygraphe), arrêts de plus de 20 min, trous de signal, points aberrants écartés, **tracé dessiné hors ligne**.
+- **Zones** (ports du Maroc et d'Europe, frontière, dépôts, clients) modifiables ; zones habituelles préchargées (coordonnées approximatives à ajuster).
+- **Étapes détectées automatiquement** : entrée au port, **embarquement et débarquement de la traversée du détroit (aller et retour)**, livraison, retour au dépôt. Un clic les applique au voyage (marquées « GPS »), renseigne la date de la traversée et la distance GPS, et propose le séjour Schengen du chauffeur.
+- Trace d'exemple intégrée pour essayer sans fichier ; schéma de données **v5** (migration automatique) ; 61 tests.
+
 ## 2.1.0 — Transport international Maroc ⇄ Europe (phase 0)
 
 Issu de l'audit [`docs/`](docs/README.md).

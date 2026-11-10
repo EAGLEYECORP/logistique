@@ -7,7 +7,7 @@
    ============================================================ */
 const AR = {
   // navigation
-  "Accueil": "الرئيسية", "Exploitation": "الاستغلال", "Commandes": "الطلبيات", "Voyages": "الرحلات", "Trajets": "المسارات", "Douane": "الجمارك",
+  "Accueil": "الرئيسية", "Exploitation": "الاستغلال", "Commandes": "الطلبيات", "Voyages": "الرحلات", "Traces GPS": "مسارات جي بي إس", "Importer une trace": "استيراد مسار", "Analyser et enregistrer": "تحليل وحفظ", "Zones (ports, frontières, dépôts, clients)": "المناطق (موانئ، حدود، مستودعات، زبناء)", "Traversées détectées": "العبورات المكتشفة", "Distance": "المسافة", "Durée": "المدة", "Vitesse moyenne": "السرعة المتوسطة", "Appliquer les étapes au voyage": "تطبيق المراحل على الرحلة", "Trajets": "المسارات", "Douane": "الجمارك",
   "Autorisations & visas": "التراخيص والتأشيرات", "Péages Maroc": "أداءات الطريق السيار", "Flotte": "الأسطول", "Camions": "الشاحنات", "Chauffeurs": "السائقون",
   "Gasoil": "الغازوال", "Gestion": "التدبير", "Clients": "الزبناء", "Factures": "الفواتير", "Outils": "الأدوات", "Codes SH": "رموز النظام المنسق", "Réglages": "الإعدادات",
   "Plus": "المزيد", "Rechercher": "بحث", "Données sur cet appareil": "البيانات محفوظة على هذا الجهاز",

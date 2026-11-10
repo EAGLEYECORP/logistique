@@ -26,9 +26,9 @@ const PARAMS_DEFAUT = {
   rappelSauvegarde: 7,     // jours sans sauvegarde avant rappel
 };
 
-/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen. */
-const VERSION_SCHEMA = 4;
-const COLLECTIONS = ["camions", "pleins", "interventions", "chauffeurs", "trajets", "dossiers", "codes", "clients", "commandes", "factures", "voyages", "autorisations"];
+/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones. */
+const VERSION_SCHEMA = 5;
+const COLLECTIONS = ["camions", "pleins", "interventions", "chauffeurs", "trajets", "dossiers", "codes", "clients", "commandes", "factures", "voyages", "autorisations", "traces"];
 
 // Documents suivis avec date d'expiration (transport national et international).
 const DOCS_CAMION = [
@@ -59,7 +59,7 @@ const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "P
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    clients: [], commandes: [], factures: [], voyages: [], autorisations: [],
+    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [],
     params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }
@@ -93,16 +93,17 @@ function migrer(brut) {
     e.meta.notif ||= { actif: false, cats: {} };
   }
   if (depuis < 4) { e.voyages = Array.isArray(e.voyages) ? e.voyages : []; e.autorisations = Array.isArray(e.autorisations) ? e.autorisations : []; e.chauffeurs.forEach((c) => { c.sejours ||= []; }); }
+  if (depuis < 5) { e.traces = Array.isArray(e.traces) ? e.traces : []; e.zones = Array.isArray(e.zones) ? e.zones : []; }
   e.meta.version = VERSION_SCHEMA;
   return { etat: e, depuis, migre: depuis < VERSION_SCHEMA };
 }
 
 function resumeDonnees(e) {
   const n = (k) => (e?.[k] || []).length;
-  return { camions: n("camions"), chauffeurs: n("chauffeurs"), clients: n("clients"), commandes: n("commandes"), factures: n("factures"), voyages: n("voyages"), autorisations: n("autorisations"), trajets: n("trajets"), pleins: n("pleins"), dossiers: n("dossiers") };
+  return { camions: n("camions"), chauffeurs: n("chauffeurs"), clients: n("clients"), commandes: n("commandes"), factures: n("factures"), voyages: n("voyages"), autorisations: n("autorisations"), traces: n("traces"), trajets: n("trajets"), pleins: n("pleins"), dossiers: n("dossiers") };
 }
 function libResume(r) {
-  const noms = { camions: "camion", chauffeurs: "chauffeur", clients: "client", commandes: "commande", factures: "facture", voyages: "voyage", autorisations: "autorisation", trajets: "trajet", pleins: "plein", dossiers: "dossier" };
+  const noms = { camions: "camion", chauffeurs: "chauffeur", clients: "client", commandes: "commande", factures: "facture", voyages: "voyage", autorisations: "autorisation", traces: "trace GPS", trajets: "trajet", pleins: "plein", dossiers: "dossier" };
   const l = Object.entries(r).filter(([, v]) => v).map(([k, v]) => `${v} ${noms[k]}${v > 1 ? "s" : ""}`);
   return l.length ? l.join(" · ") : "aucune donnée";
 }

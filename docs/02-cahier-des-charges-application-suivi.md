@@ -296,7 +296,7 @@ Le **suivi en temps réel exige un serveur** : une application hors ligne sans s
 | Phase | Contenu | Pré-requis | Effort indicatif |
 |---|---|---|---|
 | **0 — Gains rapides (dans l'application hors ligne)** | Registre des autorisations « E/MA » avec compte-rendu ; **compteur Schengen 90/180** ; entité **Voyage** avec jalons saisis ; **grille ADM + estimateur de péage** (sans graphe : choix manuel des sections) ; **modèle de coût par voyage** (traversée au ml, per diem, hébergement) ; champs de **retour** et **KPI de retour à vide** ; **check-lists de documents** par tronçon ; **calendrier d'interdictions** de circuler ; interface en arabe | Aucun serveur | 2–4 semaines |
-| **1 — Données GPS** | Import de traces (CSV/GPX) depuis la plateforme actuelle ; zones et jalons ; rapprochement péages/passages ; carte hors ligne des voyages terminés | Export des balises | 3–5 semaines |
+| **1 — Données GPS** *(import CSV/GPX, zones, jalons et traversées détectés : fait en v2.2.0 ; restent rapprochement des péages et zones des gares)* | Import de traces (CSV/GPX) depuis la plateforme actuelle ; zones et jalons ; rapprochement péages/passages ; carte hors ligne des voyages terminés | Export des balises | 3–5 semaines |
 | **2 — Suivi en direct** | Passerelle (Traccar ou API du fournisseur) ; carte en direct ; états dérivés (traversée) ; alertes ; ETA | Serveur | 4–8 semaines |
 | **3 — Conformité avancée** | Tachygraphe à distance ; télépéage (EETS) ; Jawaz Pro (API/export) ; e-CMR ; lien client | Accords partenaires | continu |
 

@@ -52,6 +52,7 @@ const P_ = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
   ship: '<path d="M3 17l2 3c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1l-1-3M5 17l-2-5 9-3 9 3-2 5M12 9V4h4M7 11V8h3"/>',
+  pin: '<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
   phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
 };
 const ic = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${P_[n] || ""}</svg>`;
@@ -145,6 +146,7 @@ const ONGLETS = [
   ["tableau", "Accueil", "home", ""],
   ["commandes", "Commandes", "box", "Exploitation"],
   ["voyages", "Voyages", "ship", "Exploitation"],
+  ["gps", "Traces GPS", "pin", "Exploitation"],
   ["itineraires", "Trajets", "route", "Exploitation"],
   ["douane", "Douane", "file", "Exploitation"],
   ["international", "Autorisations & visas", "shield", "Exploitation"],

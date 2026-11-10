@@ -130,11 +130,12 @@ function carteVoyage(v) {
         <tr><td><strong>Coût total</strong></td><td class="r num"><strong>${fmt(c.total)} MAD</strong></td></tr>
         <tr><td>Prix de vente</td><td class="r num">${c.prix ? fmt(c.prix) + " MAD" : "—"}</td></tr>
         <tr><td><strong>Marge</strong></td><td class="r num ${c.marge < 0 ? "neg" : ""}"><strong>${c.prix ? `${fmt(c.marge)} MAD · ${fmt(c.taux, 1)} %` : "—"}</strong></td></tr>
+        ${num(v.kmGps) ? `<tr><td>Distance mesurée par le GPS</td><td class="r num">${fmt(v.kmGps)} km</td></tr>` : ""}
         ${c.km ? `<tr><td>Coût au km (${fmt(c.km)} km)</td><td class="r num">${fmt(c.coutKm, 2)} MAD/km</td></tr>` : ""}
         ${num(v.kmRetourVide) ? `<tr><td>Retour à vide</td><td class="r num">${fmt(v.kmRetourVide)} km · ≈ ${fmt(c.coutKm * num(v.kmRetourVide))} MAD</td></tr>` : ""}
       </tbody></table></div>
       <div class="section-title">Étapes</div>
-      <ol class="timeline">${JALONS_VOYAGE.map(([k, l]) => { const j = jalons.find((x) => x.type === k); return `<li class="${j ? "fait" : ""}"><span class="pt"></span><div><strong>${esc(l)}</strong>${j ? `<span class="sub">${dateHeureFr(j.date)}</span>` : ""}</div></li>`; }).join("")}</ol>
+      <ol class="timeline">${JALONS_VOYAGE.map(([k, l]) => { const j = jalons.find((x) => x.type === k); return `<li class="${j ? "fait" : ""}"><span class="pt"></span><div><strong>${esc(l)}</strong>${j ? `<span class="sub">${dateHeureFr(j.date)}${j.source === "gps" ? " · " + badge("GPS", "ok") : ""}</span>` : ""}</div></li>`; }).join("")}</ol>
       <div class="row">${prochain && v.statut !== "annule" ? btn("jalon", `Marquer : ${prochain[1]}`, { id: v.id, icone: "flag", cls: "btn sm" }) : ""}${jalons.length ? btn("annuler-jalon", "Annuler la dernière étape", { id: v.id, cls: "btn ghost sm" }) : ""}</div>
       <div class="section-title">Listes de contrôle</div>
       <div class="segmented">${Object.entries(LIB_CHECKLISTS_VOYAGE).map(([k, l]) => `<button type="button" data-act="onglet-check" data-id="${v.id}|${k}" aria-selected="${k === ck}">${l}</button>`).join("")}</div>

@@ -609,3 +609,22 @@ body.mode-chauffeur .toasts, body.mode-chauffeur #toasts { bottom: calc(24px + e
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) input, :root:not([data-theme="light"]) select, :root:not([data-theme="light"]) textarea { background: var(--surface-2); } }
 :root[data-theme="dark"] input, :root[data-theme="dark"] select, :root[data-theme="dark"] textarea { background: var(--surface-2); }
 dialog { overscroll-behavior: contain; }
+
+/* voyages internationaux */
+.trav { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 8px; background: var(--surface-2); flex-wrap: wrap; }
+.trav.detroit { border-left: 4px solid var(--primary); }
+.trav.vide { opacity: .85; }
+.trav .r { text-align: right; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.ctl { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.ctl li { display: flex; gap: 10px; align-items: flex-start; font-size: .92rem; }
+.ctl li svg.i { flex: none; margin-top: 2px; width: 18px; height: 18px; }
+.ctl li.danger { color: var(--danger); } .ctl li.warn { color: var(--warn); }
+table.plain td { padding: 8px 10px; }
+
+/* arabe : de droite à gauche */
+[dir="rtl"] .timeline li::before { left: auto; right: 7px; }
+[dir="rtl"] .trav { border-left-width: 1px; } [dir="rtl"] .trav.detroit { border-left: 1px solid var(--border); border-right: 4px solid var(--primary); }
+[dir="rtl"] .trav .r { text-align: left; align-items: flex-start; }
+[dir="rtl"] th, [dir="rtl"] td { text-align: right; } [dir="rtl"] .r, [dir="rtl"] td.r, [dir="rtl"] th.r { text-align: left; }
+[dir="rtl"] .search svg.i { left: auto; right: 14px; } [dir="rtl"] .search input { padding-left: 14px; padding-right: 44px; }
+[dir="rtl"] .num { direction: ltr; unicode-bidi: isolate; }

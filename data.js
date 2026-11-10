@@ -138,3 +138,28 @@ const CHECKLISTS_DOUANE = {
     "Apurement du transit au bureau de destination",
   ],
 };
+
+/* ---------- Voyages internationaux : listes de contrôle (valeurs de départ, modifiables) ---------- */
+const CHECKLISTS_VOYAGE = {
+  depart: ["Passeport valable 6 mois après le retour", "Visa valable pour l'aller et le retour", "Jours Schengen restants suffisants", "Permis, carte conducteur, aptitude médicale",
+    "Carte grise, assurance internationale / carte verte, visite technique", "Tachygraphe étalonné (disque ou carte, papier)", "Autorisation bilatérale + compte-rendu de voyage vierge",
+    "Carnet TIR (volets), sceaux notés", "Pass Jawaz lié au camion, solde suffisant", "Poids, essieux et gabarit vérifiés (40 t, 16,50 m, 2,55 m, 4,00 m)",
+    "CMR (4 exemplaires), facture, liste de colisage", "DUM export déposée et validée (BADR)", "EUR.1 ou certificat d'origine", "Certificats sanitaires / ATP / ADR si concerné",
+    "Température de consigne réglée (frigorifique)", "Traversée du détroit réservée (mètres linéaires, heure limite)", "Balise GPS en marche, SIM active", "Photos du chargement et des scellés"],
+  arrivee: ["Contrôle d'entrée (passeport, visa, EES) fait", "Scellés contrôlés et photographiés au débarquement", "Contrôle douanier / sanitaire passé (Algeciras pour les produits frais)",
+    "Décharge TIR ou ouverture du transit", "Compteur Schengen et tachygraphe à jour", "Parking sécurisé réservé pour le repos hebdomadaire (hors cabine)", "Livraison : CMR signé, photo de preuve"],
+  retour: ["Fret de retour confirmé (ou retour à vide décidé)", "Documents de la marchandise de retour (CMR, facture, certificats)", "Déclaration d'import préparée côté Maroc",
+    "Traversée de retour réservée", "Compte-rendu de voyage rempli et remis", "Carnet TIR clôturé, sceaux comptabilisés", "Sortie de Schengen avant la date limite",
+    "Fiche de frais avec justificatifs (péages, traversée, carburant, hôtel, amendes)", "État du camion contrôlé, incidents signalés"],
+};
+const LIB_CHECKLISTS_VOYAGE = { depart: "Avant le départ", arrivee: "Arrivée en Europe", retour: "Chargement et retour" };
+
+/** Interdictions de circuler des poids lourds (> 7,5 t) — INDICATIVES, à vérifier chaque année auprès des autorités de chaque pays. jours : 0 = dimanche, 6 = samedi. */
+const INTERDICTIONS = [
+  { pays: "France", jours: [6, 0], texte: "Du samedi 22 h au dimanche 22 h, et veilles / jours fériés" },
+  { pays: "Espagne", jours: [0], texte: "Dimanches et jours fériés sur de nombreux axes (varie selon les régions)" },
+  { pays: "Italie", jours: [0], texte: "Dimanches et jours fériés, environ 9 h – 22 h" },
+  { pays: "Allemagne", jours: [0], texte: "Dimanches et jours fériés, 0 h – 22 h" },
+  { pays: "Autriche", jours: [6, 0], texte: "Du samedi 15 h au dimanche 22 h" },
+  { pays: "Suisse", jours: [0], texte: "Dimanche, et nuit de 22 h à 5 h" },
+];

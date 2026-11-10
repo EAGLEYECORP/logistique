@@ -51,6 +51,7 @@ const P_ = {
   shield: '<path d="M12 3l8 3v6c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V6z"/><path d="m9 12 2 2 4-4"/>',
   camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  ship: '<path d="M3 17l2 3c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1l-1-3M5 17l-2-5 9-3 9 3-2 5M12 9V4h4M7 11V8h3"/>',
   phone: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
 };
 const ic = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${P_[n] || ""}</svg>`;
@@ -143,8 +144,11 @@ let ongletActif = "tableau";
 const ONGLETS = [
   ["tableau", "Accueil", "home", ""],
   ["commandes", "Commandes", "box", "Exploitation"],
+  ["voyages", "Voyages", "ship", "Exploitation"],
   ["itineraires", "Trajets", "route", "Exploitation"],
   ["douane", "Douane", "file", "Exploitation"],
+  ["international", "Autorisations & visas", "shield", "Exploitation"],
+  ["peages", "Péages Maroc", "gauge", "Exploitation"],
   ["camions", "Camions", "truck", "Flotte"],
   ["chauffeurs", "Chauffeurs", "users", "Flotte"],
   ["carburant", "Gasoil", "fuel", "Flotte"],
@@ -336,6 +340,8 @@ const champsCamion = (c = {}) => [
   { name: "carteVerte", label: "Carte verte (assurance internationale)", type: "date", value: c.carteVerte },
   { name: "tachygraphe", label: "Prochain contrôle tachygraphe", type: "date", value: c.tachygraphe },
   { name: "autorisation", label: "Autorisation de transport international", type: "date", value: c.autorisation },
+  { name: "essieux", label: "Essieux (tracteur + semi-remorque)", type: "number", step: 1, min: 2, value: c.essieux, placeholder: "5" },
+  { name: "hauteurBasse", label: "Hauteur de l'essieu avant ≤ 1,30 m (rare : véhicule léger)", type: "checkbox", value: c.hauteurBasse, full: true },
 ];
 function lireCamion(v) {
   return {
@@ -343,6 +349,7 @@ function lireCamion(v) {
     kmVidange: num(v.kmVidange, num(v.km)), intervalleVidange: num(v.intervalleVidange, S.params.intervalleVidange),
     kmPneus: num(v.kmPneus, num(v.km)), intervallePneus: num(v.intervallePneus, S.params.intervallePneus),
     ...Object.fromEntries(DOCS_CAMION.map(([k]) => [k, v[k]])),
+    essieux: num(v.essieux) || undefined, hauteurBasse: !!v.hauteurBasse,
   };
 }
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.1.0 — Transport international Maroc ⇄ Europe (phase 0)
+
+Issu de l'audit [`docs/`](docs/README.md).
+
+### Voyages
+- Nouvelle page **Voyages** : aller, retour, étapes horodatées (départ, douane BADR, port, embarquement, débarquement, livraison, chargement de retour, retour), coût complet, marge, coût au km.
+- **La traversée Tanger Med ⇄ Algeciras est dans chaque voyage** (aller et retour créés automatiquement) : armateur, date, mètres linéaires, n° de réservation, statut, coût = fret + ml × (BAF + ETS + soufre + FuelEU) + passage chauffeur + frigorifique. Lignes Sète ⇄ Tanger Med préremplies (grille GNV).
+- **Contrôles avant départ** : visa et passeport (6 mois) jusqu'au retour, permis, carte conducteur, papiers du camion, autorisation bilatérale, jours Schengen, PTAC contre le plafond (40 t, 44 t transport combiné, 36 t à 4 essieux), traversées non réservées. Alertes et rappels associés.
+- **Retour à vide** : kilomètres, pourcentage et coût estimé.
+- Listes de contrôle (avant départ, arrivée en Europe, retour), tableau indicatif des interdictions de circuler.
+
+### Autorisations et Schengen
+- Registre des autorisations « E » et « MA » (au voyage / à temps), alertes d'expiration et de **compte-rendu de voyage** non remis.
+- **Compteur Schengen 90/180** par chauffeur (séjours, jours restants, dernière date autorisée).
+
+### Péages Autoroutes du Maroc
+- Grille officielle (584 sections, relevée le 10/11/2026), **classe déduite du camion** (essieux), trajets types vérifiés (Casablanca → Tanger Med 253 MAD en classe 3), calcul section par section, péage intégré à la fiche voyage.
+
+### Autres
+- **Interface en arabe (de droite à gauche)** : navigation, boutons et écrans de voyage ; reste en français. Réglages → Général → Langue.
+- Schéma de données **v4** (migration automatique, sans perte) ; export CSV des voyages, autorisations et séjours Schengen.
+- 10 nouveaux tests (**53** au total).
+
 ## 2.0.0 — Application hors ligne complète
 
 ### Sécurité des données

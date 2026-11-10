@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -467,6 +467,94 @@ test("verrou du mode chauffeur : PIN, code de secours, refus, empreintes salées
   const autre = await N.verrouCreer("4821");
   assert.notStrictEqual(autre.verrou.hashPin, verrou.hashPin); // sel différent → empreinte différente
   assert.strictEqual((await N.verrouCreer("")).verrou.hashPin, null);
+});
+
+test("Schengen 90/180 : jours inclus, fenêtre glissante, séjour en cours", () => {
+  const sej = [{ entree: "2026-01-01", sortie: "2026-01-10" }, { entree: "2026-03-01", sortie: "" }];
+  assert.strictEqual(N.schengenUtilise(sej, "2026-03-05"), 15); // 10 + 5 jours (entrée et sortie comptées)
+  assert.strictEqual(N.schengenUtilise([{ entree: "2026-01-01", sortie: "2026-01-10" }], "2026-08-01"), 0); // sorti de la fenêtre de 180 jours
+  const e = N.schengenEtat([{ entree: "2026-01-01", sortie: "" }], "2026-03-31");
+  assert.strictEqual(e.utilise, 90); assert.strictEqual(e.restant, 0); assert.strictEqual(e.depasse, false);
+  assert.strictEqual(N.schengenEtat([{ entree: "2026-01-01", sortie: "" }], "2026-04-01").depasse, true);
+});
+
+test("Schengen : séjour prévu et dernière date autorisée", () => {
+  const p = N.schengenPrevu([], "2026-05-01", "2026-05-20");
+  assert.strictEqual(p.ok, true); assert.strictEqual(p.pic, 20); assert.strictEqual(p.limite, "2026-07-29");
+  const q = N.schengenPrevu([{ entree: "2026-04-01", sortie: "2026-05-15" }], "2026-05-20", "2026-07-15");
+  assert.strictEqual(q.ok, false);
+});
+
+test("péages ADM officiels : trajets de référence en classe 3 et classe 2", () => {
+  assert.strictEqual(N.admTrajet("casa-tmed", 3).total, 253);
+  assert.strictEqual(N.admTrajet("casa-agadir", 3).total, 348);
+  assert.strictEqual(N.admTrajet("agadir-tmed", 3).total, 601);
+  assert.strictEqual(N.admTrajet("casa-tmed", 2).total, 210);
+  assert.strictEqual(N.admTrajet("casa-tmed", 3).manquantes, 0);
+  assert.strictEqual(N.admSection("tanger est", "port tanger med", 3), 36); // symétrique, casse indifférente
+  assert.strictEqual(N.ADM_GRILLE.length, 584);
+});
+
+test("classe ADM déduite du camion", () => {
+  assert.strictEqual(N.classeADM({ essieux: 5 }), 3);
+  assert.strictEqual(N.classeADM({ essieux: 2 }), 2);
+  assert.strictEqual(N.classeADM({ essieux: 2, hauteurBasse: true }), 1);
+  assert.strictEqual(N.classeADM({}), null);
+});
+
+test("traversée : mètres linéaires, surcharges, passage chauffeur", () => {
+  const sete = { fret: 2031, ml: 16.5, baf: 53, ets: 30.5, lss: 11, fueleu: 3, chauffeur: 150 };
+  assert.strictEqual(N.coutTraversee(sete), 3789.75);
+  assert.strictEqual(N.coutTraversee({ ml: 16.5, fret: 1000, baf: 4.36 }), 1071.94);
+  assert.strictEqual(N.coutTraversee({}), 0);
+});
+
+test("coût et marge d'un voyage, retour à vide", () => {
+  N.S.params.tauxEUR = 10;
+  N.S.camions = [{ id: "c", immat: "A", essieux: 5 }];
+  const v = { id: "v", camionId: "c", prix: 2000, devise: "EUR", peageTrajet: "casa-tmed", peageAR: true,
+    traversees: [{ sens: "aller", ligne: "tmed-alg", ml: 16.5, fret: 1000, baf: 4 }, { sens: "retour", ligne: "alg-tmed", ml: 16.5, fret: 1000, baf: 4 }],
+    carburantMad: 5000, kmAller: 1500, kmRetourCharge: 0, kmRetourVide: 1500 };
+  const c = N.coutVoyage(v);
+  assert.strictEqual(c.parts.peagesMaroc, 506);            // 253 × 2, classe 3
+  assert.strictEqual(c.parts.traversees, 2132 * 10);       // 2 × (1000 + 16,5 × 4)
+  assert.strictEqual(c.total, 506 + 21320 + 5000);
+  assert.strictEqual(c.prix, 20000);
+  const r = N.retourVide([v]);
+  assert.strictEqual(r.pct, 50); assert.strictEqual(Math.round(r.coutVide), Math.round(c.total / 2));
+});
+
+test("contrôles de voyage : visa expiré avant le retour, autorisation absente, poids, traversée", () => {
+  N.S.chauffeurs = [{ id: "h", nom: "Karim", visa: jour(5), passeport: jour(400), sejours: [] }];
+  N.S.camions = [{ id: "c", immat: "A", essieux: 5 }];
+  const ctl = N.controlesVoyage({ chauffeurId: "h", camionId: "c", dateDepart: jour(2), dateRetourPrevue: jour(12), ptacT: 41, traversees: [{ sens: "aller", ligne: "tmed-alg", statut: "a_reserver" }] });
+  const t = ctl.map((x) => x.texte).join("|");
+  assert.ok(/visa expire/.test(t)); assert.ok(/Aucune autorisation/.test(t)); assert.ok(/40 t/.test(t));
+  assert.ok(/Traversée aller .* à réserver/.test(t)); assert.ok(/Traversée retour non renseignée/.test(t));
+  assert.ok(ctl.find((x) => /visa/.test(x.texte)).niveau === "danger");
+});
+
+test("alertes : autorisation expirée, compte-rendu manquant, Schengen épuisé", () => {
+  N.S.autorisations = [
+    { id: "a1", type: "E", numero: "E-1", fin: jour(-2) },
+    { id: "a2", type: "MA", numero: "MA-2", fin: jour(200), dateUtilisation: jour(-16), compteRendu: false },
+  ];
+  N.S.chauffeurs = [{ id: "h", nom: "Karim", sejours: [{ entree: jour(-95), sortie: "" }] }];
+  const t = N.alertes().map((a) => a.texte).join("|");
+  assert.ok(/E-1.*expirée/.test(t)); assert.ok(/MA-2.*compte-rendu/.test(t)); assert.ok(/Karim.*Schengen/.test(t));
+});
+
+test("migration v3 → v4 : voyages et autorisations ajoutés, données conservées", () => {
+  const r = N.migrer({ meta: { version: 3 }, camions: [{ id: "c", immat: "X" }], chauffeurs: [{ id: "h", nom: "A" }] });
+  assert.strictEqual(r.etat.meta.version, 4); assert.deepStrictEqual([...r.etat.voyages], []); assert.deepStrictEqual([...r.etat.autorisations], []);
+  assert.strictEqual(r.etat.camions[0].immat, "X"); assert.deepStrictEqual([...r.etat.chauffeurs[0].sejours], []);
+});
+
+test("interdictions de circuler : dimanche concerne tous les pays, samedi la France et l'Autriche", () => {
+  const dim = N.interdictionsLe("2026-11-15", N.INTERDICTIONS).map((i) => i.pays);
+  const sam = N.interdictionsLe("2026-11-14", N.INTERDICTIONS).map((i) => i.pays);
+  assert.strictEqual(dim.length, 6); assert.deepStrictEqual([...sam], ["France", "Autriche"]);
+  assert.strictEqual(N.interdictionsLe("2026-11-12", N.INTERDICTIONS).length, 0);
 });
 
 (async () => {

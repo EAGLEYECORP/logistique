@@ -18,6 +18,9 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Camions** | Jauges d'usure vidange et pneus, papiers (assurance, visite, carte verte, tachygraphe, autorisation internationale), historique d'entretien avec coûts et photos |
 | **Gasoil** | Pleins, consommation plein à plein, détection d'anomalie (fuite, vol), **photo du ticket** |
 | **Chauffeurs** | Un responsable par camion, service/repos, permis, visa, passeport, carte conducteur |
+| **Voyages** | Maroc ⇄ Europe : aller, **traversée Tanger Med ⇄ Algeciras (aller et retour)**, étapes, contrôles avant départ (visa, passeport, papiers, autorisation, Schengen, poids), coût complet, marge, retour à vide, listes de contrôle |
+| **Autorisations & visas** | Autorisations bilatérales « E » / « MA », comptes-rendus de voyage, **compteur Schengen 90/180** par chauffeur |
+| **Péages Maroc** | Grille officielle Autoroutes du Maroc (584 sections), classe déduite du camion, trajets types |
 | **Trajets** | Coût, durée, pauses et repos calculés pendant la saisie |
 | **Douane** | Dossiers import/export/transit, documents à réunir, scans photo, impression |
 | **Codes SH** | Recherche des 97 chapitres, vos codes habituels, **assistant IA** de classement (facultatif) |
@@ -123,6 +126,9 @@ Automatique et sans action de votre part.
 | `sauvegarde.js` | ZIP, chiffrement AES-GCM, import/export, CSV, verrou PIN (testé) |
 | `app.js` | Interface : vues, fenêtres, navigation, recherche globale |
 | `commercial.js` | Commandes, clients, factures |
+| `voyages.js` | Voyages internationaux, traversées, autorisations, Schengen, péages |
+| `adm.js` | Grille tarifaire officielle des Autoroutes du Maroc |
+| `langue.js` | Interface en arabe (RTL), partielle |
 | `photos.js` | Galerie et visionneuse de photos |
 | `impression.js` | Factures, ordres de transport, dossiers de douane (A4/PDF) |
 | `reglages.js` | Réglages en onglets, sauvegarde et restauration |
@@ -133,7 +139,7 @@ Automatique et sans action de votre part.
 | `ia.js`, `vendor/anthropic-sdk.js` | Assistant IA de classement SH (facultatif, clé API de l'utilisateur) |
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js` | 43 tests |
+| `tests/noyau.test.js` | 53 tests |
 
 ```bash
 npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres
@@ -143,7 +149,13 @@ npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, 
 
 Réglages → Général → Assistant IA : collez une clé API créée sur [console.anthropic.com](https://console.anthropic.com) (paiement à l'usage, le coût de chaque demande s'affiche). Décrivez une marchandise (Codes SH ou depuis un dossier douane) : l'assistant propose le code SH, son raisonnement, les points à vérifier et les contrôles probables au Maroc. La clé reste sur l'appareil. **Vérifiez toujours le code sur le tarif officiel de l'ADII.**
 
+## Transport international (Maroc ⇄ Europe)
+
+Étude complète dans [`docs/`](docs/README.md) (audit du voyage, cahier des charges, annexes). Ce que l'application fait aujourd'hui, **sans serveur et hors ligne** : voyages avec traversée du détroit, autorisations, Schengen, péages ADM, coûts et retour à vide. Le **suivi GPS en direct** des camions demande un serveur : voir le cahier des charges.
+
 ## Avertissements
+
+- **Péages ADM** : grille relevée le 10/11/2026 sans date d'effet publiée ; recontrôlez sur adm.co.ma. **Tarifs de traversée** : le fret du détroit est sur devis, saisissez celui de votre armateur. **Interdictions de circuler** et **autorisations** : valeurs indicatives à vérifier auprès des autorités.
 
 - Listes de documents douaniers, règles de temps de conduite et TVA par défaut sont des **valeurs de départ** : vérifiez-les avec la réglementation en vigueur (ADII, ministère du Transport, votre comptable).
 - Les codes tarifaires à 10 chiffres et les droits changent avec la loi de finances : consultez le tarif officiel avant toute déclaration.

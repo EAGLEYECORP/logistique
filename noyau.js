@@ -26,9 +26,9 @@ const PARAMS_DEFAUT = {
   rappelSauvegarde: 7,     // jours sans sauvegarde avant rappel
 };
 
-/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos. */
-const VERSION_SCHEMA = 3;
-const COLLECTIONS = ["camions", "pleins", "interventions", "chauffeurs", "trajets", "dossiers", "codes", "clients", "commandes", "factures"];
+/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen. */
+const VERSION_SCHEMA = 4;
+const COLLECTIONS = ["camions", "pleins", "interventions", "chauffeurs", "trajets", "dossiers", "codes", "clients", "commandes", "factures", "voyages", "autorisations"];
 
 // Documents suivis avec date d'expiration (transport national et international).
 const DOCS_CAMION = [
@@ -59,7 +59,7 @@ const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "P
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    clients: [], commandes: [], factures: [],
+    clients: [], commandes: [], factures: [], voyages: [], autorisations: [],
     params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }
@@ -92,16 +92,17 @@ function migrer(brut) {
     if (contientDonnees(e)) e.meta.onboarde = true; // un utilisateur existant ne revoit pas l'assistant de démarrage
     e.meta.notif ||= { actif: false, cats: {} };
   }
+  if (depuis < 4) { e.voyages = Array.isArray(e.voyages) ? e.voyages : []; e.autorisations = Array.isArray(e.autorisations) ? e.autorisations : []; e.chauffeurs.forEach((c) => { c.sejours ||= []; }); }
   e.meta.version = VERSION_SCHEMA;
   return { etat: e, depuis, migre: depuis < VERSION_SCHEMA };
 }
 
 function resumeDonnees(e) {
   const n = (k) => (e?.[k] || []).length;
-  return { camions: n("camions"), chauffeurs: n("chauffeurs"), clients: n("clients"), commandes: n("commandes"), factures: n("factures"), trajets: n("trajets"), pleins: n("pleins"), dossiers: n("dossiers") };
+  return { camions: n("camions"), chauffeurs: n("chauffeurs"), clients: n("clients"), commandes: n("commandes"), factures: n("factures"), voyages: n("voyages"), autorisations: n("autorisations"), trajets: n("trajets"), pleins: n("pleins"), dossiers: n("dossiers") };
 }
 function libResume(r) {
-  const noms = { camions: "camion", chauffeurs: "chauffeur", clients: "client", commandes: "commande", factures: "facture", trajets: "trajet", pleins: "plein", dossiers: "dossier" };
+  const noms = { camions: "camion", chauffeurs: "chauffeur", clients: "client", commandes: "commande", factures: "facture", voyages: "voyage", autorisations: "autorisation", trajets: "trajet", pleins: "plein", dossiers: "dossier" };
   const l = Object.entries(r).filter(([, v]) => v).map(([k, v]) => `${v} ${noms[k]}${v > 1 ? "s" : ""}`);
   return l.length ? l.join(" · ") : "aucune donnée";
 }
@@ -294,11 +295,182 @@ function alertes() {
       ajouter(jc < 0 ? "danger" : "warn", "commandes", `Commande ${c.ref} — chargement ${jc < 0 ? "en retard" : jc === 0 ? "aujourd'hui" : "demain"}, chauffeur ou camion non affecté`, "commandes", `cmd:${c.id}:equipe`);
     }
   }
+  for (const a of S.autorisations || []) {
+    const lib = `Autorisation ${a.type === "MA" ? "« MA »" : "« E »"} ${a.numero || ""}`.trim();
+    const jf = joursAvant(a.fin);
+    if (jf !== null && jf <= P.alerteJours && !a.cloturee) ajouter(jf < 0 ? "danger" : "warn", "international", `${lib} — ${jf < 0 ? `expirée depuis ${-jf} j` : `expire dans ${jf} j`}`, "docs", `aut:${a.id}:fin`);
+    const ju = a.dateUtilisation ? -joursAvant(a.dateUtilisation) : null;
+    if (ju !== null && ju >= 7 && !a.compteRendu) ajouter(ju >= 15 ? "danger" : "warn", "international", `${lib} — compte-rendu de voyage non remis (${ju} j après le voyage)`, "docs", `aut:${a.id}:cr`);
+  }
+  for (const ch of S.chauffeurs) {
+    if (!(ch.sejours || []).length) continue;
+    const e = schengenEtat(ch.sejours);
+    if (e.depasse) ajouter("danger", "international", `${ch.nom} — ${e.utilise} jours Schengen sur 180 (limite 90 dépassée)`, "docs", `schengen:${ch.id}`);
+    else if (e.dedans && e.restant <= 10) ajouter(e.restant <= 3 ? "danger" : "warn", "international", `${ch.nom} — ${e.restant} jour(s) Schengen restant(s) : prévoir la sortie`, "docs", `schengen:${ch.id}`);
+  }
+  for (const v of S.voyages || []) {
+    if (!["prevu", "en_cours"].includes(v.statut)) continue;
+    const jd = joursAvant(v.dateDepart);
+    if (v.statut === "prevu" && jd !== null && jd <= 7) for (const c of controlesVoyage(v)) if (c.niveau === "danger" || jd <= 2) ajouter(c.niveau, "voyages", `Voyage ${v.ref} — ${c.texte}`, "commandes", `voy:${v.id}:${c.texte.slice(0, 40)}`);
+    if (v.statut === "en_cours" && v.dateRetourPrevue && joursAvant(v.dateRetourPrevue) < 0) ajouter("warn", "voyages", `Voyage ${v.ref} — retour prévu le ${dateFr(v.dateRetourPrevue)}, pas encore terminé`, "commandes", `voy:${v.id}:retard`);
+  }
   const js = S.meta.derniereSauvegarde ? -joursAvant(S.meta.derniereSauvegarde.slice(0, 10)) : Infinity;
   if (contientDonnees(S) && js > P.rappelSauvegarde) ajouter("warn", "parametres", S.meta.derniereSauvegarde ? `Dernière sauvegarde il y a ${js} jours — exportez vos données` : "Aucune sauvegarde de vos données — exportez-les", "sauvegarde", "sauvegarde");
 
   const ordre = { danger: 0, warn: 1 };
   return liste.sort((a, b) => ordre[a.niveau] - ordre[b.niveau]);
+}
+
+/* ============================================================
+   Transport international Maroc ⇄ Europe (phase 0)
+   Schengen, autorisations bilatérales, traversée du détroit, coût et contrôles d'un voyage.
+   ============================================================ */
+
+/* ---------- Schengen : 90 jours sur toute période glissante de 180 jours ---------- */
+const jourNum = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number); return Math.floor(Date.UTC(y, m - 1, d) / 86400000); };
+const numJour = (n) => new Date(n * 86400000).toISOString().slice(0, 10);
+/** Séjours : [{entree, sortie}] ; sortie vide = encore dans l'espace Schengen. Les jours d'entrée et de sortie comptent. */
+function schengenUtilise(sejours, ref = today()) {
+  const r = jourNum(ref), debut = r - 179, jours = new Set();
+  for (const s of sejours || []) {
+    if (!s.entree) continue;
+    const a = jourNum(s.entree), b = s.sortie ? jourNum(s.sortie) : r;
+    for (let d = Math.max(a, debut); d <= Math.min(b, r); d++) jours.add(d);
+  }
+  return jours.size;
+}
+function schengenEtat(sejours, ref = today()) {
+  const utilise = schengenUtilise(sejours, ref);
+  const dedans = (sejours || []).some((s) => s.entree && !s.sortie && jourNum(s.entree) <= jourNum(ref));
+  return { utilise, restant: Math.max(0, 90 - utilise), depasse: utilise > 90, dedans };
+}
+/** Un séjour prévu entre deux dates reste-t-il dans la limite ? Renvoie le pic d'utilisation et la dernière date autorisée. */
+function schengenPrevu(sejours, entree, sortie) {
+  const e = jourNum(entree), x = jourNum(sortie);
+  const avec = [...(sejours || []).filter((s) => s.entree), { entree, sortie }];
+  let pic = 0;
+  for (let d = e; d <= x; d++) pic = Math.max(pic, schengenUtilise(avec, numJour(d)));
+  let limite = null;
+  for (let d = e; d < e + 200; d++) if (schengenUtilise([...(sejours || []).filter((s) => s.entree), { entree, sortie: numJour(d) }], numJour(d)) > 90) { limite = numJour(d - 1); break; }
+  return { pic, ok: pic <= 90, limite };
+}
+
+/* ---------- Autoroutes du Maroc : classe du véhicule ---------- */
+/** Classe 1 : 2 essieux, ≤ 1,30 m · 2 : 2 essieux > 1,30 m, ou plus de 2 essieux ≤ 1,30 m · 3 : plus de 2 essieux et > 1,30 m. */
+function classeADM(camion) {
+  const essieux = num(camion?.essieux, 0);
+  if (!essieux) return null;
+  const haut = camion.hauteurBasse ? false : true; // hauteur de l'essieu avant > 1,30 m par défaut (poids lourd)
+  if (essieux <= 2) return haut ? 2 : 1;
+  return haut ? 3 : 2;
+}
+
+/* ---------- Plafonds de poids (décret 2-10-421, identique à la limite européenne) ---------- */
+function plafondPoidsT(essieux, combine) {
+  const e = num(essieux, 0);
+  if (e >= 5) return combine ? 44 : 40;
+  if (e === 4) return 36;
+  return null; // configuration non couverte : à vérifier
+}
+
+/* ---------- Traversées (Tanger Med ⇄ Algeciras est le passage obligé de chaque voyage) ---------- */
+const LIGNES_TRAVERSEE = {
+  "tmed-alg": { lib: "Tanger Med → Algeciras", duree: "≈ 1 h 30", defauts: { baf: 4.36, ets: 0, lss: 0, fueleu: 0, chauffeur: 0 }, note: "Détroit : fret sur devis (DFDS, Baleària, FRS, Armas…). BAF DFDS 4,36 €/ml (juin 2026) ; ETS non inclus." },
+  "alg-tmed": { lib: "Algeciras → Tanger Med", duree: "≈ 1 h 30", defauts: { baf: 4.36, ets: 0, lss: 0, fueleu: 0, chauffeur: 0 }, note: "Détroit : fret sur devis. Présentation 3 h avant le départ (DFDS)." },
+  "tmed-sete": { lib: "Tanger Med → Sète", duree: "≈ 38 h", defauts: { fret: 1851, baf: 53, ets: 30.5, lss: 11, fueleu: 3, chauffeur: 150 }, note: "GNV, ensemble 16,5 ml chargé, grille valable depuis le 08/10/2026 (à revérifier)." },
+  "sete-tmed": { lib: "Sète → Tanger Med", duree: "≈ 38 h", defauts: { fret: 2031, baf: 53, ets: 30.5, lss: 11, fueleu: 3, chauffeur: 150 }, note: "GNV, ensemble 16,5 ml chargé, grille valable depuis le 08/10/2026 (à revérifier)." },
+  autre: { lib: "Autre ligne", duree: "", defauts: {}, note: "" },
+};
+/** Coût en € : fret de base + mètres linéaires × (BAF + ETS + soufre + FuelEU) + passage chauffeur + frigorifique. */
+function coutTraversee(t) {
+  const ml = num(t?.ml), surch = num(t?.baf) + num(t?.ets) + num(t?.lss) + num(t?.fueleu);
+  return Math.round((num(t?.fret) + ml * surch + num(t?.chauffeur) + num(t?.frigo)) * 100) / 100;
+}
+const traverseeDetroit = (t) => t?.ligne === "tmed-alg" || t?.ligne === "alg-tmed";
+
+/* ---------- Voyage : jalons, coûts, retour à vide ---------- */
+const JALONS_VOYAGE = [
+  ["depart", "Départ du dépôt"], ["douane_export", "Douane export (BADR)"], ["port_tmed", "Entrée port Tanger Med"], ["embarque_aller", "Embarqué (aller)"],
+  ["debarque_alg", "Débarqué en Europe"], ["livre", "Livré"], ["charge_retour", "Chargement de retour"], ["embarque_retour", "Embarqué (retour)"],
+  ["debarque_tmed", "Débarqué à Tanger Med"], ["douane_import", "Douane import"], ["retour", "Retour au dépôt"],
+];
+const STATUTS_VOYAGE = [["prevu", "Prévu"], ["en_cours", "En cours"], ["termine", "Terminé"], ["annule", "Annulé"]];
+
+function peagesMarocVoyage(v) {
+  const cam = parId(S.camions, v.camionId);
+  const classe = classeADM(cam) || 3;
+  if (v.peageTrajet && typeof admTrajet === "function") {
+    const t = admTrajet(v.peageTrajet, classe);
+    if (t) return Math.round(t.total * (v.peageAR ? 2 : 1));
+  }
+  return num(v.peagesMad);
+}
+/** Coût complet d'un voyage, en MAD. */
+function coutVoyage(v) {
+  const taux = S.params.tauxEUR;
+  const trav = (v.traversees || []).reduce((s, t) => s + coutTraversee(t), 0) * taux;
+  const parts = {
+    peagesMaroc: peagesMarocVoyage(v), peagesEurope: num(v.peagesEur) * taux, traversees: trav, carburant: num(v.carburantMad),
+    fraisRoute: num(v.fraisRouteMad), douane: num(v.douaneMad), autres: num(v.autresMad),
+  };
+  const total = Object.values(parts).reduce((a, b) => a + b, 0);
+  const prix = v.devise === "EUR" ? num(v.prix) * taux : num(v.prix);
+  const km = num(v.kmAller) + num(v.kmRetourCharge) + num(v.kmRetourVide);
+  return { parts, total, prix, marge: prix - total, taux: prix ? ((prix - total) / prix) * 100 : 0, km, coutKm: km ? total / km : 0 };
+}
+/** Part des kilomètres roulés à vide et coût estimé (au coût moyen du kilomètre). */
+function retourVide(voyages) {
+  const l = voyages.filter((v) => v.statut !== "annule");
+  const vide = l.reduce((s, v) => s + num(v.kmRetourVide), 0);
+  const km = l.reduce((s, v) => s + num(v.kmAller) + num(v.kmRetourCharge) + num(v.kmRetourVide), 0);
+  const cout = l.reduce((s, v) => s + coutVoyage(v).total, 0);
+  return { kmVide: vide, km, pct: km ? (vide / km) * 100 : 0, coutVide: km ? (cout / km) * vide : 0, nb: l.length };
+}
+
+/** Contrôles avant départ et pendant le voyage (visa, passeport, papiers, autorisation, Schengen, charge, traversée). */
+function controlesVoyage(v) {
+  const r = [];
+  const ch = parId(S.chauffeurs, v.chauffeurId), cam = parId(S.camions, v.camionId);
+  const retour = v.dateRetourPrevue || v.dateDepart;
+  const apresRetour = (iso) => iso && retour && joursEntre(retour, iso) < 0;
+  const ajouter = (niveau, texte) => r.push({ niveau, texte });
+  if (!ch) ajouter("warn", "Aucun chauffeur affecté"); if (!cam) ajouter("warn", "Aucun camion affecté");
+  if (ch) {
+    if (!ch.visa) ajouter("warn", `${ch.nom} : visa non renseigné`);
+    else if (apresRetour(ch.visa)) ajouter("danger", `${ch.nom} : le visa expire le ${dateFr(ch.visa)}, avant la fin du voyage (${dateFr(retour)})`);
+    if (ch.passeport && retour && joursEntre(retour, ch.passeport) < 183) ajouter(joursEntre(retour, ch.passeport) < 0 ? "danger" : "warn", `${ch.nom} : passeport valable moins de 6 mois après le retour (${dateFr(ch.passeport)})`);
+    for (const [k, l] of [["permis", "permis"], ["carteConducteur", "carte conducteur"]]) if (apresRetour(ch[k])) ajouter("danger", `${ch.nom} : ${l} expire le ${dateFr(ch[k])}, avant la fin du voyage`);
+    if (v.dateDepart && retour) {
+      const p = schengenPrevu(ch.sejours, v.dateDepart, retour);
+      if (!p.ok) ajouter("danger", `${ch.nom} : ${p.pic} jours Schengen prévus sur 180 (limite 90) — dernier jour autorisé : ${p.limite ? dateFr(p.limite) : "?"}`);
+      else if (p.pic > 80) ajouter("warn", `${ch.nom} : ${p.pic}/90 jours Schengen après ce voyage`);
+    }
+  }
+  if (cam) {
+    for (const [k, l] of DOCS_CAMION) if (k !== "autorisation" && apresRetour(cam[k])) ajouter("danger", `${cam.immat} : ${l.toLowerCase()} expire le ${dateFr(cam[k])}, avant la fin du voyage`);
+    if (!num(cam.essieux)) ajouter("warn", `${cam.immat} : essieux non renseignés (classe de péage et poids autorisé inconnus)`);
+    const pl = plafondPoidsT(cam.essieux, v.transportCombine);
+    if (pl && num(v.ptacT) > pl) ajouter("danger", `PTAC prévu ${fmt(v.ptacT, 1)} t au-dessus de la limite de ${pl} t`);
+  }
+  const a = parId(S.autorisations, v.autorisationId);
+  if (!a) ajouter("warn", "Aucune autorisation bilatérale (« E » ou « MA ») rattachée à ce voyage");
+  else {
+    if (a.fin && v.dateDepart && joursEntre(v.dateDepart, a.fin) < 0) ajouter("danger", `Autorisation ${a.numero || a.type} expirée au départ (${dateFr(a.fin)})`);
+    else if (a.fin && retour && joursEntre(retour, a.fin) < 0) ajouter("warn", `Autorisation ${a.numero || a.type} valable jusqu'au ${dateFr(a.fin)}, avant le retour`);
+  }
+  const trav = v.traversees || [];
+  for (const sens of ["aller", "retour"]) {
+    const t = trav.find((x) => x.sens === sens);
+    if (!t) ajouter("warn", `Traversée ${sens} non renseignée`);
+    else if (t.statut === "a_reserver") ajouter("warn", `Traversée ${sens} (${LIGNES_TRAVERSEE[t.ligne]?.lib || "?"}) à réserver`);
+  }
+  return r;
+}
+
+/** Séjours à prévoir : interdictions de circuler le week-end (valeurs indicatives, à vérifier). */
+function interdictionsLe(dateStr, liste) {
+  const j = new Date(dateStr + "T00:00:00").getDay();
+  return (liste || []).filter((i) => i.jours.includes(j));
 }
 
 const joursEntre = (a, b) => Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);

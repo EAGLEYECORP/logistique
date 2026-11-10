@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.3.0 — Outils de vérification et mise en service
+
+- **Tester les canaux d'alerte** (Suivi en direct → Réglages de la source) : envoie un message d'essai sur chaque canal du relais (ntfy, Telegram, WhatsApp, webhook) et indique **lequel échoue et pourquoi**. Permet de valider un compte WhatsApp ou un bot Telegram en un clic.
+- **Diagnostic des fichiers `.ddd`** (page Tachygraphe) : structure lue (fichiers présents, jours, plage de dates, changements d'activité), **sans nom ni numéro de carte**, à copier pour signaler un écart de lecture.
+- **Checklist de mise en service** (`docs/04-mise-en-service.md`) : ce qui dépend de vous (relais, comptes, fichiers réels, déclarations) et comment chaque point se vérifie.
+- 107 tests (97 application + 10 relais).
+
 ## 3.2.0 — Synchronisation entre appareils et péages de France officiels
 
 - **Synchronisation entre appareils** (Réglages → Données) : bureau et téléphones des chauffeurs partagent les mêmes données par le relais. Données **chiffrées sur l'appareil** (AES-256-GCM, mot de passe de synchronisation) : le serveur ne garde qu'un bloc illisible. **Fusion à trois voies par enregistrement** : ce qui n'a changé que d'un côté est repris, si les deux côtés modifient le même enregistrement l'appareil qui synchronise l'emporte, une modification l'emporte toujours sur une suppression. Copie de sécurité avant chaque application de données reçues, synchronisation automatique (ouverture, toutes les 3 minutes, 15 s après une modification), reprise « le serveur gagne » / « cet appareil gagne ». Les photos ne sont pas synchronisées.

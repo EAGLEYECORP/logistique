@@ -1026,6 +1026,14 @@ test("péages de France : liaisons officielles VINCI, classe selon les essieux, 
   assert.strictEqual(N.coutVoyage({ camionId: "a", kmPays: "FR 900" }).parts.peagesEurope, 2700); // sans liaison choisie : estimation au km
 });
 
+test("diagnostic .ddd : structure lue sans donnée personnelle", () => {
+  const ddd = construireDDD({ jours: [{ date: midnight(10), distance: 1, changes: [[0, 0, 0, 3, 0], [0, 0, 0, 0, 600]] }, { date: midnight(11), distance: 1, changes: [[0, 0, 0, 0, 0]] }] });
+  const d = N.tachyDiagnosticDDD(ddd);
+  assert.ok(/EF 0504 · génération 0|EF 0504 · génération 1/.test(d)); assert.ok(/2 jour\(s\) du 2026-11-10 au 2026-11-11/.test(d)); assert.ok(/3 changement/.test(d));
+  assert.ok(!/BENALI|KARIM|12345678901234/.test(d), "ni nom ni numéro de carte");
+  assert.ok(/Aucun EF Driver_Activity_Data/.test(N.tachyDiagnosticDDD(new Uint8Array([0x05, 0x20, 0, 0, 1, 9]))));
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

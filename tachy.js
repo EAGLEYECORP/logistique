@@ -7,6 +7,7 @@
 
 let tachyEnCours = null; // { chauffeurId, nom, texte, offH, lu }
 let tachyMessage = "";
+let tachyDiagnostic = "";
 
 async function choisirColonnesTachy(lu) {
   const opts = [["-1", "— Aucune —"], ...lu.entetes.map((h, i) => [String(i), h || `Colonne ${i + 1}`])], d = lu.colonnes || {};
@@ -37,6 +38,7 @@ VUES.tachy = {
       </div>
       ${!S.chauffeurs.length ? `<p class="hint">Ajoutez d'abord des chauffeurs (page Chauffeurs).</p>` : ""}
       ${tachyMessage ? `<p class="hint" style="color:var(--danger)">${esc(tachyMessage)}</p>` : ""}
+      ${tachyDiagnostic ? `<details><summary style="cursor:pointer;color:var(--muted)">Détails de la lecture du fichier (sans données personnelles)</summary><pre style="white-space:pre-wrap;font-size:.8rem;user-select:all">${esc(tachyDiagnostic)}</pre><p class="hint">Si ce fichier est mal lu, copiez ce texte dans votre message : il ne contient ni nom ni numéro de carte.</p></details>` : ""}
       ${apercu ? `<div class="trav"><div><strong>${esc(e.nom)}</strong><span class="sub">${lu.activites.length} activité(s) · ${hFrT(apercu.debut)} → ${hFrT(apercu.fin)} · ${fmt(apercu.conduiteTotalH, 1)} h de conduite · ${apercu.infractions.length} dépassement(s)${lu.rejetes ? ` · ${lu.rejetes} ligne(s) ignorée(s)` : ""}</span></div><div class="r">${btn("tachy-enregistrer", "Analyser et enregistrer", { icone: "check", cls: "btn" })}</div></div>` : ""}
       <p class="hint"><strong>Fichier de carte conducteur (.ddd / .c1b)</strong> : lu directement (activités des 28 derniers jours, identité du conducteur) ; les signatures ne sont pas vérifiées et seuls les fichiers de <strong>carte conducteur</strong> sont lus (pas les fichiers de véhicule). <strong>Export CSV</strong> — colonnes attendues : <strong>début</strong>, <strong>fin</strong> (ou <strong>durée</strong>) et <strong>activité</strong> (conduite, repos, travail, disponibilité ; ou C, R, W, A). Le fichier est lu sur cet appareil, rien n'est envoyé.</p>
     </div>
@@ -68,7 +70,8 @@ document.addEventListener("change", async (e) => {
     tachyMessage = "";
     if (f.size > 20 * 1024 * 1024) { tachyMessage = "Fichier trop volumineux (20 Mo maximum)."; return rafraichir(); }
     if (/\.(ddd|c1b|tgd|esm|bin)$/i.test(f.name)) {
-      const lu = tachyParseDDD(new Uint8Array(await f.arrayBuffer()));
+      const octets = new Uint8Array(await f.arrayBuffer()), lu = tachyParseDDD(octets);
+      tachyDiagnostic = tachyDiagnosticDDD(octets);
       if (!lu.ok) { tachyMessage = lu.erreur; tachyEnCours = null; return rafraichir(); }
       const nomF = lu.conducteur ? sansAccent(lu.conducteur.nom) : "", cible = nomF && S.chauffeurs.find((c) => sansAccent(c.nom).includes(nomF)) || parId(S.chauffeurs, chauffeurId);
       tachyEnCours = { chauffeurId: cible?.id || chauffeurId, nom: lu.conducteur ? `${f.name} — ${lu.conducteur.prenoms} ${lu.conducteur.nom}` : f.name, texte: "", offH: 0, lu, colonnes: null, binaire: true };

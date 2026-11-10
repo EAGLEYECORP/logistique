@@ -157,7 +157,7 @@ Automatique et sans action de votre part.
 | `ia.js`, `vendor/anthropic-sdk.js` | Assistant IA de classement SH (facultatif, clé API de l'utilisateur) |
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 106 tests |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 107 tests |
 
 ```bash
 npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres
@@ -170,6 +170,10 @@ Réglages → Général → Assistant IA : collez une clé API créée sur [cons
 ## Transport international (Maroc ⇄ Europe)
 
 Étude complète dans [`docs/`](docs/README.md) (audit du voyage, cahier des charges, annexes). Ce que l'application fait aujourd'hui, **sans serveur et hors ligne** : voyages avec traversée du détroit, autorisations, Schengen, péages ADM, coûts et retour à vide. L'**import de traces GPS** exportées de vos balises fonctionne aussi hors ligne ; le **suivi en direct** des camions demande un petit serveur : voir `serveur/README.md`.
+
+## Mise en service
+
+Le suivi en direct, les alertes, le lien client et la synchronisation demandent un petit serveur (relais) ; la liste de ce qui dépend de vous (comptes, fichiers réels, déclarations) et les tests en un clic sont dans [`docs/04-mise-en-service.md`](docs/04-mise-en-service.md).
 
 ## Avertissements
 

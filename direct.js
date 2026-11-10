@@ -233,7 +233,7 @@ const cfgFormulaire = (c) => `<details class="card" ${c.mode === "off" ? "open" 
     <label class="f">Vitesse maximale (km/h)<input name="vitesseMax" type="number" min="60" max="130" value="${esc(c.vitesseMax)}"></label>
     <label class="f full">Alertes sur le téléphone du bureau (ntfy, gratuit) — adresse du sujet<input name="ntfy" value="${esc(c.ntfy || "")}" placeholder="https://ntfy.sh/mon-sujet-secret-long" autocomplete="off" inputmode="url"></label>
     <label class="check full"><input type="checkbox" name="tuiles" ${c.tuiles ? "checked" : ""}><span>Fond de carte OpenStreetMap (nécessite internet ; sinon fond uni)</span></label></div>
-    <div class="row" style="justify-content:flex-end;margin-top:8px">${btn("tester", "Tester la connexion", { cls: "btn ghost" })}<button class="btn">Enregistrer</button></div></form>
+    <div class="row" style="justify-content:flex-end;margin-top:8px">${btn("tester", "Tester la connexion", { cls: "btn ghost" })}${btn("tester-alertes", "Tester les canaux d'alerte", { cls: "btn ghost", titre: "Envoie un message d'essai sur ntfy, Telegram, WhatsApp… configurés sur le relais" })}<button class="btn">Enregistrer</button></div></form>
   <p class="hint">Le jeton et l'adresse restent sur cet appareil et ne sont jamais inclus dans une sauvegarde. Le suivi en direct a besoin d'un serveur : voir <code>serveur/README.md</code> (relais ou Traccar). Les pages <strong>https</strong> exigent un serveur en <strong>https</strong>.</p></details>`;
 
 VUES.direct = {
@@ -259,6 +259,13 @@ VUES.direct = {
     if (act === "lier-balise") {
       const f = await formulaire(`Lier la balise ${id}`, [{ name: "camionId", label: "Camion", type: "select", options: optsCamions("— Choisir —"), required: true }], { valider: "Lier", aide: "L'identifiant de la balise est enregistré sur la fiche du camion." });
       if (f?.camionId) { parId(S.camions, f.camionId).balise = id; sauver(); toast("Balise liée"); directFlotteRendu(); }
+    }
+    if (act === "tester-alertes") {
+      const c = directCfg(); if (c.mode !== "relais" || !baseUrl(c.url) || !c.jeton) return toast("Réglez d'abord la source « Relais » (adresse et jeton).", "warn");
+      try { const r = await (await fetch(`${baseUrl(c.url)}/api/alertes/test`, { method: "POST", headers: { Authorization: `Bearer ${c.jeton}` } })).json();
+        if (r.note) return toast(r.note, "warn");
+        toast(`Essai : ${r.envoyes.length ? "reçu sur " + r.envoyes.join(", ") : "aucun canal n'a répondu"}${r.erreurs.length ? " — ÉCHEC : " + r.erreurs.join(" ; ") : ""}`, r.erreurs.length || !r.envoyes.length ? "danger" : "ok"); }
+      catch { toast("Serveur injoignable.", "danger"); }
     }
     if (act === "tester") {
       const v = lireForm($("#f-direct")), c = { ...directCfg(), mode: v.mode, url: baseUrl(v.url), jeton: v.jeton };

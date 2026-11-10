@@ -7,6 +7,7 @@
 | [01 — Audit du voyage Maroc ⇄ Europe](01-audit-voyage-maroc-europe.md) | Toutes les étapes de l'aller et du retour (autorisations, visas, douane, port, traversée, conduite, retour à vide), règles de conduite, poids et dimensions, **péages ADM officiels**, péages européens, **traversées et tarifs**, risques, points non confirmés, sources. |
 | [02 — Cahier des charges de l'application de suivi](02-cahier-des-charges-application-suivi.md) | Modèle de données, 13 modules, exigences GPS, Mappy, architecture, moteur de péages, vie privée, feuille de route. |
 | [03 — Annexes](03-annexes.md) | Glossaire, check-lists imprimables, péages de référence, catalogue d'alertes, questions au transporteur, sources et confiance. |
+| [04 — Mise en service](04-mise-en-service.md) | Checklist de ce qui dépend de vous (relais, comptes, fichiers réels, déclarations) et comment chaque point se vérifie. |
 | [data/adm-grille-2026-11.csv](data/adm-grille-2026-11.csv) | Grille tarifaire officielle d'ADM (584 sections, 3 classes), relevée le 10/11/2026. |
 
 **Légende** : ✅ confirmé (source citée) · 🔶 à vérifier · ❓ inconnu. Les tarifs et règles changent : vérifiez-les avant tout usage commercial.

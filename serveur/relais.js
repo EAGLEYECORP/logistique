@@ -12,7 +12,7 @@ const crypto = require("crypto");
 const { charger } = require("./moteur.js");
 const { page } = require("./page-client.js");
 
-const VERSION = "1.3.0";
+const VERSION = "1.4.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -215,6 +215,11 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
             if (dossier) { try { fs.writeFileSync(fichierSynchro(), JSON.stringify(synchro), { mode: 0o600 }); } catch { /* garde en mémoire */ } }
             return json(res, 200, { ok: true, version: synchro.version });
           }
+        }
+        if (p === "/api/alertes/test" && req.method === "POST") { // essai de chaque canal, résultat détaillé (pour vérifier un compte WhatsApp, un bot Telegram…)
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          if (!Object.keys(canaux).length) return json(res, 200, { ok: false, envoyes: [], erreurs: [], note: "Aucun canal configuré sur le serveur (voir serveur/README.md)." });
+          return json(res, 200, { ok: true, ...(await diffuserAlerte({ texte: "Essai : les alertes de Logistique Fret arrivent bien sur ce canal.", niveau: "warn", cle: "essai" })) });
         }
         if (p === "/api/alertes" && req.method === "POST") {
           if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });

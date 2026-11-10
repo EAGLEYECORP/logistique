@@ -320,3 +320,18 @@ function fusionnerEtat(base, local, remote) {
   }
   return { etat: res, ...bilan };
 }
+
+/** Diagnostic d'un fichier de carte conducteur : structure lue, sans aucune donnée personnelle (ni nom ni numéro de carte). Sert à vérifier la lecture sur un vrai fichier et à signaler un écart. */
+function tachyDiagnosticDDD(octets) {
+  const o = octets instanceof Uint8Array ? octets : new Uint8Array(octets), fichiers = tachyLireTLV(o);
+  const lignes = [`Taille : ${o.length} octets · ${fichiers.length} fichier(s) de données`];
+  for (const f of fichiers) lignes.push(`  EF ${f.fid.toString(16).padStart(4, "0")} · génération ${f.gen} · ${f.donnees.length} octets`);
+  for (const f of fichiers.filter((x) => x.fid === 0x0504)) {
+    const j = tachyActiviteCarte(f.donnees);
+    if (!j) { lignes.push(`  Activités (génération ${f.gen}) : structure incohérente (pointeurs ou chaînage invalides)`); continue; }
+    const dates = j.map((x) => x.date);
+    lignes.push(`  Activités (génération ${f.gen}) : ${j.length} jour(s) du ${gpsIso(Math.min(...dates)).slice(0, 10)} au ${gpsIso(Math.max(...dates)).slice(0, 10)} · ${j.reduce((s, x) => s + x.changements.length, 0)} changement(s) d'activité · ${j.filter((x) => !x.changements.length).length} jour(s) vide(s)`);
+  }
+  if (!fichiers.some((f) => f.fid === 0x0504)) lignes.push("  Aucun EF Driver_Activity_Data (0504) : fichier de véhicule ou téléchargement incomplet");
+  return lignes.join("\n");
+}

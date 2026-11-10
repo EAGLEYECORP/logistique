@@ -85,6 +85,10 @@ const champsVoyage = (v = {}) => [
   { name: "peageTrajet", label: "Péage Maroc : trajet type (grille ADM)", type: "select", options: [["", "— Saisie manuelle ci-dessous —"], ...ADM_TRAJETS.map((t) => [t.id, t.lib])], value: v.peageTrajet },
   { name: "peageAR", label: "Compter aussi le péage au retour", type: "checkbox", value: v.peageAR },
   { name: "peagesMad", label: "Péages Maroc, saisie manuelle (MAD)", type: "number", min: 0, value: v.peagesMad },
+  { name: "peageFr1", label: "Péage France (VINCI, tarif officiel) : liaison 1", type: "select", options: [["", "— Aucune —"], ...FR_LIAISONS.map((l) => [l[1], `${l[1]} (${l[0]})`])], value: v.peageFr1 },
+  { name: "peageFr2", label: "Péage France : liaison 2", type: "select", options: [["", "— Aucune —"], ...FR_LIAISONS.map((l) => [l[1], `${l[1]} (${l[0]})`])], value: v.peageFr2 },
+  { name: "peageFr3", label: "Péage France : liaison 3", type: "select", options: [["", "— Aucune —"], ...FR_LIAISONS.map((l) => [l[1], `${l[1]} (${l[0]})`])], value: v.peageFr3 },
+  { name: "peageFrAR", label: "Compter aussi le péage France au retour", type: "checkbox", value: v.peageFrAR },
   { name: "kmPays", label: "Km par pays pour estimer les péages d'Europe (ex. ES 950, FR 880)", value: v.kmPays, full: true, placeholder: "ES 950, FR 880" },
   { name: "peagesEur", label: "Péages Europe, saisie manuelle (€)", type: "number", min: 0, value: v.peagesEur },
   { name: "tempMin", label: "Chaîne du froid : consigne minimale (°C)", type: "number", step: "any", value: v.tempMin },
@@ -102,7 +106,7 @@ const lireVoyage = (f) => ({
   ref: f.ref, statut: f.statut, clientId: f.clientId, marchandise: f.marchandise, origine: f.origine, destination: f.destination, dateDepart: f.dateDepart, dateRetourPrevue: f.dateRetourPrevue,
   chauffeurId: f.chauffeurId, camionId: f.camionId, remorque: f.remorque, autorisationId: f.autorisationId, ptacT: num(f.ptacT), transportCombine: !!f.transportCombine,
   livraisonPrevue: f.livraisonPrevue ? new Date(f.livraisonPrevue).toISOString() : "", destLat: f.destLat === "" ? undefined : num(f.destLat), destLon: f.destLon === "" ? undefined : num(f.destLon),
-  prix: num(f.prix), devise: f.devise, peageTrajet: f.peageTrajet, peageAR: !!f.peageAR, peagesMad: num(f.peagesMad), peagesEur: num(f.peagesEur), kmPays: f.kmPays, tempMin: f.tempMin === "" ? undefined : num(f.tempMin), tempMax: f.tempMax === "" ? undefined : num(f.tempMax), carburantMad: num(f.carburantMad),
+  prix: num(f.prix), devise: f.devise, peageTrajet: f.peageTrajet, peageAR: !!f.peageAR, peagesMad: num(f.peagesMad), peagesEur: num(f.peagesEur), kmPays: f.kmPays, peageFr1: f.peageFr1, peageFr2: f.peageFr2, peageFr3: f.peageFr3, peageFrAR: !!f.peageFrAR, tempMin: f.tempMin === "" ? undefined : num(f.tempMin), tempMax: f.tempMax === "" ? undefined : num(f.tempMax), carburantMad: num(f.carburantMad),
   fraisRouteMad: num(f.fraisRouteMad), douaneMad: num(f.douaneMad), autresMad: num(f.autresMad), kmAller: num(f.kmAller), kmRetourCharge: num(f.kmRetourCharge), kmRetourVide: num(f.kmRetourVide), notes: f.notes,
 });
 /** Coordonnées de la destination et de l'origine : saisies, sinon ville reconnue. */
@@ -149,7 +153,7 @@ function carteVoyage(v) {
   const faits = items.filter((_, i) => v.coches?.[ck]?.[i]).length;
   const dateD = v.dateDepart;
   const interd = dateD ? interdictionsLe(dateD, INTERDICTIONS) : [];
-  const parts = [["Péages Maroc", c.parts.peagesMaroc], ["Péages Europe", c.parts.peagesEurope], ["Traversées (aller + retour)", c.parts.traversees], ["Carburant", c.parts.carburant], ["Per diem, hôtel", c.parts.fraisRoute], ["Douane", c.parts.douane], ["Autres", c.parts.autres]];
+  const parts = [["Péages Maroc", c.parts.peagesMaroc], ["Péages France (VINCI)", c.parts.peagesFrance], ["Péages Europe", c.parts.peagesEurope], ["Traversées (aller + retour)", c.parts.traversees], ["Carburant", c.parts.carburant], ["Per diem, hôtel", c.parts.fraisRoute], ["Douane", c.parts.douane], ["Autres", c.parts.autres]];
   return `<details class="card dossier" data-voyage="${v.id}" ${voyagesOuverts.has(v.id) ? "open" : ""}>
     <summary>
       <div><strong>${esc(v.ref)}</strong> · ${esc(v.origine)} ⇄ ${esc(v.destination)}${v.clientId ? " · " + esc(nomClient(v.clientId)) : ""}
@@ -165,7 +169,7 @@ function carteVoyage(v) {
       <div class="section-title">Coût et marge</div>
       <div class="table-wrap"><table class="plain"><tbody>
         ${v.kmPays && peagesEuropeVoyage(v).manquants.length ? `<tr><td colspan="2" class="sub">Péages d'Europe : tarif au km non renseigné pour ${peagesEuropeVoyage(v).manquants.join(", ")} (Réglages → calculs) — ces pays ne sont pas comptés.</td></tr>` : ""}
-        ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages Europe" && v.peagesEurReel ? `<span class="sub">relevé de télépéage : ${Object.entries(v.peagesEurPays || {}).map(([p, m]) => `${p} ${fmt(m, 2)} €`).join(", ") || "total du relevé"}</span>` : ""}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
+        ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages France (VINCI)" ? `<span class="sub">${peagesFranceVoyage(v).detail.map((d) => `${esc(d.liaison)} ${fmt(d.eur, 2)} €`).join(" · ")}${v.peageFrAR ? " ×2" : ""} · classe ${peagesFranceVoyage(v).classe} · tarif officiel du ${dateFr(FR_LIAISONS_DATE)}</span>` : ""}${l === "Péages Europe" && v.peagesEurReel ? `<span class="sub">relevé de télépéage : ${Object.entries(v.peagesEurPays || {}).map(([p, m]) => `${p} ${fmt(m, 2)} €`).join(", ") || "total du relevé"}</span>` : ""}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
         <tr><td><strong>Coût total</strong></td><td class="r num"><strong>${fmt(c.total)} MAD</strong></td></tr>
         <tr><td>Prix de vente</td><td class="r num">${c.prix ? fmt(c.prix) + " MAD" : "—"}</td></tr>
         <tr><td><strong>Marge</strong></td><td class="r num ${c.marge < 0 ? "neg" : ""}"><strong>${c.prix ? `${fmt(c.marge)} MAD · ${fmt(c.taux, 1)} %` : "—"}</strong></td></tr>

@@ -12,7 +12,7 @@ const crypto = require("crypto");
 const { charger } = require("./moteur.js");
 const { page } = require("./page-client.js");
 
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -43,6 +43,9 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
   let total = 0;
   const moteur = charger(racine);
   const partages = new Map();
+  let synchro = { version: 0, blob: "", appareil: "", t: 0 };
+  const fichierSynchro = () => path.join(dossier, "synchro.json");
+  if (dossier) { try { synchro = JSON.parse(fs.readFileSync(path.join(dossier, "synchro.json"), "utf8")); } catch { /* aucune synchro */ } }
   const fichierPartages = () => path.join(dossier, "partages.json");
   const sauverPartages = () => { if (dossier) { try { fs.writeFileSync(fichierPartages(), JSON.stringify([...partages.values()]), { mode: 0o600 }); } catch { /* ignoré */ } } };
 
@@ -76,7 +79,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
   const entetes = (extra = {}) => ({ "Access-Control-Allow-Origin": origine, "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...extra });
   const json = (res, code, obj) => { res.writeHead(code, entetes({ "Content-Type": "application/json; charset=utf-8" })); res.end(JSON.stringify(obj)); };
   const jetonDe = (req, url) => { const h = req.headers.authorization || ""; return h.startsWith("Bearer ") ? h.slice(7).trim() : url.searchParams.get("token") || url.searchParams.get("key") || ""; };
-  const corps = (req) => new Promise((ok, ko) => { let n = 0; const b = []; req.on("data", (c) => { n += c.length; if (n > 262144) { ko(new Error("trop gros")); req.destroy(); } else b.push(c); }); req.on("end", () => ok(Buffer.concat(b).toString("utf8"))); req.on("error", ko); });
+  const corps = (req, max = 262144) => new Promise((ok, ko) => { let n = 0; const b = []; req.on("data", (c) => { n += c.length; if (n > max) { ko(new Error("trop gros")); req.destroy(); } else b.push(c); }); req.on("end", () => ok(Buffer.concat(b).toString("utf8"))); req.on("error", ko); });
 
   /* ---------- alertes : transmises aux canaux configurés SUR LE SERVEUR (les secrets ne passent jamais par l'application) ---------- */
   const alertesVues = new Map(); let alertesHeure = { h: 0, n: 0 };
@@ -201,6 +204,18 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           if (id && req.method === "DELETE") { partages.delete(id); sauverPartages(); return json(res, 200, { ok: true }); }
           if (id && req.method === "GET") return json(res, 200, donneesPartage(part));
         }
+        if (p === "/api/sync") { // synchronisation entre appareils : le serveur ne voit qu'un bloc chiffré par l'application
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          if (req.method === "GET") return json(res, 200, { version: synchro.version, appareil: synchro.appareil, t: synchro.t, blob: url.searchParams.get("meta") ? undefined : synchro.blob });
+          if (req.method === "PUT") {
+            let b; try { b = JSON.parse(await corps(req, 40 * 1024 * 1024)); } catch { return json(res, 400, { erreur: "JSON invalide." }); }
+            if (typeof b.blob !== "string" || !b.blob || b.blob.length > 40 * 1024 * 1024) return json(res, 400, { erreur: "blob obligatoire (40 Mo au plus)." });
+            if (Number(b.base) !== synchro.version) return json(res, 409, { erreur: "Le serveur a une version plus récente.", version: synchro.version });
+            synchro = { version: synchro.version + 1, blob: b.blob, appareil: textes(b.appareil, 60), t: Math.floor(Date.now() / 1000) };
+            if (dossier) { try { fs.writeFileSync(fichierSynchro(), JSON.stringify(synchro), { mode: 0o600 }); } catch { /* garde en mémoire */ } }
+            return json(res, 200, { ok: true, version: synchro.version });
+          }
+        }
         if (p === "/api/alertes" && req.method === "POST") {
           if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
           let b; try { b = JSON.parse(await corps(req)); } catch { return json(res, 400, { erreur: "JSON invalide." }); }
@@ -213,7 +228,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           alertesVues.set(cle, maintenant); alertesHeure.n++; if (alertesVues.size > 500) for (const [k, t] of alertesVues) if (t < maintenant - 6 * 3600000) alertesVues.delete(k);
           return json(res, 200, { ok: true, ...(await diffuserAlerte({ texte, niveau, cle })) });
         }
-        if (p === "/api/etat") return json(res, 200, { version: VERSION, appareils: historique.size, positions: total, retentionJours, partages: partages.size, moteur: moteur.disponible, canaux: Object.keys(canaux), maintenant: Math.floor(Date.now() / 1000) });
+        if (p === "/api/etat") return json(res, 200, { version: VERSION, appareils: historique.size, positions: total, retentionJours, partages: partages.size, moteur: moteur.disponible, canaux: Object.keys(canaux), synchro: synchro.version, maintenant: Math.floor(Date.now() / 1000) });
       }
       return json(res, 404, { erreur: "Introuvable." });
     } catch (e) { return json(res, 500, { erreur: "Erreur du serveur." }); }

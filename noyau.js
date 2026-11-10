@@ -424,15 +424,25 @@ function peagesEuropeVoyage(v) {
   const km = typeof v.kmPays === "string" ? lireKmPays(v.kmPays) : v.kmPays || {}, tarifs = S.params.peagesEu || {};
   const manquants = [], detail = [];
   let eur = 0;
-  for (const [pays, k] of Object.entries(km)) { const t = num(tarifs[pays]); if (t > 0) { detail.push({ pays, km: k, tarif: t, eur: k * t }); eur += k * t; } else manquants.push(pays); }
+  const kmSansFr = (v.peageFr1 || v.peageFr2 || v.peageFr3) ? Object.fromEntries(Object.entries(km).filter(([p]) => p !== "FR")) : km; // la France est comptée par liaisons officielles
+  for (const [pays, k] of Object.entries(kmSansFr)) { const t = num(tarifs[pays]); if (t > 0) { detail.push({ pays, km: k, tarif: t, eur: k * t }); eur += k * t; } else manquants.push(pays); }
   return { eur: Math.round(eur * 100) / 100, detail, manquants };
+}
+/** Péages de France sur les liaisons VINCI Autoroutes choisies (classe 3 si le camion a 2 essieux, sinon classe 4). */
+function peagesFranceVoyage(v) {
+  const noms = [v.peageFr1, v.peageFr2, v.peageFr3].filter(Boolean);
+  if (!noms.length || typeof FR_LIAISONS === "undefined") return { eur: 0, classe: null, detail: [] };
+  const cam = parId(S.camions, v.camionId), classe = cam && num(cam.essieux) && num(cam.essieux) <= 2 ? 3 : 4, col = 1 + classe;
+  const detail = noms.map((n) => { const l = FR_LIAISONS.find((x) => x[1] === n); return { liaison: n, eur: l ? l[1 + classe] : 0 }; });
+  const total = detail.reduce((s, d) => s + d.eur, 0) * (v.peageFrAR ? 2 : 1);
+  return { eur: Math.round(total * 100) / 100, classe, detail, col };
 }
 /** Coût complet d'un voyage, en MAD. */
 function coutVoyage(v) {
   const taux = S.params.tauxEUR;
   const trav = (v.traversees || []).reduce((s, t) => s + coutTraversee(t), 0) * taux;
   const parts = {
-    peagesMaroc: peagesMarocVoyage(v), peagesEurope: (num(v.peagesEurReel) > 0 ? num(v.peagesEurReel) : v.kmPays && peagesEuropeVoyage(v).eur > 0 ? peagesEuropeVoyage(v).eur : num(v.peagesEur)) * taux, traversees: trav, carburant: num(v.carburantMad),
+    peagesMaroc: peagesMarocVoyage(v), peagesFrance: peagesFranceVoyage(v).eur * taux, peagesEurope: (num(v.peagesEurReel) > 0 ? num(v.peagesEurReel) : v.kmPays && peagesEuropeVoyage(v).eur > 0 ? peagesEuropeVoyage(v).eur : num(v.peagesEur)) * taux, traversees: trav, carburant: num(v.carburantMad),
     fraisRoute: num(v.fraisRouteMad), douane: num(v.douaneMad), autres: num(v.autresMad),
   };
   const total = Object.values(parts).reduce((a, b) => a + b, 0);

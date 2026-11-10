@@ -21,6 +21,7 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Voyages** | Maroc ⇄ Europe : aller, **traversée Tanger Med ⇄ Algeciras (aller et retour)**, étapes, contrôles avant départ (visa, passeport, papiers, autorisation, Schengen, poids), coût complet, marge, retour à vide, listes de contrôle |
 | **Autorisations & visas** | Autorisations bilatérales « E » / « MA », comptes-rendus de voyage, **compteur Schengen 90/180** par chauffeur |
 | **Suivi en direct** | Carte de la flotte, état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques, **heure d'arrivée estimée** ; nécessite le relais ou Traccar (`serveur/`) |
+| **Synchronisation** | Mêmes données sur le bureau et les téléphones des chauffeurs par votre relais : chiffrée sur l'appareil, fusion par enregistrement, copies de sécurité (Réglages → Données) |
 | **Tachygraphe** | Import de la **carte conducteur (.ddd)** ou d'un CSV d'activités, dépassements des temps de conduite et de repos (CE 561/2006, version simplifiée), alertes |
 | **Chaîne du froid** | Température des balises, consigne par voyage, excursions, alerte et rapport (fiche voyage) |
 | **CMR** | Lettre de voiture CMR (24 rubriques, français / anglais) préremplie et imprimable ; relevés de télépéage européen importés |
@@ -111,7 +112,7 @@ Un point urgent est rappelé chaque jour, un point « à surveiller » tous les 
 Pour un téléphone ou une tablette laissé dans le camion : Réglages → Appareil → Mode chauffeur → choisir le chauffeur, définir un PIN.
 L'appareil n'affiche plus que la mission du chauffeur (service, étapes, photos, itinéraire, plein) ; clients, factures, marges et réglages sont masqués. La sortie demande le PIN ; un **code de secours** est remis une seule fois au gestionnaire.
 
-> **Limites à connaître** — le PIN verrouille l'interface, il ne chiffre pas les données (utilisez l'export chiffré pour cela). Les données sont **propres à chaque appareil** : pour que le chauffeur voie ses missions, importez dans son appareil une sauvegarde à jour. Il n'y a pas (encore) de synchronisation entre appareils.
+> **Limites à connaître** — le PIN verrouille l'interface, il ne chiffre pas les données (utilisez l'export chiffré pour cela). Les données sont propres à chaque appareil : pour que le chauffeur voie ses missions, activez la synchronisation par le relais (ou importez une sauvegarde à jour). La **synchronisation par le relais** (Réglages → Données) évite cet import manuel.
 
 ## Migration depuis l'ancienne version
 
@@ -135,6 +136,7 @@ Automatique et sans action de votre part.
 | `commercial.js` | Commandes, clients, factures |
 | `voyages.js` | Voyages internationaux, traversées, autorisations, Schengen, péages |
 | `gps.js` | Lecture CSV/GPX, nettoyage, analyse, zones, jalons, passages aux gares, péage mesuré, rapprochement Jawaz (testé) |
+| `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |
 | `conformite.js` | WhatsApp / SMS, analyse du tachygraphe, chaîne du froid, balise du téléphone (testé) |
 | `terrain.js` | Balise de secours du téléphone et preuve de livraison |
 | `tachy.js` | Page Tachygraphe et tarifs des péages d'Europe |
@@ -155,7 +157,7 @@ Automatique et sans action de votre part.
 | `ia.js`, `vendor/anthropic-sdk.js` | Assistant IA de classement SH (facultatif, clé API de l'utilisateur) |
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 102 tests |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 106 tests |
 
 ```bash
 npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres

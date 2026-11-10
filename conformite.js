@@ -273,3 +273,50 @@ function peagesEuDepuisReleve(lignes, debutISO, finISO) {
   }
   return { eur: Math.round(eur * 100) / 100, nb, autresDevises: autres, pays };
 }
+
+/* ============================================================
+   Synchronisation entre appareils : fusion à trois voies (dernier état synchronisé / cet appareil / serveur).
+   Par enregistrement (identifiant) : ce qui n'a changé que d'un côté est repris ; si les deux côtés ont modifié le même enregistrement,
+   cet appareil l'emporte (c'est lui qui synchronise) ; une modification l'emporte toujours sur une suppression : rien ne se perd en silence.
+   ============================================================ */
+const syncStable = (x) => JSON.stringify(x, (k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((c) => [c, v[c]])) : v));
+const syncEgal = (a, b) => a === b || (a !== undefined && b !== undefined && syncStable(a) === syncStable(b));
+const syncCle = (x) => (x && typeof x === "object" ? x.id ?? x.nom ?? syncStable(x) : x);
+const estListeObjets = (l) => Array.isArray(l) && l.every((x) => x && typeof x === "object" && !Array.isArray(x));
+function syncTroisVoies(b, l, r, bilan) {
+  if (syncEgal(l, r)) return l;
+  if (syncEgal(l, b)) return r;
+  if (syncEgal(r, b)) return l;
+  bilan.conflits++; return l;
+}
+function syncListe(base, local, remote, bilan) {
+  const index = (liste) => new Map((liste || []).map((x) => [syncCle(x), x]));
+  const B = index(base), L = index(local), R = index(remote), ids = [...new Set([...(remote || []).map(syncCle), ...(local || []).map(syncCle)])], res = [];
+  for (const id of ids) {
+    const b = B.get(id), l = L.get(id), r = R.get(id);
+    let choix;
+    if (syncEgal(l, r)) choix = l;
+    else if (b === undefined) { if (l !== undefined && r !== undefined) bilan.conflits++; choix = l !== undefined ? l : r; }
+    else {
+      const lChange = !syncEgal(l, b), rChange = !syncEgal(r, b);
+      if (!lChange) choix = r; else if (!rChange) choix = l;
+      else { bilan.conflits++; choix = l !== undefined ? l : r; } // modification contre suppression : la modification est gardée
+    }
+    if (choix !== undefined) res.push(choix);
+    if (!syncEgal(l, r)) { if (choix === r) bilan.recus++; else if (choix === l) bilan.envoyes++; }
+  }
+  return res;
+}
+/** Fusionne les trois états. base peut être null (première synchronisation : aucune base commune). */
+function fusionnerEtat(base, local, remote) {
+  const bilan = { conflits: 0, recus: 0, envoyes: 0 }, b0 = base || {}, res = {};
+  for (const k of new Set([...Object.keys(local), ...Object.keys(remote)])) {
+    const b = b0[k], l = local[k], r = remote[k];
+    if ((estListeObjets(l) || l === undefined) && (estListeObjets(r) || r === undefined) && (l !== undefined || r !== undefined) && (b === undefined || estListeObjets(b))) res[k] = syncListe(b, l, r, bilan);
+    else if (l && r && typeof l === "object" && typeof r === "object" && !Array.isArray(l) && !Array.isArray(r)) { // objet (params, entreprise, meta…) : fusion propriété par propriété
+      const o = {}; for (const c of new Set([...Object.keys(l), ...Object.keys(r)])) { const v = syncTroisVoies(b?.[c], l[c], r[c], bilan); if (v !== undefined) o[c] = v; }
+      res[k] = o;
+    } else { const v = syncTroisVoies(b, l, r, bilan); if (v !== undefined) res[k] = v; }
+  }
+  return { etat: res, ...bilan };
+}

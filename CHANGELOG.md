@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.0 — Synchronisation entre appareils et péages de France officiels
+
+- **Synchronisation entre appareils** (Réglages → Données) : bureau et téléphones des chauffeurs partagent les mêmes données par le relais. Données **chiffrées sur l'appareil** (AES-256-GCM, mot de passe de synchronisation) : le serveur ne garde qu'un bloc illisible. **Fusion à trois voies par enregistrement** : ce qui n'a changé que d'un côté est repris, si les deux côtés modifient le même enregistrement l'appareil qui synchronise l'emporte, une modification l'emporte toujours sur une suppression. Copie de sécurité avant chaque application de données reçues, synchronisation automatique (ouverture, toutes les 3 minutes, 15 s après une modification), reprise « le serveur gagne » / « cet appareil gagne ». Les photos ne sont pas synchronisées.
+- **Péages de France** : les 30 principales liaisons du réseau **VINCI Autoroutes** avec leurs **tarifs officiels du 1er février 2026** (classe 3 = 2 essieux, classe 4 = 3 essieux et plus, déduite du camion), dont Montpellier – Perthus (62,50 € en classe 4) et Lyon – Perthus (157,80 €). Les autres réseaux (APRR, Sanef…) ne sont pas couverts. Pas de double compte avec l'estimation au kilomètre.
+- Relais 1.3 : route de synchronisation (`/api/sync`, versions, refus 409 en cas de base périmée).
+- 106 tests (96 application + 10 relais).
+
 ## 3.1.0 — Fichiers du tachygraphe, alertes automatiques, CMR, télépéage européen
 
 - **Lecture des fichiers de carte conducteur (.ddd, .c1b)** : activités des 28 derniers jours et identité du conducteur lues directement (format TLV, tampon circulaire d'activité, changements d'activité sur 16 bits, selon le règlement (CE) 1360/2002, annexe 1B). Le conducteur est reconnu et le chauffeur correspondant présélectionné. Les signatures ne sont pas vérifiées ; seules les cartes conducteur sont lues (pas les fichiers de véhicule). Testé sur des fichiers construits d'après la spécification : essayez avec un vrai fichier et signalez tout écart.

@@ -65,6 +65,10 @@ Dans Traccar, créez un **jeton d'API** (profil utilisateur) et autorisez l'orig
 
 `GET /api/derniere` (dernière position de chaque balise), `GET /api/trace?id=…&depuis=<secondes>&max=…`, `GET /api/etat`, `GET /sante`. Jeton de lecture requis, sauf `/sante`.
 
+## Synchronisation entre appareils
+
+Réglages → Données → « Synchronisation entre appareils » : adresse du relais, jeton de lecture et un **mot de passe de synchronisation** identique sur tous les appareils. L'application chiffre l'état (AES-256-GCM, dérivé du mot de passe) avant l'envoi : le relais ne garde qu'un bloc illisible et un numéro de version (`GET /api/sync`, `PUT /api/sync` avec la version de base ; 409 si elle est périmée). Mot de passe perdu = données du serveur irrécupérables. Les photos ne sont pas synchronisées. Taille maximale : 40 Mo.
+
 ## Téléphone du chauffeur comme balise de secours
 
 Mode chauffeur → « Partager ma position » : le téléphone envoie sa position à `POST /api/positions` avec le **jeton d'écriture** (saisi une fois par le gestionnaire dans les réglages de la carte). Liez l'identifiant envoyé (par défaut `TEL-<chauffeur>`) au camion dans sa fiche (champ « balise »). Le navigateur ne localise plus quand l'écran s'éteint : gardez-le allumé (l'application le demande).

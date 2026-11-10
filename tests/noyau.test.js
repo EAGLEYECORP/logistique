@@ -988,6 +988,44 @@ test("relevé de télépéage européen : colonnes, période du voyage, devises"
   assert.strictEqual(N.coutVoyage({ peagesEurReel: 102.1, kmPays: "DE 1000", peagesEur: 5 }).parts.peagesEurope, 1021); // le relevé réel passe avant l'estimation
 });
 
+test("synchronisation : fusion à trois voies par enregistrement", () => {
+  const base = { camions: [{ id: "c1", immat: "A", km: 100 }, { id: "c2", immat: "B", km: 200 }, { id: "c3", immat: "C" }], clients: [{ id: "k1", nom: "X" }], params: { tauxEUR: 10.8, prixGasoil: 11 }, meta: { version: 6 } };
+  const local = { camions: [{ id: "c1", immat: "A", km: 150 }, { id: "c2", immat: "B", km: 200 }, { id: "c4", immat: "D" }], clients: [{ id: "k1", nom: "X" }], params: { tauxEUR: 10.8, prixGasoil: 12 }, meta: { version: 6 } }; // c1 modifié, c3 supprimé, c4 ajouté
+  const remote = { camions: [{ id: "c1", immat: "A", km: 100 }, { id: "c2", immat: "B", km: 260 }, { id: "c3", immat: "C" }, { id: "c5", immat: "E" }], clients: [{ id: "k1", nom: "X" }, { id: "k2", nom: "Y" }], params: { tauxEUR: 11, prixGasoil: 11 }, meta: { version: 6 } }; // c2 modifié, c5 et k2 ajoutés
+  const r = N.fusionnerEtat(base, local, remote);
+  const cam = Object.fromEntries(r.etat.camions.map((c) => [c.id, c]));
+  assert.strictEqual(cam.c1.km, 150); assert.strictEqual(cam.c2.km, 260); assert.ok(cam.c4 && cam.c5); assert.ok(!cam.c3, "supprimé ici, inchangé là-bas : supprimé");
+  assert.strictEqual(r.etat.clients.length, 2); assert.strictEqual(r.etat.params.tauxEUR, 11); assert.strictEqual(r.etat.params.prixGasoil, 12); // chaque réglage vient du côté qui l'a changé
+  assert.strictEqual(r.conflits, 0); assert.strictEqual(r.recus, 3); assert.strictEqual(r.envoyes, 3); // reçus : c2, c5, k2 · envoyés : c1 (modifié), c3 (supprimé), c4 (ajouté)
+});
+
+test("synchronisation : conflits (cet appareil l'emporte), modification contre suppression, première synchronisation", () => {
+  const base = { camions: [{ id: "c1", km: 1 }, { id: "c2", km: 2 }] };
+  const c = N.fusionnerEtat(base, { camions: [{ id: "c1", km: 10 }, { id: "c2", km: 2 }] }, { camions: [{ id: "c1", km: 20 }, { id: "c2", km: 2 }] });
+  assert.strictEqual(c.etat.camions[0].km, 10); assert.strictEqual(c.conflits, 1);
+  const m = N.fusionnerEtat(base, { camions: [{ id: "c2", km: 2 }] /* c1 supprimé ici */ }, { camions: [{ id: "c1", km: 99 } /* modifié là-bas */, { id: "c2", km: 2 }] });
+  assert.strictEqual(m.etat.camions.find((x) => x.id === "c1").km, 99); assert.strictEqual(m.conflits, 1); // la modification est gardée : rien ne se perd en silence
+  const p = N.fusionnerEtat(null, { camions: [{ id: "a", km: 1 }] }, { camions: [{ id: "b", km: 2 }] }); assert.strictEqual(p.etat.camions.length, 2);
+  const g = N.fusionnerEtat({ gares: [] }, { gares: [{ nom: "RABAT", lat: 1 }] }, { gares: [{ nom: "KENITRA", lat: 2 }] }); assert.deepStrictEqual([...g.etat.gares.map((x) => x.nom)].sort(), ["KENITRA", "RABAT"]); // enregistrements sans id : clé = nom
+  const s = N.fusionnerEtat({ v: 1 }, { v: 1, nouveau: 5 }, { v: 2 }); assert.strictEqual(s.etat.v, 2); assert.strictEqual(s.etat.nouveau, 5);
+  const id = N.fusionnerEtat(base, base, base); assert.strictEqual(JSON.stringify(id.etat), JSON.stringify(base)); assert.strictEqual(id.conflits, 0);
+});
+
+test("péages de France : liaisons officielles VINCI, classe selon les essieux, pas de double compte avec les km par pays", () => {
+  assert.strictEqual(N.FR_LIAISONS.length, 30); assert.strictEqual(N.FR_LIAISONS_DATE, "2026-02-01");
+  const perthus = N.FR_LIAISONS.find((l) => l[1] === "Montpellier / Espagne (Perthus)"); assert.deepStrictEqual([...perthus.slice(2)], [23.1, 35.3, 50.9, 62.5, 13]);
+  N.S.params.tauxEUR = 10; N.S.params.peagesEu = { FR: 0.3, ES: 0.2 };
+  N.S.camions = [{ id: "a", essieux: 5 }, { id: "p", essieux: 2 }];
+  const v = { camionId: "a", peageFr1: "Montpellier / Espagne (Perthus)", peageFr2: "Lyon / Montpellier", kmPays: "FR 900, ES 1000" };
+  const f = N.peagesFranceVoyage(v); assert.strictEqual(f.classe, 4); assert.strictEqual(f.eur, 155.1); // 62,50 + 92,60
+  assert.strictEqual(N.peagesFranceVoyage({ ...v, camionId: "p" }).eur, 121.6); // classe 3 : 50,90 + 70,70
+  assert.strictEqual(N.peagesFranceVoyage({ ...v, peageFrAR: true }).eur, 310.2);
+  assert.deepStrictEqual({ ...N.peagesEuropeVoyage(v) }.eur, 200); // la France (900 km) n'est pas comptée deux fois : seule l'Espagne reste
+  const c = N.coutVoyage(v); assert.strictEqual(c.parts.peagesFrance, 1551); assert.strictEqual(c.parts.peagesEurope, 2000);
+  assert.strictEqual(N.peagesFranceVoyage({ camionId: "a" }).eur, 0);
+  assert.strictEqual(N.coutVoyage({ camionId: "a", kmPays: "FR 900" }).parts.peagesEurope, 2700); // sans liaison choisie : estimation au km
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

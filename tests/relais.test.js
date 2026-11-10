@@ -157,6 +157,25 @@ test("alertes : diffusion sur les canaux du serveur (ntfy, Telegram, WhatsApp te
   try { const x = await (await fetch(`http://127.0.0.1:${r3.serveur.address().port}/api/alertes`, { method: "POST", headers: { authorization: "Bearer l" }, body: JSON.stringify({ texte: "t" }) })).json(); assert.ok(/Aucun canal/.test(x.note)); } finally { await new Promise((ok) => r3.serveur.close(ok)); }
 });
 
+test("synchronisation : versions, conflit 409, blob opaque, persistance, jetons", async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), "relais-")); let s = await demarrer(dossier);
+  const put = (base, blob, jeton = "lit") => s.appel("/api/sync", { methode: "PUT", jeton, corps: { base, blob, appareil: "Bureau" } });
+  try {
+    assert.strictEqual((await s.appel("/api/sync")).code, 401); assert.strictEqual((await put(0, "x", "ecrit")).code, 401); // le jeton des balises ne synchronise pas
+    assert.strictEqual((await s.appel("/api/sync", { jeton: "lit" })).json.version, 0);
+    assert.strictEqual((await put(0, "")).code, 400);
+    assert.strictEqual((await put(0, "CHIFFRE-1")).json.version, 1);
+    const conflit = await put(0, "CHIFFRE-X"); assert.strictEqual(conflit.code, 409); assert.strictEqual(conflit.json.version, 1); // base périmée : refusé
+    assert.strictEqual((await put(1, "CHIFFRE-2")).json.version, 2);
+    const g = (await s.appel("/api/sync", { jeton: "lit" })).json; assert.strictEqual(g.blob, "CHIFFRE-2"); assert.strictEqual(g.appareil, "Bureau"); assert.ok(g.t > 0);
+    assert.strictEqual((await s.appel("/api/sync?meta=1", { jeton: "lit" })).json.blob, undefined); // sondage léger sans le contenu
+    const gros = "A".repeat(1024 * 1024); assert.strictEqual((await put(2, gros)).json.version, 3); // plus de 256 Ko accepté sur cette route
+  } finally { await s.arreter(); }
+  s = await demarrer(dossier);
+  try { assert.strictEqual((await s.appel("/api/sync?meta=1", { jeton: "lit" })).json.version, 3); } finally { await s.arreter(); }
+  fs.rmSync(dossier, { recursive: true });
+});
+
 (async () => {
   let ok = 0;
   for (const [n, f] of tests) { try { await f(); ok++; console.log("✓", n); } catch (e) { console.error("✗", n, "\n ", e.message); process.exitCode = 1; } }

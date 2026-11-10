@@ -11,7 +11,7 @@ const VERSION = "__VERSION__"; // remplacé par l'identifiant du commit à la pu
 const CACHE = `logistique-${VERSION}`;
 const FICHIERS = [
   "./", "index.html", "style.css",
-  "data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "ia.js", "stockage.js", "sauvegarde.js", "app.js", "commercial.js", "voyages.js", "traces.js", "gares.js", "direct.js", "partages.js", "photos.js", "impression.js", "onboarding.js", "reglages.js", "notifications.js", "chauffeur.js", "terrain.js", "tachy.js", "langue.js", "boot.js",
+  "data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "ia.js", "stockage.js", "sauvegarde.js", "app.js", "commercial.js", "voyages.js", "traces.js", "gares.js", "direct.js", "partages.js", "photos.js", "impression.js", "onboarding.js", "reglages.js", "notifications.js", "chauffeur.js", "terrain.js", "tachy.js", "synchro.js", "langue.js", "boot.js",
   "vendor/anthropic-sdk.js",
   "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "manifest.webmanifest",
 ];

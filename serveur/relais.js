@@ -9,8 +9,10 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { charger } = require("./moteur.js");
+const { page } = require("./page-client.js");
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -30,13 +32,17 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null };
 }
 
-function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900 } = {}) {
+function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") } = {}) {
   if (!jetonEcriture || !jetonLecture) throw new Error("JETON_ECRITURE et JETON_LECTURE sont obligatoires.");
   const historique = new Map(); // id -> [positions triées]
   const noms = new Map();
   const compteurs = new Map();
   const egal = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
   let total = 0;
+  const moteur = charger(racine);
+  const partages = new Map();
+  const fichierPartages = () => path.join(dossier, "partages.json");
+  const sauverPartages = () => { if (dossier) { try { fs.writeFileSync(fichierPartages(), JSON.stringify([...partages.values()]), { mode: 0o600 }); } catch { /* ignoré */ } } };
 
   const fichierDuJour = (t) => path.join(dossier, `positions-${new Date(t * 1000).toISOString().slice(0, 10)}.jsonl`);
   function ajouter(p, nom) {
@@ -58,16 +64,56 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
       for (const l of fs.readFileSync(path.join(dossier, f), "utf8").split("\n")) { if (!l) continue; try { const p = JSON.parse(l); if (p.id && Number.isFinite(p.t)) ajouter(p); } catch { /* ligne abîmée */ } }
     }
   }
+  if (dossier) { try { for (const p of JSON.parse(fs.readFileSync(fichierPartages(), "utf8"))) partages.set(p.id, p); } catch { /* aucun partage */ } }
   const enregistrer = (positions, noms_ = []) => {
     let n = 0;
     positions.forEach((p, i) => { if (ajouter(p, noms_[i])) { n++; if (dossier) { try { fs.appendFileSync(fichierDuJour(p.t), JSON.stringify(p) + "\n"); } catch { /* disque plein : on garde en mémoire */ } } } });
     return n;
   };
 
-  const entetes = (extra = {}) => ({ "Access-Control-Allow-Origin": origine, "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...extra });
+  const entetes = (extra = {}) => ({ "Access-Control-Allow-Origin": origine, "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...extra });
   const json = (res, code, obj) => { res.writeHead(code, entetes({ "Content-Type": "application/json; charset=utf-8" })); res.end(JSON.stringify(obj)); };
   const jetonDe = (req, url) => { const h = req.headers.authorization || ""; return h.startsWith("Bearer ") ? h.slice(7).trim() : url.searchParams.get("token") || url.searchParams.get("key") || ""; };
   const corps = (req) => new Promise((ok, ko) => { let n = 0; const b = []; req.on("data", (c) => { n += c.length; if (n > 262144) { ko(new Error("trop gros")); req.destroy(); } else b.push(c); }); req.on("end", () => ok(Buffer.concat(b).toString("utf8"))); req.on("error", ko); });
+
+  const nombre = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+  const textes = (v, max = 120) => String(v ?? "").slice(0, max).trim();
+  /** Champs d'un partage acceptés depuis l'application (tout le reste est ignoré). */
+  function lirePartage(b, base = {}) {
+    const o = { ...base };
+    if (b.balise !== undefined) o.balise = textes(b.balise, 64);
+    for (const k of ["reference", "origine", "destination"]) if (b[k] !== undefined) o[k] = textes(b[k]);
+    for (const k of ["destLat", "destLon", "origLat", "origLon"]) if (b[k] !== undefined) o[k] = nombre(b[k]);
+    if (b.livraisonPrevue !== undefined) o.livraisonPrevue = Number.isFinite(Date.parse(b.livraisonPrevue)) ? new Date(b.livraisonPrevue).toISOString() : "";
+    if (b.precision !== undefined) o.precision = ["approx", "exacte", "masquee"].includes(b.precision) ? b.precision : "approx";
+    if (b.langue !== undefined) o.langue = ["fr", "en", "es", "ar"].includes(b.langue) ? b.langue : "fr";
+    if (b.message !== undefined) o.message = textes(b.message, 400);
+    if (b.statut !== undefined) { o.statut = b.statut === "livre" ? "livre" : "actif"; if (o.statut === "livre" && !o.livreLe) o.livreLe = Math.floor(Date.now() / 1000); if (o.statut === "actif") delete o.livreLe; }
+    if (Array.isArray(b.etapes)) o.etapes = b.etapes.slice(0, 20).map((e) => ({ libelle: textes(e.libelle, 80), date: Number.isFinite(Date.parse(e.date)) ? new Date(e.date).toISOString() : "" })).filter((e) => e.libelle);
+    if (Array.isArray(b.zones)) o.zones = b.zones.slice(0, 40).map((z) => ({ id: textes(z.id, 40), nom: textes(z.nom, 80), type: textes(z.type, 20), lat: nombre(z.lat), lon: nombre(z.lon), rayon: nombre(z.rayon) })).filter((z) => z.lat !== null && z.lon !== null && z.rayon);
+    if (b.jours !== undefined || !o.expire) o.expire = Math.floor(Date.now() / 1000) + Math.max(1, Math.min(120, Number(b.jours) || 14)) * 86400;
+    return o;
+  }
+  /** Ce que voit le client : état, ETA, position (selon la précision choisie), étapes. Aucune donnée interne. */
+  function donneesPartage(p, maintenant = Math.floor(Date.now() / 1000)) {
+    const h = (historique.get(p.balise) || []).filter((x) => x.t > maintenant - 12 * 3600).map((x) => [x.t, x.lat, x.lon, x.v]);
+    const dest = p.destLat !== null && p.destLat !== undefined && p.destLon !== null && p.destLon !== undefined ? [p.destLat, p.destLon] : null;
+    const orig = p.origLat !== null && p.origLat !== undefined && p.origLon !== null && p.origLon !== undefined ? [p.origLat, p.origLon] : null;
+    const zones = p.zones || [];
+    const out = { reference: p.reference, origine: p.origine, destination: p.destination, statut: p.statut, livreLe: p.livreLe || null, etat: "en_attente", maj: null, eta: null, retardMin: null, progression: null, position: null, orig, dest, etapes: p.etapes || [], message: p.message || "" };
+    if (p.statut === "livre" || !h.length) return out;
+    const last = h[h.length - 1];
+    out.maj = last[0];
+    if (moteur.disponible) {
+      out.etat = moteur.appeler("directEtat", h, maintenant, zones).code;
+      if (dest) { const e = moteur.appeler("etaVoyage", h, maintenant, dest, { zones }); if (e) { out.eta = { arrivee: e.arrivee, min: e.min, max: e.max }; out.retardMin = p.livraisonPrevue ? moteur.appeler("etaRetardMin", e, p.livraisonPrevue) : null; } }
+    } else out.etat = maintenant - last[0] > 1800 ? "hors_ligne" : (last[3] ?? 0) >= 5 ? "en_route" : "arret";
+    if (orig && dest) { const dist = (a, b) => { const r = Math.PI / 180, x = Math.sin(((b[0] - a[0]) * r) / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(((b[1] - a[1]) * r) / 2) ** 2; return 12742 * Math.asin(Math.sqrt(x)); }; const d1 = dist(orig, [last[1], last[2]]), d2 = dist([last[1], last[2]], dest); out.progression = d1 + d2 > 0 ? Math.max(0, Math.min(100, Math.round((100 * d1) / (d1 + d2)))) : null; }
+    const dec = p.precision === "exacte" ? 1e4 : 10;
+    if (p.precision !== "masquee") out.position = [Math.round(last[1] * dec) / dec, Math.round(last[2] * dec) / dec];
+    return out;
+  }
+  const ENTETES_PUBLICS = { "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "no-referrer", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src data:" };
 
   const serveur = http.createServer(async (req, res) => {
     try {
@@ -78,6 +124,17 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
       if (req.method === "OPTIONS") { res.writeHead(204, entetes()); return res.end(); }
       const p = url.pathname.replace(/\/+$/, "") || "/";
       if (p === "/sante") return json(res, 200, { ok: true, version: VERSION });
+
+      // --- lien de suivi public (identifiant secret dans l'adresse) ---
+      const m = p.match(/^\/suivi\/([A-Za-z0-9_-]{16,64})(\/donnees)?$/);
+      if (m && req.method === "GET") {
+        const part = partages.get(m[1]), maintenant = Math.floor(Date.now() / 1000);
+        if (!part) { res.writeHead(404, entetes({ "Content-Type": "text/plain; charset=utf-8", ...ENTETES_PUBLICS })); return res.end("Lien de suivi introuvable."); }
+        if (part.expire < maintenant) { res.writeHead(410, entetes({ "Content-Type": "text/plain; charset=utf-8", ...ENTETES_PUBLICS })); return res.end("Ce lien de suivi a expiré."); }
+        if (m[2]) { res.writeHead(200, entetes({ "Content-Type": "application/json; charset=utf-8", ...ENTETES_PUBLICS })); return res.end(JSON.stringify(donneesPartage(part, maintenant))); }
+        const lang = url.searchParams.get("lang") || part.langue || "fr";
+        res.writeHead(200, entetes({ "Content-Type": "text/html; charset=utf-8", ...ENTETES_PUBLICS })); return res.end(page(lang));
+      }
 
       const jeton = jetonDe(req, url);
       const peutEcrire = egal(jeton, jetonEcriture), peutLire = peutEcrire ? false : egal(jeton, jetonLecture);
@@ -109,12 +166,30 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           const l = (historique.get(id) || []).filter((x) => x.t > depuis && x.t <= jusqua);
           return json(res, 200, l.slice(-max));
         }
-        if (p === "/api/etat") return json(res, 200, { version: VERSION, appareils: historique.size, positions: total, retentionJours, maintenant: Math.floor(Date.now() / 1000) });
+        const mp = p.match(/^\/api\/partages(?:\/([A-Za-z0-9_-]{16,64}))?$/);
+        if (mp) {
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          const id = mp[1];
+          if (!id && req.method === "GET") return json(res, 200, [...partages.values()].map((x) => ({ id: x.id, reference: x.reference, balise: x.balise, destination: x.destination, expire: x.expire, statut: x.statut, creeLe: x.creeLe })));
+          if (!id && req.method === "POST") {
+            if (partages.size >= 500) return json(res, 429, { erreur: "Trop de liens actifs : supprimez les anciens." });
+            let b; try { b = JSON.parse(await corps(req)); } catch { return json(res, 400, { erreur: "JSON invalide." }); }
+            const o = lirePartage(b, { id: crypto.randomBytes(18).toString("base64url"), precision: "approx", langue: "fr", statut: "actif", etapes: [], zones: [], creeLe: Math.floor(Date.now() / 1000) });
+            if (!o.balise || !o.reference) return json(res, 400, { erreur: "balise et reference sont obligatoires." });
+            partages.set(o.id, o); sauverPartages(); return json(res, 201, { id: o.id, chemin: `/suivi/${o.id}`, expire: o.expire });
+          }
+          const part = id && partages.get(id);
+          if (id && !part) return json(res, 404, { erreur: "Lien introuvable." });
+          if (id && req.method === "PUT") { let b; try { b = JSON.parse(await corps(req)); } catch { return json(res, 400, { erreur: "JSON invalide." }); } partages.set(id, lirePartage(b, part)); sauverPartages(); return json(res, 200, { ok: true }); }
+          if (id && req.method === "DELETE") { partages.delete(id); sauverPartages(); return json(res, 200, { ok: true }); }
+          if (id && req.method === "GET") return json(res, 200, donneesPartage(part));
+        }
+        if (p === "/api/etat") return json(res, 200, { version: VERSION, appareils: historique.size, positions: total, retentionJours, partages: partages.size, moteur: moteur.disponible, maintenant: Math.floor(Date.now() / 1000) });
       }
       return json(res, 404, { erreur: "Introuvable." });
     } catch (e) { return json(res, 500, { erreur: "Erreur du serveur." }); }
   });
-  return { serveur, historique, enregistrer };
+  return { serveur, historique, enregistrer, partages, donneesPartage };
 }
 
 module.exports = { creer, normaliser, VERSION };

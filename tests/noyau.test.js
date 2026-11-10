@@ -791,6 +791,65 @@ test("carte : cadrage Mercator et tuiles", () => {
   assert.deepStrictEqual([...N.mercPx(0, 0, 0)], [128, 128]);
 });
 
+/* ---------- Phase 4 : ETA ---------- */
+test("villes connues : accents, casse, mentions entre parenthèses, pays", () => {
+  assert.deepStrictEqual([...N.villeConnue("Perpignan")], [42.6887, 2.8948]);
+  assert.deepStrictEqual([...N.villeConnue("  SÈTE ")], [43.4075, 3.6967]);
+  assert.deepStrictEqual([...N.villeConnue("Marché de Rungis (France)")], [48.7462, 2.3526]);
+  assert.deepStrictEqual([...N.villeConnue("Tanger Med")], [35.889, -5.5]);
+  assert.strictEqual(N.villeConnue("Ville inconnue"), null); assert.strictEqual(N.villeConnue(""), null);
+});
+
+test("ETA : même côté du détroit, sans repos", () => {
+  const hist = marche(10, 75); // dernier point à NOW
+  const dest = [hist[9][1] + 0.9, -7]; // ≈ 100 km à vol d'oiseau
+  const e = N.etaVoyage(hist, NOW, dest, { zones: N.ZONES_DEFAUT, facteurRoute: 1.3, vitesse: 75 });
+  assert.ok(e.kmRestants >= 125 && e.kmRestants <= 135, "km " + e.kmRestants);
+  assert.strictEqual(e.traversee, false); assert.strictEqual(e.reposJournaliers, 0);
+  assert.ok(e.dureeH > 1.5 && e.dureeH < 2.2, "durée " + e.dureeH);
+  assert.ok(e.min < e.arrivee && e.arrivee < e.max); assert.ok(e.arrivee > NOW);
+});
+
+test("ETA : Maroc → Europe passe par le détroit, avec repos journalier", () => {
+  const hist = [[NOW - 600, 34.02, -6.84, 70], [NOW, 34.05, -6.8, 70]];
+  const e = N.etaVoyage(hist, NOW, N.villeConnue("Perpignan"), { zones: N.ZONES_DEFAUT, vitesse: 75 });
+  assert.strictEqual(e.traversee, true); assert.ok(e.attentesH >= 5.4 && e.attentesH <= 5.6, "attentes " + e.attentesH);
+  assert.ok(e.reposJournaliers >= 1, "au moins un repos de 11 h sur ce trajet"); assert.ok(e.dureeH > 35 && e.dureeH < 60, "durée " + e.dureeH);
+  assert.ok(e.pauses >= 2);
+  // la même route sans les règles de repos serait bien plus courte
+  assert.ok(e.dureeH > e.conduiteH + e.attentesH + 11 - 0.01);
+});
+
+test("ETA : traversée en cours et camion déjà au port", () => {
+  const dest = N.villeConnue("Madrid");
+  const mer = N.etaVoyage([[NOW - 2400, 35.889, -5.5, 0]], NOW, dest, { zones: N.ZONES_DEFAUT, vitesse: 75 });
+  assert.strictEqual(mer.etat, "traversee"); assert.ok(mer.attentesH > 1.0 && mer.attentesH < 2.0, "attentes " + mer.attentesH); // il reste ≈ 1 h de mer + 1 h de débarquement
+  const port = N.etaVoyage([[NOW - 60, 35.889, -5.5, 0]], NOW, dest, { zones: N.ZONES_DEFAUT, vitesse: 75 });
+  assert.strictEqual(port.etat, "au_port"); assert.ok(port.attentesH < 5.5);
+  const retour = N.etaVoyage([[NOW - 60, 37.0, -4.0, 80]], NOW, N.villeConnue("Casablanca"), { zones: N.ZONES_DEFAUT, vitesse: 75 });
+  assert.strictEqual(retour.traversee, true);
+});
+
+test("ETA : la conduite déjà effectuée avance la pause obligatoire ; vitesse récente et bornes", () => {
+  const frais = N.etaVoyage([[NOW - 60, 40, -3, 0], [NOW, 40, -3, 0]], NOW, [43, 2], { zones: [], vitesse: 75 });
+  const fatigue = N.etaVoyage(marche(50, 80).map((p) => [p[0], 30 + (p[1] - 33) * 2, -7 + (p[1] - 33) * 2, 80]).slice(-50), NOW, [60, 10], { zones: [], vitesse: 75 });
+  assert.ok(fatigue.pauses + fatigue.reposJournaliers >= 1);
+  const vite = Array.from({ length: 8 }, (_, i) => [NOW - (7 - i) * 300, 40 + i * 0.1126, -3, null]); // ≈ 150 km/h mesurés
+  assert.strictEqual(N.etaVoyage(vite, NOW, [50, 5], { zones: [] }).vitesse, 85); // plafonnée
+  assert.strictEqual(N.etaVoyage([[NOW, 40, -3, 0]], NOW, [43, 2], { zones: [] }).vitesse, 75); // sans roulage récent : valeur par défaut
+  assert.strictEqual(N.etaVoyage([], NOW, [43, 2], {}), null); assert.strictEqual(N.etaVoyage(marche(3), NOW, null, {}), null);
+  const h = Array.from({ length: 10 }, (_, i) => [NOW - (9 - i) * 300, 33 + i * 0.0502, -7, 80]); // ≈ 67 km/h mesurés
+  assert.ok(Math.abs(N.vitesseMoyenne(h, NOW) - 67) < 3);
+  assert.ok(N.conduiteJour(marche(20), NOW) > 1.5);
+});
+
+test("ETA : retard par rapport au créneau prévu", () => {
+  const eta = { arrivee: NOW + 3600 };
+  assert.strictEqual(N.etaRetardMin(eta, new Date((NOW + 1800) * 1000).toISOString()), 30);
+  assert.strictEqual(N.etaRetardMin(eta, new Date((NOW + 7200) * 1000).toISOString()), -60);
+  assert.strictEqual(N.etaRetardMin(eta, ""), null); assert.strictEqual(N.etaRetardMin(null, "2026-01-01T00:00:00Z"), null);
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

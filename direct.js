@@ -100,12 +100,22 @@ function directIntegrer(res) {
     D.hist.set(id, h);
   }
 }
+/** ETA du voyage en cours d'un camion, d'après son historique récent. */
+function etaDuVoyage(v) {
+  const cam = parId(S.camions, v.camionId), dest = destinationDe(v);
+  const hist = cam?.balise && directDonnees.hist.get(cam.balise.trim());
+  if (!hist?.length || !dest) return null;
+  const e = etaVoyage(hist, maintenantS(), dest, { zones: zonesActives() });
+  return e && { ...e, retardMin: etaRetardMin(e, v.livraisonPrevue) };
+}
 /** Pour chaque balise : état, alertes, voyage. */
 function directFlotte() {
   const c = directCfg(), now = maintenantS(), zones = zonesActives(), res = [];
   for (const [id, hist] of directDonnees.hist) {
     const cam = camionDeBalise(id), etat = directEtat(hist, now, zones), nom = libelleBalise(id);
-    res.push({ id, nom, camion: cam, voyage: voyageActif(cam?.id), hist, etat, derniere: hist[hist.length - 1], conduite: conduiteCourante(hist, now), alertes: directAlertes(nom, etat, hist, { vitesseMax: Number(c.vitesseMax) || 90 }) });
+    const voyage = voyageActif(cam?.id), eta = voyage ? etaDuVoyage(voyage) : null, alertes = directAlertes(nom, etat, hist, { vitesseMax: Number(c.vitesseMax) || 90 });
+    if (eta && eta.retardMin !== null && eta.retardMin > 60 && etat.code !== "hors_ligne") alertes.push({ niveau: "warn", cle: `retard:${nom}`, texte: `${nom} — retard probable de ${String(Math.round(eta.retardMin / 6) / 10).replace(".", ",")} h sur ${voyage.ref} (arrivée estimée ${new Date(eta.arrivee * 1000).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" })})` });
+    res.push({ id, nom, camion: cam, voyage, hist, etat, eta, derniere: hist[hist.length - 1], conduite: conduiteCourante(hist, now), alertes });
   }
   return res.sort((a, b) => (b.alertes.length - a.alertes.length) || a.nom.localeCompare(b.nom));
 }
@@ -145,6 +155,7 @@ async function directRafraichir() {
     const res = await SOURCES[c.mode](c, directVoyageDepuis);
     directIntegrer(res); directDonnees.maj = maintenantS(); directDonnees.erreur = "";
     const f = directFlotte(); directMajVoyages(f); directNotifier(f);
+    if (typeof partagesSynchroniser === "function") partagesSynchroniser();
   } catch (e) { directDonnees.erreur = e.message || "Erreur inconnue."; }
   directDonnees.enCours = false;
   if (ongletActif === "direct") { const z = $("#direct-live"); if (z) { z.innerHTML = directLive(); majSelectionCarte(); } }
@@ -194,6 +205,7 @@ function directLive() {
     ${flotte.map((f) => `<div class="card direct-camion ${f.id === directSelection ? "sel" : ""}" data-direct-camion="${esc(f.id)}">
       <div class="card-head"><h2>${esc(f.nom)}${f.camion ? "" : ` <span class="sub" style="display:inline">· balise ${esc(f.id)}</span>`}</h2>${badge(f.etat.libelle, f.etat.niveau)}</div>
       <p class="hint" style="margin:0 0 8px">${[f.derniere[3] != null ? `${Math.round(f.derniere[3])} km/h` : "", `dernière position il y a ${ilYa(now - f.derniere[0])}`, f.etat.zone && esc(f.etat.zone.nom), f.etat.code === "traversee" ? "silence normal en mer : le signal reviendra à l'arrivée" : "", f.etat.code === "arret" || f.etat.code === "arret_long" ? `arrêt de ${f.etat.arretMin} min` : "", f.voyage && `voyage ${esc(f.voyage.ref)} · ${esc(f.voyage.origine)} ⇄ ${esc(f.voyage.destination)}`].filter(Boolean).join(" · ")}</p>
+      ${f.eta ? `<p class="hint" style="margin:0 0 8px"><strong>Arrivée estimée ${new Date(f.eta.arrivee * 1000).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</strong> (${new Date(f.eta.min * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} – ${new Date(f.eta.max * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}) · ${fmt(f.eta.kmRestants)} km restants${f.eta.retardMin !== null && f.eta.retardMin > 30 ? ` · ${badge("retard probable", f.eta.retardMin > 60 ? "danger" : "warn")}` : ""}</p>` : ""}
       <div class="row">${badge(`Conduite : ${dureeTxt(f.conduite.serieH)} sans pause de 45 min`, f.conduite.serieH >= 4.5 ? "danger" : f.conduite.serieH >= 4.25 ? "warn" : "neutral")}
         ${f.camion ? "" : btn("lier-balise", "Lier à un camion", { id: f.id, icone: "truck", cls: "btn ghost sm" })}</div></div>`).join("")}`;
 }

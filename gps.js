@@ -561,3 +561,89 @@ function directVue(points, { largeur = 640, hauteur = 380, marge = 40, zMax = 14
   }
   return { z, ox, oy, largeur, hauteur, tuiles, vers: (lat, lon) => { const p = mercPx(lat, lon, z); return [p[0] - ox, p[1] - oy]; } };
 }
+
+/* ============================================================
+   Phase 4 : heure d'arrivée estimée (ETA)
+   Estimation indicative : distance à vol d'oiseau × coefficient de détour, vitesse récente du camion,
+   traversée du détroit, pauses et repos réglementaires (règlement CE 561/2006). Ce n'est ni un itinéraire ni un tachygraphe.
+   ============================================================ */
+
+/** Coordonnées [lat, lon] d'une ville connue (sans accents ni casse), sinon null. */
+function villeConnue(nom) {
+  const k = gpsNorm(nom).replace(/\(.*\)/, "").replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+  if (!k) return null;
+  if (VILLES[k]) return VILLES[k];
+  const cle = Object.keys(VILLES).sort((a, b) => b.length - a.length).find((v) => k === v || k.startsWith(v + " ") || k.endsWith(" " + v));
+  return cle ? VILLES[cle] : null;
+}
+/** Vitesse moyenne de roulage (km/h) sur les 6 dernières heures ; null si trop peu de roulage. */
+function vitesseMoyenne(hist, maintenant) {
+  let km = 0, s = 0;
+  for (let i = 1; i < hist.length; i++) {
+    const a = hist[i - 1], b = hist[i], dt = b[0] - a[0];
+    if (b[0] < maintenant - 6 * 3600 || dt <= 0 || dt > 900) continue;
+    const d = gpsDistance(a, b), v = (d / dt) * 3.6;
+    if (v >= SEUIL_MARCHE_KMH) { km += d / 1000; s += dt; }
+  }
+  return s >= 1800 ? km / (s / 3600) : null;
+}
+/** Heures de conduite depuis le dernier repos d'au moins 9 h (estimation, pour la limite journalière). */
+function conduiteJour(points, maintenant = null) {
+  let jour = 0, arret = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i], dt = b[0] - a[0];
+    const v = b[3] ?? (dt > 0 ? (gpsDistance(a, b) / dt) * 3.6 : 0);
+    if (dt > 15 * 60) { arret += dt; if (arret >= 9 * 3600) jour = 0; continue; }
+    if (v >= SEUIL_MARCHE_KMH) { jour += dt; arret = 0; } else { arret += dt; if (arret >= 9 * 3600) jour = 0; }
+  }
+  if (maintenant !== null && points.length) { const trou = maintenant - points[points.length - 1][0]; if (trou > 15 * 60) { arret += trou; if (arret >= 9 * 3600) jour = 0; } }
+  return jour / 3600;
+}
+
+/**
+ * ETA d'un camion vers une destination [lat, lon].
+ * Le détroit est franchi par les ports des zones (Tanger Med ⇄ Algeciras) quand la position et la destination ne sont pas du même côté (latitude 35,95).
+ * options : facteurRoute (détour, 1,3), vitesse (km/h, sinon vitesse récente, sinon 75), attentePortH (3), traverseeH (1,5), debarquementH (1), jourMaxH (9), zones.
+ */
+function etaVoyage(hist, maintenant, dest, { zones = [], facteurRoute = 1.3, vitesse = null, attentePortH = 3, traverseeH = 1.5, debarquementH = 1, jourMaxH = 9 } = {}) {
+  if (!hist.length || !dest) return null;
+  const last = hist[hist.length - 1], pos = [last[1], last[2]];
+  const cote = (lat) => (lat < 35.95 ? "maroc" : "europe");
+  const portMa = zones.find((z) => z.type === "port_maroc" && /med/i.test(z.nom)) || zones.find((z) => z.type === "port_maroc");
+  const portEu = zones.find((z) => z.type === "port_europe" && /algeciras/i.test(z.nom)) || zones.find((z) => z.type === "port_europe");
+  const km = (a, b) => (gpsDistance([0, ...a], [0, ...b]) / 1000) * facteurRoute;
+  const etat = directEtat(hist, maintenant, zones);
+  const traversee = cote(pos[0]) !== cote(dest[0]) && portMa && portEu;
+  const legs = [];       // blocs de roulage (km) ou d'attente (heures)
+  let kmTotal = 0;
+  if (traversee) {
+    const depart = cote(pos[0]) === "maroc" ? portMa : portEu, arrivee = cote(pos[0]) === "maroc" ? portEu : portMa;
+    const enMer = etat.code === "traversee";
+    const dejaAuPort = etat.zone && etat.zone.id === depart.id;
+    if (enMer) { legs.push({ attente: Math.max(0, traverseeH - (maintenant - last[0]) / 3600) + debarquementH }); legs.push({ km: km([arrivee.lat, arrivee.lon], dest) }); }
+    else {
+      if (!dejaAuPort) legs.push({ km: km(pos, [depart.lat, depart.lon]) });
+      legs.push({ attente: (dejaAuPort ? Math.max(1, attentePortH - 1) : attentePortH) + traverseeH + debarquementH });
+      legs.push({ km: km([arrivee.lat, arrivee.lon], dest) });
+    }
+  } else legs.push({ km: km(pos, dest) });
+  kmTotal = legs.reduce((s, l) => s + (l.km || 0), 0);
+  const v = Math.max(55, Math.min(85, vitesse ?? vitesseMoyenne(hist, maintenant) ?? 75));
+  let serie = conduiteCourante(hist, maintenant).serieH, jour = conduiteJour(hist, maintenant);
+  let t = 0, courtes = 0, repos = 0, conduite = 0, attentes = 0;
+  for (const l of legs) {
+    if (l.attente !== undefined) { t += l.attente; attentes += l.attente; if (l.attente >= 0.75) serie = 0; continue; }
+    let reste = l.km / v;
+    while (reste > 1e-9) {
+      const dispo = Math.min(4.5 - serie, jourMaxH - jour, reste);
+      if (dispo > 1e-9) { t += dispo; conduite += dispo; serie += dispo; jour += dispo; reste -= dispo; }
+      if (reste <= 1e-9) break;
+      if (jour >= jourMaxH - 1e-9) { t += 11; repos++; serie = 0; jour = 0; } else { t += 0.75; courtes++; serie = 0; }
+    }
+  }
+  const marge = Math.max(0.33, t * 0.12);
+  return { kmRestants: Math.round(kmTotal), conduiteH: conduite, attentesH: attentes, dureeH: t, pauses: courtes, reposJournaliers: repos, traversee: !!traversee, vitesse: Math.round(v), etat: etat.code,
+    arrivee: Math.round(maintenant + t * 3600), min: Math.round(maintenant + (t - marge) * 3600), max: Math.round(maintenant + (t + marge) * 3600) };
+}
+/** Retard probable (minutes) par rapport au créneau prévu ; négatif = en avance. */
+const etaRetardMin = (eta, prevuISO) => (eta && prevuISO && Number.isFinite(Date.parse(prevuISO)) ? Math.round((eta.arrivee - Date.parse(prevuISO) / 1000) / 60) : null);

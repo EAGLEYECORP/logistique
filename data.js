@@ -163,3 +163,14 @@ const INTERDICTIONS = [
   { pays: "Autriche", jours: [6, 0], texte: "Du samedi 15 h au dimanche 22 h" },
   { pays: "Suisse", jours: [0], texte: "Dimanche, et nuit de 22 h à 5 h" },
 ];
+
+/** Villes courantes (coordonnées approximatives du centre) : le voyage reconnaît sa destination sans saisie de coordonnées. */
+const VILLES = {
+  "agadir": [30.4278, -9.5981], "casablanca": [33.5731, -7.5898], "rabat": [34.0209, -6.8416], "marrakech": [31.6295, -7.9811], "fes": [34.0331, -5.0003], "tanger": [35.7595, -5.834],
+  "tanger med": [35.889, -5.5], "kenitra": [34.261, -6.5802], "oujda": [34.6867, -1.9114], "laayoune": [27.1253, -13.1625], "dakhla": [23.6848, -15.958], "nador": [35.1681, -2.9335],
+  "algeciras": [36.1408, -5.4562], "madrid": [40.4168, -3.7038], "barcelone": [41.3851, 2.1734], "valence": [39.4699, -0.3763], "seville": [37.3891, -5.9845], "malaga": [36.7213, -4.4214], "almeria": [36.8381, -2.4597],
+  "murcie": [37.9922, -1.1307], "saragosse": [41.6488, -0.8891], "bilbao": [43.263, -2.935], "perpignan": [42.6887, 2.8948], "montpellier": [43.6108, 3.8767], "sete": [43.4075, 3.6967], "marseille": [43.2965, 5.3698],
+  "lyon": [45.764, 4.8357], "paris": [48.8566, 2.3522], "rungis": [48.7462, 2.3526], "bordeaux": [44.8378, -0.5792], "toulouse": [43.6047, 1.4442], "nantes": [47.2184, -1.5536], "lille": [50.6292, 3.0573],
+  "milan": [45.4642, 9.19], "turin": [45.0703, 7.6869], "rome": [41.9028, 12.4964], "bruxelles": [50.8503, 4.3517], "anvers": [51.2194, 4.4025], "rotterdam": [51.9244, 4.4777], "amsterdam": [52.3676, 4.9041],
+  "francfort": [50.1109, 8.6821], "munich": [48.1351, 11.582], "hambourg": [53.5511, 9.9937], "lisbonne": [38.7223, -9.1393],
+};

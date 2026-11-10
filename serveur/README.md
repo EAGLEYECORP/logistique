@@ -65,11 +65,32 @@ Dans Traccar, créez un **jeton d'API** (profil utilisateur) et autorisez l'orig
 
 `GET /api/derniere` (dernière position de chaque balise), `GET /api/trace?id=…&depuis=<secondes>&max=…`, `GET /api/etat`, `GET /sante`. Jeton de lecture requis, sauf `/sante`.
 
+## Lien de suivi pour vos clients
+
+Dans l'application : **Voyages → Partager le suivi**. Le relais crée une adresse secrète `https://…/suivi/<identifiant>` qui affiche, **sans compte ni installation** (téléphone ou ordinateur, en français, anglais, espagnol ou arabe) :
+
+- l'état du camion (en route, pause, au port, traversée du détroit…) ;
+- l'**heure d'arrivée estimée**, avec une fourchette, et le retard probable par rapport au créneau promis ;
+- une **position approximative** (≈ 10 km), exacte ou masquée, au choix ;
+- les étapes (parti, embarqué, arrivé en Europe, livré) et votre message.
+
+Le client ne voit **ni le chauffeur, ni la plaque, ni l'identifiant de la balise**. La page fonctionne **application fermée** : le relais calcule l'état et l'ETA lui-même (il charge `data.js`, `noyau.js`, `adm.js` et `gps.js` de la racine du dépôt, pour donner exactement le même résultat que l'application). L'application envoie au relais les étapes, le créneau et le statut « livré » à chaque changement.
+
+| Appel (jeton de lecture) | Effet |
+|---|---|
+| `POST /api/partages` | crée un lien (`balise`, `reference`, `origine`, `destination`, `destLat`, `destLon`, `origLat`, `origLon`, `livraisonPrevue`, `precision` : `approx` / `exacte` / `masquee`, `langue`, `jours`, `message`, `etapes`, `zones`) |
+| `PUT /api/partages/<id>` | met à jour (étapes, `statut: "livre"`, créneau…) |
+| `DELETE /api/partages/<id>` | **révoque** le lien |
+| `GET /api/partages` | liste |
+| `GET /suivi/<id>` · `/suivi/<id>/donnees` | page et données publiques (410 si expiré, 404 si révoqué) |
+
+Le jeton d'**écriture** (balises, Traccar) ne peut pas créer de lien. Un lien expire après 14 jours par défaut (1 à 120). **Toute personne qui possède l'adresse voit le suivi** : ne la transmettez qu'aux destinataires concernés, et révoquez-la après la livraison. La page n'est pas indexée par les moteurs de recherche et n'envoie pas de référent.
+
 ## Mise en ligne (https)
 
 - **PC, Raspberry Pi ou serveur** : placez un proxy https devant le relais, par exemple [Caddy](https://caddyserver.com) : `suivi.mon-entreprise.ma { reverse_proxy localhost:8787 }` (certificat automatique).
 - **Sans ouvrir de port** : un tunnel (par exemple Cloudflare Tunnel) expose le relais en https depuis une machine du bureau.
-- **Conteneur** : `docker build -t relais serveur && docker run -d -p 8787:8787 -v relais-donnees:/donnees relais`.
+- **Conteneur** (à construire depuis la racine du dépôt) : `docker build -f serveur/Dockerfile -t relais . && docker run -d -p 8787:8787 -v relais-donnees:/donnees relais`.
 - **Téléphone Android (Termux)** : `pkg install nodejs`, puis `node serveur/relais.js` ; adresse `http://localhost:8787` depuis le même téléphone.
 
 Choisissez et vérifiez vous-même l'hébergement, ses conditions et son coût : aucun n'est imposé.

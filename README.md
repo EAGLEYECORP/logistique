@@ -20,7 +20,8 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Chauffeurs** | Un responsable par camion, service/repos, permis, visa, passeport, carte conducteur |
 | **Voyages** | Maroc ⇄ Europe : aller, **traversée Tanger Med ⇄ Algeciras (aller et retour)**, étapes, contrôles avant départ (visa, passeport, papiers, autorisation, Schengen, poids), coût complet, marge, retour à vide, listes de contrôle |
 | **Autorisations & visas** | Autorisations bilatérales « E » / « MA », comptes-rendus de voyage, **compteur Schengen 90/180** par chauffeur |
-| **Suivi en direct** | Carte de la flotte, état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques ; nécessite le relais ou Traccar (`serveur/`) |
+| **Suivi en direct** | Carte de la flotte, état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques, **heure d'arrivée estimée** ; nécessite le relais ou Traccar (`serveur/`) |
+| **Lien client** | Page publique de suivi (état, ETA, position approximative, étapes) en 4 langues, révocable, fonctionne application fermée ; nécessite le relais |
 | **Traces GPS** | Import CSV/GPX de vos balises, tracé hors ligne, traversées et étapes détectées, conduite estimée, zones modifiables |
 | **Péages Maroc** | Grille officielle Autoroutes du Maroc (584 sections), classe déduite du camion, trajets types ; **gares localisées** (relevées sur vos traces ou importées d'OpenStreetMap), **péage mesuré par GPS** et **rapprochement avec le relevé Jawaz Pro** |
 | **Trajets** | Coût, durée, pauses et repos calculés pendant la saisie |
@@ -130,6 +131,7 @@ Automatique et sans action de votre part.
 | `commercial.js` | Commandes, clients, factures |
 | `voyages.js` | Voyages internationaux, traversées, autorisations, Schengen, péages |
 | `gps.js` | Lecture CSV/GPX, nettoyage, analyse, zones, jalons, passages aux gares, péage mesuré, rapprochement Jawaz (testé) |
+| `partages.js` | Lien de suivi client : création, partage WhatsApp / e-mail, révocation, synchronisation |
 | `direct.js` | Suivi en direct : sources (relais, Traccar, démo), carte, états, alertes |
 | `serveur/relais.js` | Relais de positions (Node, sans dépendance) : réception et lecture |
 | `gares.js` | Gares de péage : relevé sur trace, import OpenStreetMap, relevés Jawaz Pro |
@@ -146,7 +148,7 @@ Automatique et sans action de votre part.
 | `ia.js`, `vendor/anthropic-sdk.js` | Assistant IA de classement SH (facultatif, clé API de l'utilisateur) |
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 80 tests |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 89 tests |
 
 ```bash
 npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres

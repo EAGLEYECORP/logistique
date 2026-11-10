@@ -71,6 +71,9 @@ const champsVoyage = (v = {}) => [
   { name: "destination", label: "Destination (ville)", value: v.destination, required: true, placeholder: "Perpignan" },
   { name: "dateDepart", label: "Départ prévu", type: "date", value: v.dateDepart || today(), required: true },
   { name: "dateRetourPrevue", label: "Retour au dépôt prévu", type: "date", value: v.dateRetourPrevue, required: true },
+  { name: "livraisonPrevue", label: "Livraison promise au client (date et heure)", type: "datetime-local", value: v.livraisonPrevue ? dateISO(v.livraisonPrevue) + "T" + new Date(v.livraisonPrevue).toTimeString().slice(0, 5) : "" },
+  { name: "destLat", label: "Destination : latitude (vide = ville reconnue)", type: "number", step: "any", value: v.destLat },
+  { name: "destLon", label: "Destination : longitude", type: "number", step: "any", value: v.destLon },
   { name: "chauffeurId", label: "Chauffeur", type: "select", options: [["", "— À affecter —"], ...S.chauffeurs.map((h) => [h.id, h.nom])], value: v.chauffeurId },
   { name: "camionId", label: "Camion", type: "select", options: optsCamions("— À affecter —"), value: v.camionId },
   { name: "remorque", label: "Remorque", value: v.remorque },
@@ -95,11 +98,26 @@ const champsVoyage = (v = {}) => [
 const lireVoyage = (f) => ({
   ref: f.ref, statut: f.statut, clientId: f.clientId, marchandise: f.marchandise, origine: f.origine, destination: f.destination, dateDepart: f.dateDepart, dateRetourPrevue: f.dateRetourPrevue,
   chauffeurId: f.chauffeurId, camionId: f.camionId, remorque: f.remorque, autorisationId: f.autorisationId, ptacT: num(f.ptacT), transportCombine: !!f.transportCombine,
+  livraisonPrevue: f.livraisonPrevue ? new Date(f.livraisonPrevue).toISOString() : "", destLat: f.destLat === "" ? undefined : num(f.destLat), destLon: f.destLon === "" ? undefined : num(f.destLon),
   prix: num(f.prix), devise: f.devise, peageTrajet: f.peageTrajet, peageAR: !!f.peageAR, peagesMad: num(f.peagesMad), peagesEur: num(f.peagesEur), carburantMad: num(f.carburantMad),
   fraisRouteMad: num(f.fraisRouteMad), douaneMad: num(f.douaneMad), autresMad: num(f.autresMad), kmAller: num(f.kmAller), kmRetourCharge: num(f.kmRetourCharge), kmRetourVide: num(f.kmRetourVide), notes: f.notes,
 });
+/** Coordonnées de la destination et de l'origine : saisies, sinon ville reconnue. */
+const destinationDe = (v) => (Number.isFinite(v.destLat) && Number.isFinite(v.destLon) ? [v.destLat, v.destLon] : villeConnue(v.destination));
+const origineDe = (v) => villeConnue(v.origine);
 const niveauStatutVoyage = { prevu: "neutral", en_cours: "warn", termine: "ok", annule: "neutral" };
 
+/** Arrivée estimée (si le suivi en direct est actif pour ce camion). */
+function blocEta(v) {
+  if (!["prevu", "en_cours"].includes(v.statut) || typeof etaDuVoyage !== "function") return "";
+  const e = etaDuVoyage(v);
+  if (!e) return destinationDe(v) ? "" : `<p class="hint">Pour estimer l'heure d'arrivée, précisez la destination (ville connue, ou latitude et longitude).</p>`;
+  const hm = (t) => new Date(t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const d = (t) => new Date(t * 1000).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return `<div class="section-title">Arrivée estimée</div><div class="trav"><div><strong>${d(e.arrivee)}</strong><span class="sub">entre ${hm(e.min)} et ${hm(e.max)} · ${fmt(e.kmRestants)} km restants · ${e.pauses} pause(s) et ${e.reposJournaliers} repos de 11 h${e.traversee ? " · traversée du détroit comprise" : ""}</span></div>
+    <div class="r">${e.retardMin !== null ? badge(e.retardMin > 30 ? `Retard probable ${Math.round(e.retardMin / 6) / 10} h` : e.retardMin < -30 ? "En avance" : "Dans les temps", e.retardMin > 60 ? "danger" : e.retardMin > 30 ? "warn" : "ok") : ""}</div></div>
+    <p class="hint" style="margin-top:6px">Estimation indicative (distance à vol d'oiseau avec détour, vitesse récente, repos réglementaires).</p>`;
+}
 function carteVoyage(v) {
   const c = coutVoyage(v);
   const ctl = ["prevu", "en_cours"].includes(v.statut) ? controlesVoyage(v) : [];
@@ -124,6 +142,7 @@ function carteVoyage(v) {
       ${blocTraversee(v, "aller")}${blocTraversee(v, "retour")}
       ${ctl.length ? `<div class="section-title">À régler avant le départ</div><ul class="ctl">${ctl.map((x) => `<li class="${niveauCtl[x.niveau]}">${ic(x.niveau === "danger" ? "alert" : "clock")}<span>${esc(x.texte)}</span></li>`).join("")}</ul>` : v.statut === "prevu" ? `<p class="hint" style="color:var(--ok)">${ic("check")} Aucun point bloquant détecté.</p>` : ""}
       ${interd.length ? `<p class="hint">Départ un ${new Date(dateD + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long" })} : interdictions de circuler possibles (${interd.map((i) => i.pays).join(", ")}) — voir le tableau en bas de page.</p>` : ""}
+      ${blocEta(v)}
       <div class="section-title">Coût et marge</div>
       <div class="table-wrap"><table class="plain"><tbody>
         ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
@@ -144,6 +163,7 @@ function carteVoyage(v) {
       ${v.notes ? `<p class="hint">${esc(v.notes)}</p>` : ""}
       <div class="row">
         ${v.statut === "termine" ? "" : btn("terminer", "Terminer le voyage", { id: v.id, icone: "check", cls: "btn ghost sm" })}
+        ${btn("partager", v.partage ? "Lien client" : "Partager le suivi", { id: v.id, icone: "mail", cls: "btn ghost sm" })}
         ${boutonPhotos("voyage:" + v.id, `Documents — ${v.ref}`, { texte: true })}
         ${btn("modifier", "Modifier", { id: v.id, icone: "edit", cls: "btn ghost sm" })}
         ${btn("suppr", "Supprimer", { id: v.id, cls: "btn text-danger sm" })}

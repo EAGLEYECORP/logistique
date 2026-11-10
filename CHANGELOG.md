@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.0 — Heure d'arrivée estimée et lien de suivi client (phase 4)
+
+- **ETA** : heure d'arrivée estimée avec fourchette, calculée d'après la position, la vitesse récente du camion, la **traversée du détroit** (attente au port, mer, débarquement) et les **pauses et repos réglementaires** (45 min après 4 h 30, 11 h après 9 h de conduite, en tenant compte de la conduite déjà effectuée). Affichée dans le suivi en direct et dans la fiche voyage ; **alerte de retard probable** par rapport au créneau promis au client.
+- Fiche voyage : créneau promis (date et heure), coordonnées de destination (reconnues automatiquement pour une quarantaine de grandes villes, sinon saisies).
+- **Lien de suivi pour le client** (Voyages → « Partager le suivi ») : page publique en français, anglais, espagnol ou arabe, avec état, ETA, retard éventuel, position approximative (ou exacte, ou masquée), étapes et message. **Fonctionne application fermée** (le relais calcule lui-même, avec le même moteur que l'application). Le client ne voit ni chauffeur, ni plaque, ni balise. Partage par WhatsApp ou e-mail (message prêt, aucun envoi automatique), validité réglable, **révocation**, passage automatique à « Livré ».
+- Relais 1.1 : liens (`/api/partages`), page client, moteur partagé avec l'application ; 89 tests (81 application + 8 relais).
+
 ## 2.4.0 — Suivi en direct (phase 3)
 
 - **Page « Suivi en direct »** : carte de la flotte (fond OpenStreetMap facultatif, fond uni hors ligne), état de chaque camion (en route, à l'arrêt, arrêt prolongé, au port, en douane, au dépôt, **en traversée**, signal perdu), vitesse, âge de la dernière position, conduite sans pause de 45 min, alertes.

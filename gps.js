@@ -73,6 +73,7 @@ const GPS_COLONNES = {
   lon: ["longitude", "lon", "lng", "long", "gps longitude", "x"],
   temps: ["horodatage", "datetime", "date/heure", "date heure", "date et heure", "date & heure", "timestamp", "time", "heure gps", "gps time", "fix time", "positiontime", "date time", "dateheure", "heure", "date"],
   vitesse: ["vitesse", "vitesse (km/h)", "speed", "speed (km/h)", "vitesse km/h", "velocity", "gps speed"],
+  temp: ["temperature", "température", "temp", "temp1", "temperature (°c)", "temp (°c)", "temperature c"],
 };
 function gpsDetecterColonnes(entetes) {
   const h = entetes.map(gpsNorm);
@@ -81,7 +82,7 @@ function gpsDetecterColonnes(entetes) {
     for (const c of cands) { if (c.length < 4) continue; const i = h.findIndex((x) => x.includes(c)); if (i >= 0) return i; }
     return -1;
   };
-  const col = { lat: trouver(GPS_COLONNES.lat), lon: trouver(GPS_COLONNES.lon), temps: trouver(GPS_COLONNES.temps), vitesse: trouver(GPS_COLONNES.vitesse), date: -1 };
+  const col = { lat: trouver(GPS_COLONNES.lat), lon: trouver(GPS_COLONNES.lon), temps: trouver(GPS_COLONNES.temps), vitesse: trouver(GPS_COLONNES.vitesse), temp: trouver(GPS_COLONNES.temp), date: -1 };
   // Date et heure dans deux colonnes distinctes
   const iDate = h.findIndex((x) => x === "date" || x === "jour"), iHeure = h.findIndex((x) => x === "heure" || x === "time" || x === "hour");
   if (iDate >= 0 && iHeure >= 0 && iDate !== iHeure) { col.temps = iHeure; col.date = iDate; }
@@ -104,7 +105,8 @@ function gpsParseCSV(texte, { offH = 0, colonnes = null } = {}) {
     const t = gpsTemps(brut, offH);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(t) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) { rejetes++; continue; }
     const v = col.vitesse >= 0 ? gpsNombre(l[col.vitesse]) : NaN;
-    points.push([t, lat, lon, Number.isFinite(v) ? v : null]);
+    const tp = col.temp >= 0 ? gpsNombre(l[col.temp]) : NaN;
+    points.push([t, lat, lon, Number.isFinite(v) ? v : null, Number.isFinite(tp) && Math.abs(tp) < 100 ? tp : null]);
   }
   return { ok: points.length > 0, points, entetes, colonnes: col, rejetes, erreur: points.length ? "" : "Aucune ligne exploitable (vérifiez les colonnes et le format de date)." };
 }
@@ -245,6 +247,13 @@ function gpsReduire(points, max = 800) {
   const pas = (points.length - 1) / (max - 1), res = [];
   for (let i = 0; i < max; i++) { const p = points[Math.round(i * pas)]; res.push([p[0], Math.round(p[1] * 1e5) / 1e5, Math.round(p[2] * 1e5) / 1e5]); }
   return res;
+}
+
+/** Températures de la trace réduites à une mesure toutes les 5 minutes : [[t, °C], …]. */
+function gpsTemperatures(points, pasS = 300) {
+  const r = []; let dernier = -Infinity;
+  for (const p of points) if (Number.isFinite(p[4]) && p[0] - dernier >= pasS) { r.push([p[0], p[4]]); dernier = p[0]; }
+  return r;
 }
 
 /** Séjour Schengen proposé d'après les traversées : entrée au débarquement en Europe, sortie à l'embarquement de retour. */
@@ -486,7 +495,7 @@ function directDepuisTraccar(appareils, positions) {
     const t = gpsTemps(String(p.fixTime || p.deviceTime || "").replace(/\.\d+(?=Z|[+-]|$)/, ""));
     if (!Number.isFinite(t) || !Number.isFinite(p.latitude) || !Number.isFinite(p.longitude)) continue;
     const d = noms.get(p.deviceId);
-    res.push({ id: d?.uniqueId || `traccar:${p.deviceId}`, nom: d?.name || "", t, lat: p.latitude, lon: p.longitude, v: Number.isFinite(p.speed) ? Math.round(p.speed * 1.852 * 10) / 10 : null, cap: Number.isFinite(p.course) ? p.course : null });
+    res.push({ id: d?.uniqueId || `traccar:${p.deviceId}`, nom: d?.name || "", t, lat: p.latitude, lon: p.longitude, v: Number.isFinite(p.speed) ? Math.round(p.speed * 1.852 * 10) / 10 : null, cap: Number.isFinite(p.course) ? p.course : null, temp: Number.isFinite(Number(p.attributes?.temp1 ?? p.attributes?.temperature)) && (p.attributes?.temp1 ?? p.attributes?.temperature) !== null ? Number(p.attributes.temp1 ?? p.attributes.temperature) : null });
   }
   return res;
 }

@@ -39,7 +39,7 @@ function enregistrerTrace(voyageId) {
   const t = {
     id: uid(), nom: gpsEnCours.nom.replace(/\.[^.]+$/, ""), voyageId: voyageId || "", camionId: v?.camionId || "", source: lu.format, importe: new Date().toISOString(), ecartes, rejetes: lu.rejetes || 0,
     nbPoints: an.nbPoints, debut: an.debut, fin: an.fin, km: Math.round(an.km * 10) / 10, dureeH: an.dureeH, vitMoyKmh: an.vitMoyKmh, conduiteH: an.conduiteH, conduiteMaxSansPauseH: an.conduiteMaxSansPauseH,
-    arrets: an.arrets.slice(0, 40), trous: an.trous.slice(0, 40), visites: an.visites, traversees: an.traversees, jalons: an.jalons, pts: gpsSimplifier(points), ralentis: gpsRalentissements(points).slice(0, 80),
+    arrets: an.arrets.slice(0, 40), trous: an.trous.slice(0, 40), visites: an.visites, traversees: an.traversees, jalons: an.jalons, pts: gpsSimplifier(points), temps: gpsTemperatures(points), ralentis: gpsRalentissements(points).slice(0, 80),
   };
   S.traces.unshift(t); tracesOuvertes.add(t.id); sauver();
   return t;

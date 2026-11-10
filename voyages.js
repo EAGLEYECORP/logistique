@@ -85,7 +85,10 @@ const champsVoyage = (v = {}) => [
   { name: "peageTrajet", label: "Péage Maroc : trajet type (grille ADM)", type: "select", options: [["", "— Saisie manuelle ci-dessous —"], ...ADM_TRAJETS.map((t) => [t.id, t.lib])], value: v.peageTrajet },
   { name: "peageAR", label: "Compter aussi le péage au retour", type: "checkbox", value: v.peageAR },
   { name: "peagesMad", label: "Péages Maroc, saisie manuelle (MAD)", type: "number", min: 0, value: v.peagesMad },
-  { name: "peagesEur", label: "Péages Europe (€)", type: "number", min: 0, value: v.peagesEur },
+  { name: "kmPays", label: "Km par pays pour estimer les péages d'Europe (ex. ES 950, FR 880)", value: v.kmPays, full: true, placeholder: "ES 950, FR 880" },
+  { name: "peagesEur", label: "Péages Europe, saisie manuelle (€)", type: "number", min: 0, value: v.peagesEur },
+  { name: "tempMin", label: "Chaîne du froid : consigne minimale (°C)", type: "number", step: "any", value: v.tempMin },
+  { name: "tempMax", label: "Chaîne du froid : consigne maximale (°C)", type: "number", step: "any", value: v.tempMax },
   { name: "carburantMad", label: "Carburant (MAD)", type: "number", min: 0, value: v.carburantMad },
   { name: "fraisRouteMad", label: "Per diem, hôtel, parkings (MAD)", type: "number", min: 0, value: v.fraisRouteMad },
   { name: "douaneMad", label: "Frais de douane / transit (MAD)", type: "number", min: 0, value: v.douaneMad },
@@ -99,7 +102,7 @@ const lireVoyage = (f) => ({
   ref: f.ref, statut: f.statut, clientId: f.clientId, marchandise: f.marchandise, origine: f.origine, destination: f.destination, dateDepart: f.dateDepart, dateRetourPrevue: f.dateRetourPrevue,
   chauffeurId: f.chauffeurId, camionId: f.camionId, remorque: f.remorque, autorisationId: f.autorisationId, ptacT: num(f.ptacT), transportCombine: !!f.transportCombine,
   livraisonPrevue: f.livraisonPrevue ? new Date(f.livraisonPrevue).toISOString() : "", destLat: f.destLat === "" ? undefined : num(f.destLat), destLon: f.destLon === "" ? undefined : num(f.destLon),
-  prix: num(f.prix), devise: f.devise, peageTrajet: f.peageTrajet, peageAR: !!f.peageAR, peagesMad: num(f.peagesMad), peagesEur: num(f.peagesEur), carburantMad: num(f.carburantMad),
+  prix: num(f.prix), devise: f.devise, peageTrajet: f.peageTrajet, peageAR: !!f.peageAR, peagesMad: num(f.peagesMad), peagesEur: num(f.peagesEur), kmPays: f.kmPays, tempMin: f.tempMin === "" ? undefined : num(f.tempMin), tempMax: f.tempMax === "" ? undefined : num(f.tempMax), carburantMad: num(f.carburantMad),
   fraisRouteMad: num(f.fraisRouteMad), douaneMad: num(f.douaneMad), autresMad: num(f.autresMad), kmAller: num(f.kmAller), kmRetourCharge: num(f.kmRetourCharge), kmRetourVide: num(f.kmRetourVide), notes: f.notes,
 });
 /** Coordonnées de la destination et de l'origine : saisies, sinon ville reconnue. */
@@ -117,6 +120,22 @@ function blocEta(v) {
   return `<div class="section-title">Arrivée estimée</div><div class="trav"><div><strong>${d(e.arrivee)}</strong><span class="sub">entre ${hm(e.min)} et ${hm(e.max)} · ${fmt(e.kmRestants)} km restants · ${e.pauses} pause(s) et ${e.reposJournaliers} repos de 11 h${e.traversee ? " · traversée du détroit comprise" : ""}</span></div>
     <div class="r">${e.retardMin !== null ? badge(e.retardMin > 30 ? `Retard probable ${Math.round(e.retardMin / 6) / 10} h` : e.retardMin < -30 ? "En avance" : "Dans les temps", e.retardMin > 60 ? "danger" : e.retardMin > 30 ? "warn" : "ok") : ""}</div></div>
     <p class="hint" style="margin-top:6px">Estimation indicative (distance à vol d'oiseau avec détour, vitesse récente, repos réglementaires).</p>`;
+}
+/** Chaîne du froid : analyse des températures des traces rattachées au voyage. */
+function blocFroid(v) {
+  const traces = S.traces.filter((t) => t.voyageId === v.id && t.temps?.length);
+  if (!traces.length) return "";
+  const pts = traces.flatMap((t) => t.temps).sort((a, b) => a[0] - b[0]);
+  const consigne = Number.isFinite(v.tempMin) && Number.isFinite(v.tempMax);
+  const r = consigne ? froidAnalyser(pts, v.tempMin, v.tempMax) : null, brut = froidAnalyser(pts, -100, 100);
+  const hm = (t) => new Date(t * 1000).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return `<div class="section-title">Chaîne du froid</div><div class="trav"><div><strong>${String(brut.min.toFixed(1)).replace(".", ",")} à ${String(brut.max.toFixed(1)).replace(".", ",")} °C</strong><span class="sub">moyenne ${String(brut.moyenne.toFixed(1)).replace(".", ",")} °C · ${brut.nb} mesure(s)${consigne ? ` · consigne ${v.tempMin} à ${v.tempMax} °C` : ""}</span></div><div class="r">${r ? badge(r.conforme ? "Conforme" : `${r.excursions.length} excursion(s)`, r.conforme ? "ok" : "danger") : badge("Consigne non renseignée", "neutral")}</div></div>
+    ${r && r.excursions.length ? `<ul class="ctl">${r.excursions.map((e) => `<li class="danger">${ic("alert")}<span>${hm(e.debut)} : ${e.sens === "haut" ? "au-dessus" : "en dessous"} de la consigne pendant ${e.dureeMin} min (extrême ${String(e.extreme).replace(".", ",")} °C)</span></li>`).join("")}</ul>` : ""}`;
+}
+/** Preuve de livraison (signature, réserves, position). */
+function blocPreuve(v) {
+  if (!v.pod) return "";
+  return `<div class="section-title">Preuve de livraison</div><div class="trav"><div><strong>Livré${v.pod.signataire ? ` à ${esc(v.pod.signataire)}` : ""}</strong><span class="sub">${dateHeureFr(v.pod.date)}${v.pod.lat ? ` · position ${v.pod.lat.toFixed(4)}, ${v.pod.lon.toFixed(4)}` : ""}${v.pod.reserves ? ` · réserves : ${esc(v.pod.reserves)}` : " · sans réserve"}</span></div><div class="r">${btn("preuve-imprimer", "Imprimer", { id: v.id, icone: "print", cls: "btn ghost sm" })}</div></div>`;
 }
 function carteVoyage(v) {
   const c = coutVoyage(v);
@@ -142,9 +161,10 @@ function carteVoyage(v) {
       ${blocTraversee(v, "aller")}${blocTraversee(v, "retour")}
       ${ctl.length ? `<div class="section-title">À régler avant le départ</div><ul class="ctl">${ctl.map((x) => `<li class="${niveauCtl[x.niveau]}">${ic(x.niveau === "danger" ? "alert" : "clock")}<span>${esc(x.texte)}</span></li>`).join("")}</ul>` : v.statut === "prevu" ? `<p class="hint" style="color:var(--ok)">${ic("check")} Aucun point bloquant détecté.</p>` : ""}
       ${interd.length ? `<p class="hint">Départ un ${new Date(dateD + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long" })} : interdictions de circuler possibles (${interd.map((i) => i.pays).join(", ")}) — voir le tableau en bas de page.</p>` : ""}
-      ${blocEta(v)}
+      ${blocEta(v)}${blocFroid(v)}${blocPreuve(v)}
       <div class="section-title">Coût et marge</div>
       <div class="table-wrap"><table class="plain"><tbody>
+        ${v.kmPays && peagesEuropeVoyage(v).manquants.length ? `<tr><td colspan="2" class="sub">Péages d'Europe : tarif au km non renseigné pour ${peagesEuropeVoyage(v).manquants.join(", ")} (Réglages → calculs) — ces pays ne sont pas comptés.</td></tr>` : ""}
         ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
         <tr><td><strong>Coût total</strong></td><td class="r num"><strong>${fmt(c.total)} MAD</strong></td></tr>
         <tr><td>Prix de vente</td><td class="r num">${c.prix ? fmt(c.prix) + " MAD" : "—"}</td></tr>
@@ -163,6 +183,7 @@ function carteVoyage(v) {
       ${v.notes ? `<p class="hint">${esc(v.notes)}</p>` : ""}
       <div class="row">
         ${v.statut === "termine" ? "" : btn("terminer", "Terminer le voyage", { id: v.id, icone: "check", cls: "btn ghost sm" })}
+        ${v.statut === "annule" ? "" : btn("preuve", v.pod ? "Refaire la preuve de livraison" : "Preuve de livraison", { id: v.id, icone: "check", cls: "btn ghost sm" })}
         ${btn("partager", v.partage ? "Lien client" : "Partager le suivi", { id: v.id, icone: "mail", cls: "btn ghost sm" })}
         ${boutonPhotos("voyage:" + v.id, `Documents — ${v.ref}`, { texte: true })}
         ${btn("modifier", "Modifier", { id: v.id, icone: "edit", cls: "btn ghost sm" })}
@@ -380,3 +401,4 @@ document.addEventListener("change", (e) => {
   if (e.target.id === "peage-camion") { peageCamion = e.target.value; rafraichir(); }
   if (e.target.id === "peage-classe") { peageClasse = e.target.value; rafraichir(); }
 });
+

@@ -302,6 +302,19 @@ Le **suivi en temps réel exige un serveur** : une application hors ligne sans s
 
 ---
 
+### État d'avancement (v3.0.0)
+
+| Phase | Contenu | État |
+|---|---|---|
+| 0 | Voyages, traversée du détroit, autorisations, Schengen, péages ADM, arabe | ✅ v2.1 |
+| 1 | Import GPS CSV/GPX, zones, étapes automatiques | ✅ v2.2 |
+| 2 | Gares de péage, péage mesuré, rapprochement Jawaz Pro | ✅ v2.3 |
+| 3 | Suivi en direct (relais, Traccar, démonstration) | ✅ v2.4 |
+| 4 | ETA et lien client | ✅ v2.5 |
+| 5 à 8 | Alertes ntfy / WhatsApp / SMS, balise du téléphone, preuve de livraison, tachygraphe (CSV), chaîne du froid, péages d'Europe | ✅ v3.0 |
+
+**Volontairement non réalisé** (dépend d'un tiers, d'un coût ou d'une information non confirmée) : lecture des fichiers bruts `.ddd` et téléchargement à distance du tachygraphe (matériel ou service du fournisseur) ; API Jawaz Pro et télépéage européen EETS (aucune API documentée) ; envoi automatique WhatsApp (compte professionnel payant) ; valeur juridique d'un e-CMR (non confirmée) ; tarifs de péage de France, d'Espagne et d'Italie préremplis (grilles officielles à saisir) ; synchronisation entre appareils (hors du périmètre hors ligne).
+
 ## 12. Critères d'acceptation (extraits)
 
 1. Le calcul de péage Casablanca → Tanger Med en classe 3 donne **253 MAD** avec le détail 43 + 28 + 182.

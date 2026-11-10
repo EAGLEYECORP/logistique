@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.0.0 — Feuille de route terminée (phases 5 à 8)
+
+- **Alertes sur le téléphone du bureau** (ntfy, gratuit) et **boutons WhatsApp / SMS** prêts à l'emploi vers le chauffeur concerné, sur chaque alerte du suivi en direct. Rien n'est envoyé sans geste de l'utilisateur côté WhatsApp / SMS ; l'envoi automatique par WhatsApp Business exige un compte et des frais, il n'est pas inclus.
+- **Balise de secours dans le téléphone du chauffeur** (mode chauffeur) : position envoyée au relais toutes les 20 à 60 s, positions conservées hors réseau et renvoyées au retour du réseau, écran maintenu allumé.
+- **Preuve de livraison** : signature du destinataire à l'écran, réserves, position et heure, imprimable ; marque le voyage « livré » (et le lien client). **Ce n'est pas un e-CMR** : la valeur juridique d'un CMR électronique au Maroc et en Espagne n'est pas confirmée.
+- **Tachygraphe** : import des activités d'un conducteur (CSV : conduite, repos, travail, disponibilité), détection des dépassements (conduite continue, journée, semaine, deux semaines, repos journalier et hebdomadaire), alerte sur les 14 derniers jours. Les fichiers bruts `.ddd` ne sont pas lus.
+- **Chaîne du froid** : température reçue des balises (relais, Traccar, CSV), consigne par voyage, alerte au-delà de 15 min hors plage, analyse des excursions et rapport dans la fiche voyage.
+- **Péages d'Europe** : estimation par kilomètres par pays × tarif au km réglable ; seuls l'Allemagne et l'Autriche sont préremplis, les autres pays sont signalés tant que vous n'avez pas saisi le tarif de votre concessionnaire.
+- 98 tests (90 application + 8 relais).
+
 ## 2.5.0 — Heure d'arrivée estimée et lien de suivi client (phase 4)
 
 - **ETA** : heure d'arrivée estimée avec fourchette, calculée d'après la position, la vitesse récente du camion, la **traversée du détroit** (attente au port, mer, débarquement) et les **pauses et repos réglementaires** (45 min après 4 h 30, 11 h après 9 h de conduite, en tenant compte de la conduite déjà effectuée). Affichée dans le suivi en direct et dans la fiche voyage ; **alerte de retard probable** par rapport au créneau promis au client.

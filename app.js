@@ -155,6 +155,7 @@ const ONGLETS = [
   ["peages", "Péages Maroc", "gauge", "Exploitation"],
   ["camions", "Camions", "truck", "Flotte"],
   ["chauffeurs", "Chauffeurs", "users", "Flotte"],
+  ["tachy", "Tachygraphe", "clock", "Flotte"],
   ["carburant", "Gasoil", "fuel", "Flotte"],
   ["clients", "Clients", "building", "Gestion"],
   ["factures", "Factures", "receipt", "Gestion"],

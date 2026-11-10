@@ -27,9 +27,11 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   v = v === undefined || v === null || v === "" ? null : Number(v);
   if (v !== null && Number.isFinite(v)) { if (brut.vitesse === undefined && brut.v === undefined) v = unite === "noeuds" ? v * NOEUD_KMH : unite === "ms" ? v * 3.6 : v; } else v = null;
   const cap = Number(brut.cap ?? brut.course ?? brut.heading ?? brut.bearing);
+  const tp = brut.temp ?? brut.temperature ?? brut.temp1 ?? brut.attributes?.temp1 ?? brut.attributes?.temperature;
+  const temp = tp === undefined || tp === null || tp === "" || !Number.isFinite(Number(tp)) || Math.abs(Number(tp)) > 100 ? null : Math.round(Number(tp) * 10) / 10;
   if (!id || id.length > 64 || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0) || !Number.isFinite(t)) return null;
   if (t > maintenant + 600 || t < maintenant - 7 * 86400) return null; // horloge folle ou position trop ancienne
-  return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null };
+  return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null, ...(temp !== null ? { temp } : {}) };
 }
 
 function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") } = {}) {
@@ -149,7 +151,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           let data; try { data = JSON.parse(await corps(req)); } catch { return json(res, 400, { erreur: "JSON invalide." }); }
           if (p === "/traccar") { // renvoi d'événements de Traccar : { position, device }
             const pos = data.position || data; const dev = data.device || {};
-            recues = 1; const x = normaliser({ id: dev.uniqueId || pos.deviceId, t: pos.fixTime || pos.deviceTime, lat: pos.latitude, lon: pos.longitude, speed: pos.speed, course: pos.course }, { unite: "noeuds" });
+            recues = 1; const x = normaliser({ id: dev.uniqueId || pos.deviceId, t: pos.fixTime || pos.deviceTime, lat: pos.latitude, lon: pos.longitude, speed: pos.speed, course: pos.course, attributes: pos.attributes }, { unite: "noeuds" });
             if (x) { positions.push(x); nomsP.push(dev.name); }
           } else { const liste = Array.isArray(data) ? data : Array.isArray(data.positions) ? data.positions : [data]; if (liste.length > 2000) return json(res, 413, { erreur: "2000 positions au plus par envoi." }); recues = liste.length; for (const b of liste) { const x = normaliser(b, { unite }); if (x) positions.push(x); } }
         }

@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -848,6 +848,90 @@ test("ETA : retard par rapport au créneau prévu", () => {
   assert.strictEqual(N.etaRetardMin(eta, new Date((NOW + 1800) * 1000).toISOString()), 30);
   assert.strictEqual(N.etaRetardMin(eta, new Date((NOW + 7200) * 1000).toISOString()), -60);
   assert.strictEqual(N.etaRetardMin(eta, ""), null); assert.strictEqual(N.etaRetardMin(null, "2026-01-01T00:00:00Z"), null);
+});
+
+/* ---------- Phases 5 à 8 : conformité et communication ---------- */
+test("péages d'Europe : km par pays × tarif, pays sans tarif signalés et jamais devinés", () => {
+  N.S.params.peagesEu = { DE: 0.35, ES: 0.2 };
+  assert.deepStrictEqual({ ...N.lireKmPays("ES 950, FR: 880 de=300") }, { ES: 950, FR: 880, DE: 300 });
+  const r = N.peagesEuropeVoyage({ kmPays: "ES 1000, FR 900, DE 100" });
+  assert.strictEqual(r.eur, 235); assert.deepStrictEqual([...r.manquants], ["FR"]); assert.strictEqual(r.detail.length, 2);
+  N.S.params.tauxEUR = 10; N.S.camions = [];
+  assert.strictEqual(N.coutVoyage({ kmPays: "ES 1000", peagesEur: 999 }).parts.peagesEurope, 2000); // le calcul par pays remplace la saisie
+  assert.strictEqual(N.coutVoyage({ peagesEur: 50 }).parts.peagesEurope, 500);
+  assert.strictEqual(N.coutVoyage({ kmPays: "FR 900", peagesEur: 50 }).parts.peagesEurope, 500); // tarif absent : on garde la saisie
+});
+
+test("WhatsApp et SMS : numéros marocains et internationaux", () => {
+  assert.strictEqual(N.telInternational("06 12 34 56 78"), "212612345678"); assert.strictEqual(N.telInternational("+34 600 11 22 33"), "34600112233");
+  assert.strictEqual(N.telInternational("0034600112233"), "34600112233"); assert.strictEqual(N.telInternational("612345678"), "212612345678");
+  assert.strictEqual(N.telInternational("abc"), ""); assert.strictEqual(N.telInternational(""), "");
+  assert.strictEqual(N.lienWhatsApp("06 12 34 56 78", "Bonjour & merci"), "https://wa.me/212612345678?text=Bonjour%20%26%20merci");
+  assert.strictEqual(N.lienSMS("0612345678", "Pause"), "sms:+212612345678?&body=Pause"); assert.strictEqual(N.lienWhatsApp("", "x"), "");
+});
+
+const jourT = (j, h = 0, m = 0) => Date.UTC(2026, 10, j, h, m) / 1000; // novembre 2026
+test("tachygraphe : lecture CSV (colonnes françaises, durées, activités)", () => {
+  const csv = "Conducteur;Début;Fin;Activité\nKarim;10/11/2026 06:00;10/11/2026 10:30;Conduite\nKarim;10/11/2026 10:30;10/11/2026 11:15;Repos\nKarim;10/11/2026 11:15;10/11/2026 14:00;C\nKarim;??;;Conduite\n";
+  const r = N.tachyParseCSV(csv); assert.strictEqual(r.ok, true); assert.strictEqual(r.activites.length, 3); assert.strictEqual(r.rejetes, 1); assert.strictEqual(r.activites[1].type, "repos");
+  const d = N.tachyParseCSV("driver,start,duration,activity\nA,2026-11-10 06:00:00,04:30,driving\nA,2026-11-10 10:30:00,45,rest");
+  assert.strictEqual(d.activites[0].fin - d.activites[0].debut, 16200); assert.strictEqual(d.activites[1].fin - d.activites[1].debut, 2700);
+  assert.strictEqual(N.tachyParseCSV("a;b\n1;2").ok, false);
+  assert.deepStrictEqual([N.tachyActivite("Driving"), N.tachyActivite("Disponibilité"), N.tachyActivite("pause"), N.tachyActivite("W"), N.tachyActivite("???")], ["conduite", "disponibilite", "repos", "travail", null]);
+});
+
+test("tachygraphe : conduite continue, journée et semaine", () => {
+  const ok = N.tachyAnalyser([{ debut: jourT(10, 6), fin: jourT(10, 10, 30), type: "conduite" }, { debut: jourT(10, 10, 30), fin: jourT(10, 11, 15), type: "repos" }, { debut: jourT(10, 11, 15), fin: jourT(10, 15, 30), type: "conduite" }]);
+  assert.strictEqual(ok.infractions.length, 0); assert.ok(Math.abs(ok.conduiteTotalH - 8.75) < 0.01);
+  const trop = N.tachyAnalyser([{ debut: jourT(10, 6), fin: jourT(10, 12), type: "conduite" }]); // 6 h sans pause
+  assert.ok(trop.infractions.some((i) => i.type === "conduite_continue"));
+  const fractionnee = N.tachyAnalyser([{ debut: jourT(10, 6), fin: jourT(10, 10), type: "conduite" }, { debut: jourT(10, 10), fin: jourT(10, 10, 15), type: "repos" }, { debut: jourT(10, 10, 15), fin: jourT(10, 10, 45), type: "repos" }, { debut: jourT(10, 10, 45), fin: jourT(10, 14), type: "conduite" }]);
+  assert.strictEqual(fractionnee.infractions.filter((i) => i.type === "conduite_continue").length, 0); // pause fractionnée 15 + 30 min
+  const jour11h = N.tachyAnalyser([{ debut: jourT(10, 4), fin: jourT(10, 8), type: "conduite" }, { debut: jourT(10, 8), fin: jourT(10, 8, 45), type: "repos" }, { debut: jourT(10, 8, 45), fin: jourT(10, 12, 45), type: "conduite" }, { debut: jourT(10, 12, 45), fin: jourT(10, 13, 30), type: "repos" }, { debut: jourT(10, 13, 30), fin: jourT(10, 15, 40), type: "conduite" }]);
+  assert.ok(jour11h.infractions.some((i) => i.type === "conduite_jour" || i.gravite), "10 h 10 de conduite dans la journée");
+});
+
+test("tachygraphe : semaine de plus de 56 h, repos hebdomadaire manquant", () => {
+  const acts = [];
+  for (let j = 2; j <= 22; j++) { // 3 semaines : conduite 4 h + pause + 4 h chaque jour, repos de 12 h
+    acts.push({ debut: jourT(j, 5), fin: jourT(j, 9), type: "conduite" }, { debut: jourT(j, 9), fin: jourT(j, 9, 45), type: "repos" }, { debut: jourT(j, 9, 45), fin: jourT(j, 14, 15), type: "conduite" }, { debut: jourT(j, 14, 15), fin: jourT(j + 1, 4), type: "repos" });
+  }
+  const a = N.tachyAnalyser(acts);
+  assert.ok(a.semaines.some((s) => s.conduiteH > 56)); assert.ok(a.infractions.some((i) => i.type === "conduite_semaine"));
+  assert.ok(a.infractions.some((i) => i.type === "repos_hebdo")); assert.ok(a.infractions.some((i) => i.type === "conduite_2semaines"));
+});
+
+test("alerte : dépassements récents du tachygraphe", () => {
+  N.S.chauffeurs = [{ id: "h", nom: "Karim", tachy: { infractions: [{ type: "conduite_semaine", gravite: "grave", date: jour(-3), texte: "x" }, { type: "x", gravite: "mineur", date: jour(-40), texte: "y" }] } }];
+  const a = N.alertes().find((x) => /tachygraphe/.test(x.texte)); assert.ok(a); assert.strictEqual(a.niveau, "danger"); assert.ok(/1 dépassement/.test(a.texte));
+});
+
+test("chaîne du froid : excursions au-delà de la tolérance, excursion en cours", () => {
+  const pts = [[0, 4], [600, 5], [1200, 9], [1800, 9.5], [2400, 10], [3000, 6], [3600, 5]]; // 8 °C max : hors plage de 1200 à 3000 s
+  const r = N.froidAnalyser(pts, 2, 8, { toleranceMin: 15 });
+  assert.strictEqual(r.conforme, false); assert.strictEqual(r.excursions.length, 1); assert.strictEqual(r.excursions[0].sens, "haut"); assert.strictEqual(r.excursions[0].extreme, 10); assert.strictEqual(r.excursions[0].dureeMin, 30);
+  assert.strictEqual(N.froidAnalyser([[0, 4], [600, 9], [1200, 5]], 2, 8).conforme, true); // 10 min : sous la tolérance (dégivrage, porte)
+  assert.strictEqual(N.froidAnalyser([], 2, 8), null);
+  const enCours = N.froidEnCours([[0, 5], [600, 9], [1200, 9.5], [1800, 10]], 2, 8, 1900);
+  assert.strictEqual(enCours.sens, "haut"); assert.ok(enCours.depuisMin >= 15); assert.strictEqual(N.froidEnCours([[0, 5], [600, 9]], 2, 8, 700), null); assert.strictEqual(N.froidEnCours([[0, 5]], 2, 8, 100), null);
+});
+
+test("balise du téléphone : fréquence, déplacement, précision", () => {
+  const a = { t: 1000, lat: 33, lon: -7 };
+  assert.strictEqual(N.baliseTelRetenir(null, { t: 1, lat: 33, lon: -7 }), true);
+  assert.strictEqual(N.baliseTelRetenir(a, { t: 1010, lat: 33.01, lon: -7 }), false); // trop tôt
+  assert.strictEqual(N.baliseTelRetenir(a, { t: 1030, lat: 33.01, lon: -7 }), true);   // 20 s et 1 km
+  assert.strictEqual(N.baliseTelRetenir(a, { t: 1030, lat: 33, lon: -7 }), false);      // immobile
+  assert.strictEqual(N.baliseTelRetenir(a, { t: 1100, lat: 33, lon: -7 }), true);       // 60 s : signe de vie
+  assert.strictEqual(N.baliseTelRetenir(a, { t: 2000, lat: 33.5, lon: -7, precision: 900 }), false);
+});
+
+test("GPS : température lue dans le CSV et réduite pour le stockage", () => {
+  const r = N.gpsParseCSV("Horodatage;Latitude;Longitude;Vitesse;Température (°C)\n10/11/2026 08:00:00;35,8;-5,5;60;4,5\n10/11/2026 08:02:00;35,81;-5,5;60;4,6\n10/11/2026 08:06:00;35,82;-5,5;60;");
+  assert.strictEqual(r.ok, true); assert.strictEqual(r.points[0][4], 4.5); assert.strictEqual(r.points[2][4], null);
+  const t = N.gpsTemperatures(r.points); assert.deepStrictEqual([...t.map((x) => x[1])], [4.5]); // une mesure toutes les 5 min : la 2ᵉ est trop proche, la 3ᵉ n'a pas de valeur
+  const tr = N.directDepuisTraccar([{ id: 1, uniqueId: "X" }], [{ deviceId: 1, fixTime: "2026-11-10T08:00:00Z", latitude: 35, longitude: -5, speed: 0, attributes: { temp1: 3.2 } }]);
+  assert.strictEqual(tr[0].temp, 3.2);
 });
 
 (async () => {

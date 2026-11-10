@@ -9,7 +9,7 @@
    ============================================================ */
 
 const CLE_DIRECT = "logistique-direct";
-const DIRECT_DEFAUT = { mode: "off", url: "", jeton: "", intervalle: 20, vitesseMax: 90, tuiles: true };
+const DIRECT_DEFAUT = { mode: "off", url: "", jeton: "", intervalle: 20, vitesseMax: 90, tuiles: true, ntfy: "" };
 const directCfg = () => { try { return { ...DIRECT_DEFAUT, ...JSON.parse(localStorage.getItem(CLE_DIRECT) || "{}") }; } catch { return { ...DIRECT_DEFAUT }; } };
 const directSauverCfg = (c) => { try { localStorage.setItem(CLE_DIRECT, JSON.stringify(c)); } catch { /* ignoré */ } };
 
@@ -93,9 +93,9 @@ function directIntegrer(res) {
   for (const p of res.derniere) { if (p.nom) D.noms.set(p.id, p.nom); D.derniere.set(p.id, p); }
   for (const [id, liste] of Object.entries(res.traces)) {
     const h = D.hist.get(id) || [], fin = h.length ? h[h.length - 1][0] : 0;
-    for (const p of liste) if (p.t > fin) h.push([p.t, p.lat, p.lon, p.v ?? null]);
-    if (!h.length) { const d = D.derniere.get(id); if (d) h.push([d.t, d.lat, d.lon, d.v ?? null]); }
-    const dernier = D.derniere.get(id); if (dernier && h.length && dernier.t > h[h.length - 1][0]) h.push([dernier.t, dernier.lat, dernier.lon, dernier.v ?? null]);
+    for (const p of liste) if (p.t > fin) h.push([p.t, p.lat, p.lon, p.v ?? null, p.temp ?? null]);
+    if (!h.length) { const d = D.derniere.get(id); if (d) h.push([d.t, d.lat, d.lon, d.v ?? null, d.temp ?? null]); }
+    const dernier = D.derniere.get(id); if (dernier && h.length && dernier.t > h[h.length - 1][0]) h.push([dernier.t, dernier.lat, dernier.lon, dernier.v ?? null, dernier.temp ?? null]);
     h.sort((a, b) => a[0] - b[0]); if (h.length > 4000) h.splice(0, h.length - 4000);
     D.hist.set(id, h);
   }
@@ -115,7 +115,10 @@ function directFlotte() {
     const cam = camionDeBalise(id), etat = directEtat(hist, now, zones), nom = libelleBalise(id);
     const voyage = voyageActif(cam?.id), eta = voyage ? etaDuVoyage(voyage) : null, alertes = directAlertes(nom, etat, hist, { vitesseMax: Number(c.vitesseMax) || 90 });
     if (eta && eta.retardMin !== null && eta.retardMin > 60 && etat.code !== "hors_ligne") alertes.push({ niveau: "warn", cle: `retard:${nom}`, texte: `${nom} — retard probable de ${String(Math.round(eta.retardMin / 6) / 10).replace(".", ",")} h sur ${voyage.ref} (arrivée estimée ${new Date(eta.arrivee * 1000).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" })})` });
-    res.push({ id, nom, camion: cam, voyage, hist, etat, eta, derniere: hist[hist.length - 1], conduite: conduiteCourante(hist, now), alertes });
+    const froid = voyage && Number.isFinite(voyage.tempMin) && Number.isFinite(voyage.tempMax) ? froidEnCours(hist.map((p) => [p[0], p[4]]), voyage.tempMin, voyage.tempMax, now) : null;
+    if (froid) alertes.push({ niveau: "danger", cle: `froid:${nom}`, texte: `${nom} — température ${String(froid.temp).replace(".", ",")} °C hors consigne (${voyage.tempMin} à ${voyage.tempMax} °C) depuis ${froid.depuisMin} min` });
+    const chauffeur = (voyage && parId(S.chauffeurs, voyage.chauffeurId)) || S.chauffeurs.find((c) => cam && c.camionId === cam.id) || null;
+    res.push({ id, nom, camion: cam, chauffeur, voyage, hist, etat, eta, derniere: hist[hist.length - 1], conduite: conduiteCourante(hist, now), alertes });
   }
   return res.sort((a, b) => (b.alertes.length - a.alertes.length) || a.nom.localeCompare(b.nom));
 }
@@ -134,11 +137,16 @@ function directMajVoyages(flotte) {
   }
   if (change) sauver();
 }
+/** Envoi gratuit sur le téléphone du bureau via ntfy (https://ntfy.sh/<sujet>) — le sujet est un secret : choisissez un nom long et imprévisible. */
+async function alerteExterne(a) {
+  const url = directCfg().ntfy; if (!/^https:\/\//.test(url || "")) return;
+  try { await fetch(url, { method: "POST", body: a.texte, headers: { Title: "Logistique Fret", Priority: a.niveau === "danger" ? "high" : "default", Tags: a.niveau === "danger" ? "rotating_light" : "warning" } }); } catch { /* ignoré */ }
+}
 function directNotifier(flotte) {
   let vues; try { vues = new Set(JSON.parse(sessionStorage.getItem("logistique-direct-vues") || "[]")); } catch { vues = new Set(); }
   for (const f of flotte) for (const a of f.alertes) {
     if (vues.has(a.cle)) continue; vues.add(a.cle);
-    toast(a.texte, a.niveau === "danger" ? "danger" : "warn");
+    toast(a.texte, a.niveau === "danger" ? "danger" : "warn"); alerteExterne(a);
     if (a.niveau === "danger" && typeof notifAfficher === "function" && notifConfig().actif && notifPermission() === "granted") notifAfficher({ titre: "Suivi en direct", corps: a.texte, tag: a.cle, onglet: "direct" });
   }
   // une alerte résolue peut se reproduire : on oublie celles qui ne sont plus actives
@@ -200,11 +208,12 @@ function directLive() {
       <div class="kpi"><div class="l">${ic("alert")} Alertes</div><div class="v">${alertes.length}</div><div class="s ${alertes.some((a) => a.niveau === "danger") ? "danger" : alertes.length ? "warn" : ""}">${compte("hors_ligne") ? `${compte("hors_ligne")} signal perdu` : alertes.length ? "à traiter" : "rien à signaler"}</div></div>
     </div>
     ${flotte.length ? `<div class="card" style="padding:0;overflow:hidden">${directCarte(flotte)}</div>` : `<div class="card">${vide("pin", D.maj ? "Aucune position reçue" : "En attente de positions", D.maj ? "Le serveur répond mais n'a encore reçu aucune position. Vérifiez que vos balises ou Traccar envoient bien vers le relais." : "Les camions apparaîtront ici dès la première réponse du serveur.")}</div>`}
-    ${alertes.length ? `<div class="section-title">Alertes</div><div class="card"><ul class="ctl">${alertes.map((a) => `<li class="${a.niveau}">${ic(a.niveau === "danger" ? "alert" : "clock")}<span>${esc(a.texte)}</span></li>`).join("")}</ul></div>` : ""}
+    ${flotte.some((f) => f.alertes.length) ? `<div class="section-title">Alertes</div><div class="card"><ul class="ctl">${flotte.flatMap((f) => f.alertes.map((a) => { const msg = `${a.texte} — merci de confirmer.`, wa = f.chauffeur ? lienWhatsApp(f.chauffeur.tel, msg) : "", sms = f.chauffeur ? lienSMS(f.chauffeur.tel, msg) : ""; return `<li class="${a.niveau}">${ic(a.niveau === "danger" ? "alert" : "clock")}<span>${esc(a.texte)}${wa ? ` <a class="btn ghost sm" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp ${esc(f.chauffeur.nom.split(" ")[0])}</a> <a class="btn ghost sm" href="${esc(sms)}">SMS</a>` : ""}</span></li>`; })).join("")}</ul></div>` : ""}
     <div class="section-title">Camions</div>
     ${flotte.map((f) => `<div class="card direct-camion ${f.id === directSelection ? "sel" : ""}" data-direct-camion="${esc(f.id)}">
       <div class="card-head"><h2>${esc(f.nom)}${f.camion ? "" : ` <span class="sub" style="display:inline">· balise ${esc(f.id)}</span>`}</h2>${badge(f.etat.libelle, f.etat.niveau)}</div>
       <p class="hint" style="margin:0 0 8px">${[f.derniere[3] != null ? `${Math.round(f.derniere[3])} km/h` : "", `dernière position il y a ${ilYa(now - f.derniere[0])}`, f.etat.zone && esc(f.etat.zone.nom), f.etat.code === "traversee" ? "silence normal en mer : le signal reviendra à l'arrivée" : "", f.etat.code === "arret" || f.etat.code === "arret_long" ? `arrêt de ${f.etat.arretMin} min` : "", f.voyage && `voyage ${esc(f.voyage.ref)} · ${esc(f.voyage.origine)} ⇄ ${esc(f.voyage.destination)}`].filter(Boolean).join(" · ")}</p>
+      ${f.derniere[4] != null ? `<p class="hint" style="margin:0 0 8px">${badge(`${String(f.derniere[4]).replace(".", ",")} °C`, f.alertes.some((a) => a.cle.startsWith("froid:")) ? "danger" : "ok")}${f.voyage && Number.isFinite(f.voyage.tempMin) ? ` consigne ${f.voyage.tempMin} à ${f.voyage.tempMax} °C` : ""}</p>` : ""}
       ${f.eta ? `<p class="hint" style="margin:0 0 8px"><strong>Arrivée estimée ${new Date(f.eta.arrivee * 1000).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</strong> (${new Date(f.eta.min * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} – ${new Date(f.eta.max * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}) · ${fmt(f.eta.kmRestants)} km restants${f.eta.retardMin !== null && f.eta.retardMin > 30 ? ` · ${badge("retard probable", f.eta.retardMin > 60 ? "danger" : "warn")}` : ""}</p>` : ""}
       <div class="row">${badge(`Conduite : ${dureeTxt(f.conduite.serieH)} sans pause de 45 min`, f.conduite.serieH >= 4.5 ? "danger" : f.conduite.serieH >= 4.25 ? "warn" : "neutral")}
         ${f.camion ? "" : btn("lier-balise", "Lier à un camion", { id: f.id, icone: "truck", cls: "btn ghost sm" })}</div></div>`).join("")}`;
@@ -218,6 +227,7 @@ const cfgFormulaire = (c) => `<details class="card" ${c.mode === "off" ? "open" 
     <label class="f full">Jeton de lecture<input name="jeton" type="password" value="${esc(c.jeton)}" autocomplete="off" placeholder="affiché au démarrage du relais"></label>
     <label class="f">Actualisation (secondes)<input name="intervalle" type="number" min="10" max="300" value="${esc(c.intervalle)}"></label>
     <label class="f">Vitesse maximale (km/h)<input name="vitesseMax" type="number" min="60" max="130" value="${esc(c.vitesseMax)}"></label>
+    <label class="f full">Alertes sur le téléphone du bureau (ntfy, gratuit) — adresse du sujet<input name="ntfy" value="${esc(c.ntfy || "")}" placeholder="https://ntfy.sh/mon-sujet-secret-long" autocomplete="off" inputmode="url"></label>
     <label class="check full"><input type="checkbox" name="tuiles" ${c.tuiles ? "checked" : ""}><span>Fond de carte OpenStreetMap (nécessite internet ; sinon fond uni)</span></label></div>
     <div class="row" style="justify-content:flex-end;margin-top:8px">${btn("tester", "Tester la connexion", { cls: "btn ghost" })}<button class="btn">Enregistrer</button></div></form>
   <p class="hint">Le jeton et l'adresse restent sur cet appareil et ne sont jamais inclus dans une sauvegarde. Le suivi en direct a besoin d'un serveur : voir <code>serveur/README.md</code> (relais ou Traccar). Les pages <strong>https</strong> exigent un serveur en <strong>https</strong>.</p></details>`;
@@ -234,7 +244,7 @@ VUES.direct = {
   apres() { if (directCfg().mode !== "off") directRafraichir(); },
   async soumettre(fid, v) {
     if (fid !== "f-direct") return false;
-    const c = { mode: v.mode, url: baseUrl(v.url), jeton: v.jeton, intervalle: Math.max(10, Math.min(300, Number(v.intervalle) || 20)), vitesseMax: Number(v.vitesseMax) || 90, tuiles: !!v.tuiles };
+    const c = { mode: v.mode, url: baseUrl(v.url), jeton: v.jeton, intervalle: Math.max(10, Math.min(300, Number(v.intervalle) || 20)), vitesseMax: Number(v.vitesseMax) || 90, tuiles: !!v.tuiles, ntfy: /^https:\/\//.test(v.ntfy || "") ? v.ntfy.trim() : "" };
     if (c.mode === "relais" || c.mode === "traccar") { if (!/^https?:\/\//.test(c.url)) { toast("Adresse du serveur invalide (https://…).", "danger"); return true; } if (location.protocol === "https:" && /^http:\/\/(?!localhost|127\.0\.0\.1)/.test(c.url)) { toast("Une page https ne peut pas appeler un serveur http : utilisez une adresse https.", "danger"); return true; } }
     directSauverCfg(c); directDonnees.hist.clear(); directDonnees.derniere.clear(); directDonnees.maj = null; directDonnees.erreur = "";
     directDemarrer(); toast("Réglages enregistrés"); afficher("direct"); return true;

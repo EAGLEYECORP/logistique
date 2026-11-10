@@ -45,7 +45,7 @@ Dans l'application : Suivi en direct → source « Relais », adresse `http://lo
 | OsmAnd / Traccar Client | `GET /osmand?token=<jeton>&id=...&lat=...&lon=...&timestamp=...&speed=...` | `&unite=kmh` (défaut), `noeuds` ou `ms` pour la vitesse |
 | Renvoi Traccar | `POST /traccar?token=<jeton>` | corps JSON `{ position, device }`, vitesse en nœuds |
 
-Champs JSON reconnus : `id` (ou `deviceId`, `imei`), `lat`/`lon` (ou `latitude`/`longitude`, `lng`), `t` (ou `timestamp`, `time`, `fixTime` : secondes, millisecondes ou date ISO), `v` (ou `speed`, `vitesse`, km/h), `cap`. Les positions dans le futur (> 10 min), de plus de 7 jours, hors plage ou en double sont ignorées.
+Température (chaîne du froid) : `temp`, `temperature` ou `temp1` en °C (Traccar : attribut `temp1`). Champs JSON reconnus : `id` (ou `deviceId`, `imei`), `lat`/`lon` (ou `latitude`/`longitude`, `lng`), `t` (ou `timestamp`, `time`, `fixTime` : secondes, millisecondes ou date ISO), `v` (ou `speed`, `vitesse`, km/h), `cap`. Les positions dans le futur (> 10 min), de plus de 7 jours, hors plage ou en double sont ignorées.
 
 ### Brancher Traccar sur le relais
 
@@ -64,6 +64,14 @@ Dans Traccar, créez un **jeton d'API** (profil utilisateur) et autorisez l'orig
 ## Lire (application)
 
 `GET /api/derniere` (dernière position de chaque balise), `GET /api/trace?id=…&depuis=<secondes>&max=…`, `GET /api/etat`, `GET /sante`. Jeton de lecture requis, sauf `/sante`.
+
+## Téléphone du chauffeur comme balise de secours
+
+Mode chauffeur → « Partager ma position » : le téléphone envoie sa position à `POST /api/positions` avec le **jeton d'écriture** (saisi une fois par le gestionnaire dans les réglages de la carte). Liez l'identifiant envoyé (par défaut `TEL-<chauffeur>`) au camion dans sa fiche (champ « balise »). Le navigateur ne localise plus quand l'écran s'éteint : gardez-le allumé (l'application le demande).
+
+## Alertes sur le téléphone du bureau
+
+Suivi en direct → Réglages de la source → « Alertes sur le téléphone du bureau » : adresse d'un sujet [ntfy](https://ntfy.sh) (`https://ntfy.sh/<sujet-long-et-secret>`). Installez l'application ntfy sur le téléphone du bureau et abonnez-vous au sujet. Chaque nouvelle alerte du suivi (signal perdu, conduite continue, température, retard…) y est envoyée. Le sujet fait office de mot de passe : choisissez un nom long et imprévisible, ou hébergez votre propre serveur ntfy.
 
 ## Lien de suivi pour vos clients
 

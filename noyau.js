@@ -20,6 +20,7 @@ const PARAMS_DEFAUT = {
   conduiteAvantPause: 4.5, // heures avant une pause
   dureePause: 0.75,        // heures (45 min)
   seuilConso: 15,          // % au-dessus de la moyenne = anomalie
+  peagesEu: { DE: 0.35, AT: 0.48 }, // €/km par pays (poids lourds) — France, Espagne, Italie… à renseigner d'après les grilles officielles
   tauxEUR: 10.8,           // MAD pour 1 EUR — à mettre à jour
   tvaDefaut: 14,           // % — à vérifier avec votre comptable (export, transport international…)
   delaiPaiement: 30,       // jours, si le client n'en a pas
@@ -310,6 +311,10 @@ function alertes() {
     if (e.depasse) ajouter("danger", "international", `${ch.nom} — ${e.utilise} jours Schengen sur 180 (limite 90 dépassée)`, "docs", `schengen:${ch.id}`);
     else if (e.dedans && e.restant <= 10) ajouter(e.restant <= 3 ? "danger" : "warn", "international", `${ch.nom} — ${e.restant} jour(s) Schengen restant(s) : prévoir la sortie`, "docs", `schengen:${ch.id}`);
   }
+  for (const ch of S.chauffeurs) {
+    const recentes = (ch.tachy?.infractions || []).filter((i) => i.date && joursAvant(i.date) >= -14);
+    if (recentes.length) ajouter(recentes.some((i) => i.gravite === "grave") ? "danger" : "warn", "chauffeurs", `${ch.nom} — ${recentes.length} dépassement(s) des temps de conduite et de repos ces 14 derniers jours (tachygraphe)`, "repos", `tachy:${ch.id}`);
+  }
   for (const v of S.voyages || []) {
     if (!["prevu", "en_cours"].includes(v.statut)) continue;
     const jd = joursAvant(v.dateDepart);
@@ -408,12 +413,26 @@ function peagesMarocVoyage(v) {
   }
   return num(v.peagesMad);
 }
+/** « ES 950, FR 880 » → { ES: 950, FR: 880 } (codes pays sur 2 lettres, kilomètres). */
+function lireKmPays(texte) {
+  const o = {};
+  for (const m of String(texte || "").toUpperCase().matchAll(/\b([A-Z]{2})\b\s*[:=]?\s*(\d+(?:[.,]\d+)?)/g)) o[m[1]] = (o[m[1]] || 0) + num(m[2]);
+  return o;
+}
+/** Péages d'Europe estimés : kilomètres par pays × tarif €/km du pays. Pays sans tarif renseigné : listés, jamais devinés. */
+function peagesEuropeVoyage(v) {
+  const km = typeof v.kmPays === "string" ? lireKmPays(v.kmPays) : v.kmPays || {}, tarifs = S.params.peagesEu || {};
+  const manquants = [], detail = [];
+  let eur = 0;
+  for (const [pays, k] of Object.entries(km)) { const t = num(tarifs[pays]); if (t > 0) { detail.push({ pays, km: k, tarif: t, eur: k * t }); eur += k * t; } else manquants.push(pays); }
+  return { eur: Math.round(eur * 100) / 100, detail, manquants };
+}
 /** Coût complet d'un voyage, en MAD. */
 function coutVoyage(v) {
   const taux = S.params.tauxEUR;
   const trav = (v.traversees || []).reduce((s, t) => s + coutTraversee(t), 0) * taux;
   const parts = {
-    peagesMaroc: peagesMarocVoyage(v), peagesEurope: num(v.peagesEur) * taux, traversees: trav, carburant: num(v.carburantMad),
+    peagesMaroc: peagesMarocVoyage(v), peagesEurope: (v.kmPays && peagesEuropeVoyage(v).eur > 0 ? peagesEuropeVoyage(v).eur : num(v.peagesEur)) * taux, traversees: trav, carburant: num(v.carburantMad),
     fraisRoute: num(v.fraisRouteMad), douane: num(v.douaneMad), autres: num(v.autresMad),
   };
   const total = Object.values(parts).reduce((a, b) => a + b, 0);

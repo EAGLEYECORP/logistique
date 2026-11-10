@@ -39,10 +39,47 @@ function enregistrerTrace(voyageId) {
   const t = {
     id: uid(), nom: gpsEnCours.nom.replace(/\.[^.]+$/, ""), voyageId: voyageId || "", camionId: v?.camionId || "", source: lu.format, importe: new Date().toISOString(), ecartes, rejetes: lu.rejetes || 0,
     nbPoints: an.nbPoints, debut: an.debut, fin: an.fin, km: Math.round(an.km * 10) / 10, dureeH: an.dureeH, vitMoyKmh: an.vitMoyKmh, conduiteH: an.conduiteH, conduiteMaxSansPauseH: an.conduiteMaxSansPauseH,
-    arrets: an.arrets.slice(0, 40), trous: an.trous.slice(0, 40), visites: an.visites, traversees: an.traversees, jalons: an.jalons, pts: gpsReduire(points),
+    arrets: an.arrets.slice(0, 40), trous: an.trous.slice(0, 40), visites: an.visites, traversees: an.traversees, jalons: an.jalons, pts: gpsSimplifier(points), ralentis: gpsRalentissements(points).slice(0, 80),
   };
   S.traces.unshift(t); tracesOuvertes.add(t.id); sauver();
   return t;
+}
+
+/** Péage mesuré : passages devant les gares localisées, puis sections de la grille ADM selon la classe du camion. */
+function peagesDeTrace(t) {
+  const v = t.voyageId && parId(S.voyages, t.voyageId);
+  const classe = classeADM(parId(S.camions, v?.camionId || t.camionId)) || 3;
+  const passages = gpsPassagesGares(t.pts, S.gares);
+  const trajets = gpsTrajetsPeage(passages, classe);
+  return { classe, passages, trajets, total: trajets.reduce((s, x) => s + x.mad, 0) };
+}
+const NIV_RAPPROCHE = { ok: ["Conforme", "ok"], ecart: ["Écart de montant", "warn"], non_facture: ["Non facturé", "danger"], sans_passage: ["Facturé sans passage GPS", "warn"], liaison: ["Liaison (aucun tarif)", "neutral"] };
+function sectionPeagesTrace(t, v) {
+  const p = peagesDeTrace(t);
+  const lie = S.gares.length >= 2;
+  const rel = parId(S.releves, t.releveId);
+  const rap = rel && lie ? gpsRapprocher(p.trajets, rel.lignes, { debut: t.debut, fin: t.fin }) : null;
+  const rs = rap && gpsResumeRapprochement(rap);
+  return `<div class="section-title">Péages mesurés par GPS</div>
+    ${!lie ? `<p class="hint" style="margin-top:0">Aucune gare de péage n'est encore localisée (${S.gares.length}/92). ADM ne publie pas leurs coordonnées : relevez-les une fois sur cette trace, elles serviront pour tous vos voyages.</p>`
+      : p.trajets.length ? `<div class="table-wrap"><table class="plain"><tbody>${p.trajets.map((x) => `<tr><td>${esc(x.de)} → ${esc(x.vers)}</td><td>${hFr(x.tVers)}</td><td class="r num">${x.type === "section" ? x.mad + " MAD" : x.type === "liaison" ? badge("liaison", "neutral") : badge("section absente de la grille", "danger")}</td></tr>`).join("")}
+        <tr><td colspan="2"><strong>Total mesuré · classe ${p.classe}</strong></td><td class="r num"><strong>${p.total} MAD</strong></td></tr></tbody></table></div>`
+      : `<p class="hint" style="margin-top:0">Aucun passage devant une gare localisée sur cette trace (${S.gares.length} gare(s) connue(s)).</p>`}
+    <div class="row">
+      ${t.ralentis?.length ? btn("releve-gares", `Relever les gares (${t.ralentis.length} candidats)`, { id: t.id, icone: "pin", cls: "btn ghost sm" }) : ""}
+      ${v && lie && p.total ? btn("peage-voyage", v.peagesReelMad ? "Mettre à jour le péage du voyage" : "Utiliser ce péage dans le voyage", { id: t.id, icone: "check", cls: "btn sm" }) : ""}
+      ${v?.peagesReelMad ? btn("peage-type", "Revenir au trajet type", { id: t.id, cls: "btn ghost sm" }) : ""}
+    </div>
+    ${lie && S.releves.length ? `<div class="form-grid" style="margin-top:10px"><label class="f">Comparer au relevé de péage (Jawaz Pro)<select data-trace-releve="${t.id}"><option value="">— Aucun —</option>${S.releves.map((r) => `<option value="${r.id}" ${r.id === t.releveId ? "selected" : ""}>${esc(r.nom)}</option>`).join("")}</select></label></div>` : ""}
+    ${rap ? `<div class="kpis" style="margin-top:10px">
+        <div class="kpi"><div class="l">Conformes</div><div class="v">${rs.ok}</div></div>
+        <div class="kpi"><div class="l">Écarts de montant</div><div class="v">${rs.ecart}</div></div>
+        <div class="kpi"><div class="l">Non facturés</div><div class="v">${rs.nonFacture}</div><div class="s ${rs.manque ? "danger" : ""}">${rs.manque} MAD</div></div>
+        <div class="kpi"><div class="l">Sans passage GPS</div><div class="v">${rs.sansPassage}</div><div class="s ${rs.surplus ? "warn" : ""}">${rs.surplus} MAD</div></div></div>
+      ${rap.filter((x) => x.statut !== "liaison").map((x) => { const tr = x.trajet, l = x.ligne; const [lib, niv] = NIV_RAPPROCHE[x.statut];
+        return `<div class="trav"><div>${tr ? `<strong>${esc(tr.de)} → ${esc(tr.vers)}</strong><span class="sub">GPS ${hFr(tr.tVers)} · ${tr.mad} MAD</span>` : `<strong>${esc(l.gareB)}</strong><span class="sub">Facturé ${hFr(l.t)}${l.ref ? " · " + esc(l.ref) : ""}</span>`}</div>
+          <div class="r">${badge(lib, niv)}<span class="num">${l ? l.mad + " MAD" : "—"}${x.statut === "ecart" ? ` (${x.difference > 0 ? "+" : ""}${x.difference})` : ""}</span></div></div>`; }).join("")}
+      <p class="hint">« Non facturé » : le camion est passé mais aucune ligne ne correspond (Pass non débité, gare mal localisée ?). « Facturé sans passage GPS » : une ligne du relevé n'a pas de passage correspondant pendant cette trace (Pass utilisé sur un autre véhicule, trou de signal ?). À vérifier avant toute réclamation.</p>` : ""}`;
 }
 
 /** Applique les jalons et les dates de traversée de la trace au voyage (sans écraser ce qui est déjà saisi). */
@@ -104,6 +141,7 @@ function carteTrace(t) {
       ${t.visites.length ? `<div class="section-title">Passages dans les zones</div><div class="table-wrap"><table class="plain"><tbody>${t.visites.map((x) => `<tr><td>${esc(x.zone)}</td><td>${hFr(x.entree)}</td><td class="r">${x.sortie > x.entree ? dureeTxt((x.sortie - x.entree) / 3600) : "—"}</td></tr>`).join("")}</tbody></table></div>` : ""}
       ${t.arrets.length ? `<div class="section-title">Arrêts de plus de 20 min</div><div class="table-wrap"><table class="plain"><tbody>${t.arrets.map((x) => `<tr><td>${hFr(x.debut)}</td><td>${x.zone ? esc(x.zone) : `<span class="sub">${x.lat.toFixed(3)}, ${x.lon.toFixed(3)}</span>`}</td><td class="r">${dureeTxt(x.dureeMin / 60)}</td></tr>`).join("")}</tbody></table></div>` : ""}
       ${t.trous.length ? `<div class="section-title">Trous de signal (plus de 30 min)</div><div class="table-wrap"><table class="plain"><tbody>${t.trous.map((x) => `<tr><td>${hFr(x.debut)}</td><td>${x.de || x.vers ? `${esc(x.de || "?")} → ${esc(x.vers || "?")}` : ""}</td><td class="r">${dureeTxt(x.dureeMin / 60)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      ${sectionPeagesTrace(t, v)}
       <div class="section-title">Voyage</div>
       <div class="form-grid"><label class="f">Rattacher à un voyage<select data-trace-voyage="${t.id}"><option value="">— Aucun —</option>${S.voyages.map((x) => `<option value="${x.id}" ${x.id === t.voyageId ? "selected" : ""}>${esc(x.ref)} · ${esc(x.origine)} ⇄ ${esc(x.destination)}</option>`).join("")}</select></label></div>
       <div class="row">
@@ -170,6 +208,12 @@ VUES.gps = {
       if (ch_.some((s) => s.entree === sj.entree)) return toast("Ce séjour est déjà enregistré.", "warn");
       ch_.push(sj); sauver(); toast(`Séjour ajouté pour ${ch.nom}`); rafraichir();
     }
+    if (act === "releve-gares" && t) return ouvrirReleveGares(id);
+    if (act === "peage-voyage" && t) {
+      const v = parId(S.voyages, t.voyageId); if (!v) return;
+      v.peagesReelMad = peagesDeTrace(t).total; sauver(); toast(`Péage du voyage ${v.ref} : ${v.peagesReelMad} MAD (mesuré)`); rafraichir();
+    }
+    if (act === "peage-type" && t) { const v = parId(S.voyages, t.voyageId); if (v) { delete v.peagesReelMad; sauver(); toast("Retour au trajet type"); rafraichir(); } }
     if (act === "suppr-trace" && t && (await confirmer(`Supprimer la trace « ${t.nom} » ?`, "Les étapes déjà appliquées au voyage sont conservées."))) { S.traces = S.traces.filter((x) => x.id !== id); sauver(); rafraichir(); }
     if (act === "zone-ajouter") {
       const f = await formulaire("Nouvelle zone", champsZone(), { valider: "Ajouter" });
@@ -190,6 +234,7 @@ document.addEventListener("change", async (e) => {
   if (e.target.id === "gps-fuseau" && gpsEnCours) {
     const off = Number(e.target.value); preparerImport(gpsEnCours.texte, gpsEnCours.nom, off); return rafraichir();
   }
+  if (e.target.dataset?.traceReleve !== undefined) { const t = parId(S.traces, e.target.dataset.traceReleve); if (t) { t.releveId = e.target.value; sauver(); rafraichir(); } return; }
   if (e.target.dataset?.traceVoyage !== undefined) {
     const t = parId(S.traces, e.target.dataset.traceVoyage); if (!t) return;
     t.voyageId = e.target.value; t.camionId = parId(S.voyages, t.voyageId)?.camionId || ""; sauver(); return rafraichir();

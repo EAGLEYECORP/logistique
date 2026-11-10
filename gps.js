@@ -255,7 +255,7 @@ function gpsSejourSchengen(an) {
 }
 
 /** Trace → dessin SVG hors ligne (projection simple). Renvoie le balisage SVG. */
-function gpsSVG(pts, zones = [], visites = [], { largeur = 640, hauteur = 320 } = {}) {
+function gpsSVG(pts, zones = [], visites = [], { largeur = 640, hauteur = 320, marques = [] } = {}) {
   if (pts.length < 2) return "";
   const lats = pts.map((p) => p[1]), lons = pts.map((p) => p[2]);
   const latMin = Math.min(...lats), latMax = Math.max(...lats), lonMin = Math.min(...lons), lonMax = Math.max(...lons);
@@ -272,5 +272,203 @@ function gpsSVG(pts, zones = [], visites = [], { largeur = 640, hauteur = 320 } 
   }).join("");
   const d = pts.map((p, i) => `${i ? "L" : "M"}${X(p[2]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join("");
   const a = pts[0], b = pts[pts.length - 1];
-  return `<svg viewBox="0 0 ${largeur} ${hauteur}" class="gps-carte" role="img" aria-label="Tracé du voyage">${cercles}<path d="${d}" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${X(a[2]).toFixed(1)}" cy="${Y(a[1]).toFixed(1)}" r="5" fill="var(--ok, #16a34a)"/><circle cx="${X(b[2]).toFixed(1)}" cy="${Y(b[1]).toFixed(1)}" r="5" fill="var(--danger, #dc2626)"/></svg>`;
+  const reperes = marques.map((m) => `<g><circle cx="${X(m.lon).toFixed(1)}" cy="${Y(m.lat).toFixed(1)}" r="9" fill="var(--warn, #d97706)" stroke="#fff" stroke-width="1.5"/><text x="${X(m.lon).toFixed(1)}" y="${(Y(m.lat) + 3.5).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">${String(m.label).replace(/[&<>"]/g, "")}</text></g>`).join("");
+  return `<svg viewBox="0 0 ${largeur} ${hauteur}" class="gps-carte" role="img" aria-label="Tracé du voyage">${cercles}<path d="${d}" fill="none" stroke="var(--primary)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${X(a[2]).toFixed(1)}" cy="${Y(a[1]).toFixed(1)}" r="5" fill="var(--ok, #16a34a)"/><circle cx="${X(b[2]).toFixed(1)}" cy="${Y(b[1]).toFixed(1)}" r="5" fill="var(--danger, #dc2626)"/>${reperes}</svg>`;
+}
+
+/* ============================================================
+   Phase 2 : gares de péage, péage mesuré par GPS, rapprochement avec le relevé Jawaz Pro
+   ADM ne publie pas les coordonnées de ses gares : elles sont relevées sur vos propres traces.
+   ============================================================ */
+
+/** Simplification d'une trace (Douglas-Peucker, tolérance en mètres) en conservant l'heure : [[t, lat, lon], …]. */
+function gpsSimplifier(points, tolM = 30, max = 2500) {
+  const n = points.length;
+  if (n <= 2) return points.map((p) => [p[0], Math.round(p[1] * 1e5) / 1e5, Math.round(p[2] * 1e5) / 1e5]);
+  const lat0 = points[0][1], kx = Math.cos(gpsRad(lat0)) * 111320, ky = 111320;
+  const X = points.map((p) => p[2] * kx), Y = points.map((p) => p[1] * ky);
+  const garde = new Uint8Array(n); garde[0] = garde[n - 1] = 1;
+  const pile = [[0, n - 1]];
+  while (pile.length) {
+    const [a, b] = pile.pop();
+    let dmax = 0, imax = -1;
+    const dx = X[b] - X[a], dy = Y[b] - Y[a], L2 = dx * dx + dy * dy;
+    for (let i = a + 1; i < b; i++) {
+      let d;
+      if (L2 === 0) d = Math.hypot(X[i] - X[a], Y[i] - Y[a]);
+      else { const t = Math.max(0, Math.min(1, ((X[i] - X[a]) * dx + (Y[i] - Y[a]) * dy) / L2)); d = Math.hypot(X[i] - (X[a] + t * dx), Y[i] - (Y[a] + t * dy)); }
+      if (d > dmax) { dmax = d; imax = i; }
+    }
+    if (imax > 0 && dmax > tolM) { garde[imax] = 1; pile.push([a, imax], [imax, b]); }
+  }
+  const res = [];
+  for (let i = 0; i < n; i++) if (garde[i]) res.push(points[i]);
+  return gpsReduire(res, max);
+}
+
+/** Ralentissements isolés pendant une conduite rapide : candidats « gare de péage ». [{ t, lat, lon, vmin, dureeS }] */
+function gpsRalentissements(points, zones = []) {
+  const n = points.length, v = new Array(n).fill(0), r = [];
+  for (let i = 0; i < n; i++) {
+    if (points[i][3] != null) v[i] = points[i][3];
+    else if (i > 0 && points[i][0] > points[i - 1][0]) v[i] = (gpsDistance(points[i - 1], points[i]) / (points[i][0] - points[i - 1][0])) * 3.6;
+  }
+  let i = 0;
+  while (i < n) {
+    if (v[i] >= 40) { i++; continue; }
+    let j = i; while (j + 1 < n && v[j + 1] < 40) j++;
+    const debut = points[i][0], fin = points[j][0];
+    const avant = []; for (let k = i - 1; k >= 0 && debut - points[k][0] <= 600; k--) avant.push(v[k]);
+    const apres = []; for (let k = j + 1; k < n && points[k][0] - fin <= 600; k++) apres.push(v[k]);
+    if (Math.max(0, ...avant) >= 60 && Math.max(0, ...apres) >= 60 && fin - debut <= 480) {
+      let m = i; for (let k = i; k <= j; k++) if (v[k] < v[m]) m = k;
+      const z = zones.length ? gpsZoneDe(points[m], zones) : null;
+      if (!z) r.push({ t: points[m][0], lat: points[m][1], lon: points[m][2], vmin: Math.round(v[m]), dureeS: Math.max(0, fin - debut) });
+    }
+    i = j + 1;
+  }
+  return r;
+}
+
+/** Distance (m) d'un point à un segment AB et position du point le plus proche (0..1). */
+function gpsDistanceSegment(p, a, b) {
+  const kx = Math.cos(gpsRad(p[0])) * 111320, ky = 111320;
+  const ax = (a[1] - p[1]) * kx, ay = (a[0] - p[0]) * ky, bx = (b[1] - p[1]) * kx, by = (b[0] - p[0]) * ky;
+  const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+  const t = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+  return { d: Math.hypot(ax + t * dx, ay + t * dy), t };
+}
+
+/** Passages devant les gares localisées. gares : [{ nom, lat, lon, rayon }]. Renvoie [{ gare, t, d }] triés par heure. */
+function gpsPassagesGares(points, gares) {
+  const res = [];
+  for (const g of gares) {
+    const rayon = g.rayon || 300, trouves = [];
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      if (b[0] - a[0] > 900) continue; // trou de signal : on ne devine rien
+      if (Math.abs(a[1] - g.lat) > 0.05 && Math.abs(b[1] - g.lat) > 0.05) continue;
+      const { d, t } = gpsDistanceSegment([g.lat, g.lon], [a[1], a[2]], [b[1], b[2]]);
+      if (d <= rayon) trouves.push({ gare: g.nom, t: Math.round(a[0] + t * (b[0] - a[0])), d: Math.round(d) });
+    }
+    for (const x of trouves) { const y = res.find((z) => z.gare === g.nom && Math.abs(z.t - x.t) <= 600); if (!y) res.push(x); else if (x.d < y.d) Object.assign(y, x); }
+  }
+  return res.sort((a, b) => a.t - b.t);
+}
+
+/**
+ * Péage mesuré : chaque couple de passages successifs est une section de la grille ADM (le péage se règle à la gare d'arrivée).
+ * Renvoie [{ de, vers, tDe, tVers, mad, type }] ; type : "section" | "liaison" (gares voisines sans tarif dans la grille) | "absente".
+ */
+function gpsTrajetsPeage(passages, classe = 3, maxH = 6) {
+  const res = [];
+  for (let i = 1; i < passages.length; i++) {
+    const a = passages[i - 1], b = passages[i];
+    if (b.t - a.t > maxH * 3600) continue;
+    const mad = admSection(a.gare, b.gare, classe);
+    if (mad !== null) res.push({ de: a.gare, vers: b.gare, tDe: a.t, tVers: b.t, mad, type: "section" });
+    else res.push({ de: a.gare, vers: b.gare, tDe: a.t, tVers: b.t, mad: 0, type: b.t - a.t <= 1800 ? "liaison" : "absente" });
+  }
+  return res;
+}
+
+/* ---------- relevé de péage (export Jawaz Pro ou autre) ---------- */
+const admGares = () => [...new Set(ADM_GRILLE.flatMap((r) => [r[0], r[1]]))].sort();
+const gareNorm = (s) => gpsNorm(s).replace(/\b(gare|de|du|d|peage|barriere|station|echangeur|ech|autoroute|sortie|entree)\b/g, " ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+/** Nom ADM correspondant à un libellé libre (exact, sinon unique correspondance partielle). */
+function admGareProche(nom) {
+  const n = gareNorm(nom); if (!n) return null;
+  const noms = admGares();
+  const exact = noms.find((g) => gareNorm(g) === n); if (exact) return exact;
+  const part = noms.filter((g) => { const m = gareNorm(g); return m.includes(n) || n.includes(m); });
+  return part.length === 1 ? part[0] : null;
+}
+const gareIdem = (a, b) => { const x = admGareProche(a) || gareNorm(a), y = admGareProche(b) || gareNorm(b); return !!x && x === y; };
+
+const RELEVE_COLONNES = {
+  temps: ["date et heure", "date/heure", "horodatage", "datetime", "date heure", "date passage", "date de passage", "heure passage", "date operation", "date", "heure"],
+  gareB: ["gare de sortie", "gare sortie", "sortie", "gare arrivee", "arrivee", "gare", "station", "peage", "lieu"],
+  gareA: ["gare d'entree", "gare entree", "entree", "gare depart", "depart", "origine"],
+  montant: ["montant", "tarif", "prix", "debit", "total", "amount", "cout"],
+  ref: ["n pass", "numero pass", "pass", "tag", "badge", "plaque", "immatriculation", "vehicule"],
+};
+function releveDetecter(entetes) {
+  const h = entetes.map(gpsNorm);
+  const trouver = (cands, exclure = () => false) => {
+    for (const c of cands) { const i = h.findIndex((x, k) => x === c && !exclure(x, k)); if (i >= 0) return i; }
+    for (const c of cands) { if (c.length < 4) continue; const i = h.findIndex((x, k) => x.includes(c) && !exclure(x, k)); if (i >= 0) return i; }
+    return -1;
+  };
+  const estEntree = (x) => /entree|depart|origine/.test(x);
+  const col = { temps: trouver(RELEVE_COLONNES.temps), gareB: trouver(RELEVE_COLONNES.gareB, estEntree), gareA: trouver(RELEVE_COLONNES.gareA), montant: trouver(RELEVE_COLONNES.montant), ref: trouver(RELEVE_COLONNES.ref), date: -1 };
+  const iDate = h.findIndex((x) => x === "date" || x === "jour"), iHeure = h.findIndex((x) => x === "heure" || x === "time" || x === "hour");
+  if (iDate >= 0 && iHeure >= 0 && iDate !== iHeure) { col.temps = iHeure; col.date = iDate; }
+  if (col.gareA === col.gareB) col.gareA = -1;
+  return col;
+}
+/** Lit un relevé de péages CSV. Lignes : { t, gareA, gareB, mad, ref }. */
+function releveParse(texte, { offH = 0, colonnes = null } = {}) {
+  const lignes = gpsLignesCSV(texte);
+  if (lignes.length < 2) return { ok: false, lignes: [], entetes: lignes[0] || [], colonnes: null, rejetes: 0, erreur: "Fichier vide ou sans ligne de données." };
+  const entetes = lignes[0], col = colonnes || releveDetecter(entetes);
+  if (col.temps < 0 || col.gareB < 0 || col.montant < 0) return { ok: false, lignes: [], entetes, colonnes: col, rejetes: 0, erreur: "Colonnes introuvables." };
+  const res = []; let rejetes = 0;
+  for (const l of lignes.slice(1)) {
+    const brut = col.date >= 0 && col.date !== col.temps ? `${l[col.date]} ${l[col.temps]}` : l[col.temps];
+    const t = gpsTemps(brut, offH), mad = gpsNombre(l[col.montant]);
+    if (!Number.isFinite(t) || !Number.isFinite(mad)) { rejetes++; continue; }
+    res.push({ t, gareA: col.gareA >= 0 ? l[col.gareA] : "", gareB: l[col.gareB], mad, ref: col.ref >= 0 ? l[col.ref] : "" });
+  }
+  return { ok: res.length > 0, lignes: res, entetes, colonnes: col, rejetes, erreur: res.length ? "" : "Aucune ligne exploitable (date, gare ou montant illisible)." };
+}
+
+/**
+ * Compare les péages mesurés par GPS au relevé facturé.
+ * Statuts : ok · ecart (montant différent) · non_facture (passage GPS sans ligne) · sans_passage (ligne facturée sans passage GPS : Pass prêté ? autre camion ?).
+ */
+function gpsRapprocher(trajets, lignes, { fenetreMin = 30, debut = null, fin = null } = {}) {
+  const pris = new Set(), res = [];
+  for (const tr of trajets) {
+    if (tr.type !== "section") { res.push({ statut: "liaison", trajet: tr }); continue; }
+    let meilleur = -1, ecart = Infinity;
+    lignes.forEach((l, i) => { if (pris.has(i) || !gareIdem(l.gareB, tr.vers)) return; const d = Math.abs(l.t - tr.tVers); if (d <= fenetreMin * 60 && d < ecart) { ecart = d; meilleur = i; } });
+    if (meilleur < 0) { res.push({ statut: "non_facture", trajet: tr }); continue; }
+    pris.add(meilleur);
+    const l = lignes[meilleur];
+    res.push({ statut: Math.abs(l.mad - tr.mad) <= 1 ? "ok" : "ecart", trajet: tr, ligne: l, difference: Math.round((l.mad - tr.mad) * 100) / 100 });
+  }
+  lignes.forEach((l, i) => { if (!pris.has(i) && (debut === null || (l.t >= debut - 3600 && l.t <= fin + 3600))) res.push({ statut: "sans_passage", ligne: l }); });
+  return res;
+}
+const gpsResumeRapprochement = (r) => ({ ok: r.filter((x) => x.statut === "ok").length, ecart: r.filter((x) => x.statut === "ecart").length, nonFacture: r.filter((x) => x.statut === "non_facture").length, sansPassage: r.filter((x) => x.statut === "sans_passage").length,
+  manque: Math.round(r.filter((x) => x.statut === "non_facture").reduce((s, x) => s + x.trajet.mad, 0) * 100) / 100, surplus: Math.round(r.filter((x) => x.statut === "sans_passage").reduce((s, x) => s + x.ligne.mad, 0) * 100) / 100 });
+
+/** Requête à coller dans overpass-turbo.eu (puis Exporter → GeoJSON) pour obtenir les gares de péage du Maroc. */
+const OSM_REQUETE = `[out:json][timeout:90];
+area["ISO3166-1"="MA"]->.a;
+(
+  node["barrier"="toll_booth"](area.a);
+  way["barrier"="toll_booth"](area.a);
+  node["highway"="toll_gantry"](area.a);
+);
+out center tags;`;
+
+/** Lit un export OpenStreetMap (GeoJSON d'overpass-turbo, ou JSON d'Overpass) : [{ nom, lat, lon, osm }]. */
+function osmGaresParse(texte) {
+  let j; try { j = JSON.parse(texte); } catch { return { ok: false, gares: [], erreur: "Ce fichier n'est pas un JSON valide." }; }
+  const centre = (g) => {
+    if (!g) return null;
+    if (g.type === "Point") return [g.coordinates[1], g.coordinates[0]];
+    const pts = []; const walk = (c) => { if (typeof c[0] === "number") pts.push(c); else c.forEach(walk); }; walk(g.coordinates || []);
+    return pts.length ? [pts.reduce((s, p) => s + p[1], 0) / pts.length, pts.reduce((s, p) => s + p[0], 0) / pts.length] : null;
+  };
+  const brut = [];
+  if (Array.isArray(j.features)) for (const f of j.features) { const c = centre(f.geometry); if (c) brut.push({ lat: c[0], lon: c[1], tags: f.properties?.tags || f.properties || {}, osm: f.id || f.properties?.["@id"] || "" }); }
+  else if (Array.isArray(j.elements)) for (const e of j.elements) { const lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon; if (Number.isFinite(lat) && Number.isFinite(lon)) brut.push({ lat, lon, tags: e.tags || {}, osm: `${e.type}/${e.id}` }); }
+  else return { ok: false, gares: [], erreur: "Format non reconnu (attendu : GeoJSON ou JSON d'Overpass)." };
+  const gares = brut.map((b) => {
+    const t = b.tags, libelle = t["name:fr"] || t.name || t["name:ar"] || t.ref || "";
+    return { nom: libelle, adm: admGareProche(t["name:fr"] || "") || admGareProche(t.name || "") || admGareProche(t.ref || ""), lat: b.lat, lon: b.lon, osm: b.osm };
+  });
+  return { ok: gares.length > 0, gares, erreur: gares.length ? "" : "Aucune gare de péage dans ce fichier." };
 }

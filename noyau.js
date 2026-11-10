@@ -26,8 +26,8 @@ const PARAMS_DEFAUT = {
   rappelSauvegarde: 7,     // jours sans sauvegarde avant rappel
 };
 
-/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones. */
-const VERSION_SCHEMA = 5;
+/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones · 6 = + gares de péage et relevés Jawaz. */
+const VERSION_SCHEMA = 6;
 const COLLECTIONS = ["camions", "pleins", "interventions", "chauffeurs", "trajets", "dossiers", "codes", "clients", "commandes", "factures", "voyages", "autorisations", "traces"];
 
 // Documents suivis avec date d'expiration (transport national et international).
@@ -59,7 +59,7 @@ const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "P
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [],
+    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [],
     params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }
@@ -94,6 +94,7 @@ function migrer(brut) {
   }
   if (depuis < 4) { e.voyages = Array.isArray(e.voyages) ? e.voyages : []; e.autorisations = Array.isArray(e.autorisations) ? e.autorisations : []; e.chauffeurs.forEach((c) => { c.sejours ||= []; }); }
   if (depuis < 5) { e.traces = Array.isArray(e.traces) ? e.traces : []; e.zones = Array.isArray(e.zones) ? e.zones : []; }
+  if (depuis < 6) { e.gares = Array.isArray(e.gares) ? e.gares : []; e.releves = Array.isArray(e.releves) ? e.releves : []; }
   e.meta.version = VERSION_SCHEMA;
   return { etat: e, depuis, migre: depuis < VERSION_SCHEMA };
 }
@@ -398,6 +399,7 @@ const JALONS_VOYAGE = [
 const STATUTS_VOYAGE = [["prevu", "Prévu"], ["en_cours", "En cours"], ["termine", "Terminé"], ["annule", "Annulé"]];
 
 function peagesMarocVoyage(v) {
+  if (num(v.peagesReelMad)) return num(v.peagesReelMad); // péage mesuré par GPS : prioritaire
   const cam = parId(S.camions, v.camionId);
   const classe = classeADM(cam) || 3;
   if (v.peageTrajet && typeof admTrajet === "function") {

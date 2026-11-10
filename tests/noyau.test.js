@@ -644,6 +644,104 @@ test("GPS : réduction de trace et dessin SVG", () => {
   assert.strictEqual(N.gpsSVG([[0, 1, 1]], []), "");
 });
 
+/* ---------- Phase 2 : gares et péage mesuré ---------- */
+const GARES_T = [
+  { nom: "CASABLANCA", lat: 33.65, lon: -7.55, rayon: 300 }, { nom: "RABAT", lat: 34.05, lon: -6.80, rayon: 300 },
+  { nom: "KENITRA", lat: 34.28, lon: -6.60, rayon: 300 }, { nom: "KENITRA NORD", lat: 34.35, lon: -6.58, rayon: 300 }, { nom: "PORT TANGER MED", lat: 35.88, lon: -5.50, rayon: 300 },
+];
+/** Trace rectiligne passant devant les gares, avec un ralentissement à chacune. */
+function traceAutoroute(passes) {
+  const pts = []; let t = Date.UTC(2026, 10, 10, 6) / 1000;
+  const route = GARES_T;
+  pts.push([t, route[0].lat - 0.02, route[0].lon, 80]);
+  for (let i = 0; i < route.length; i++) {
+    const g = route[i];
+    if (passes.includes(g.nom)) { t += 60; pts.push([t, g.lat - 0.003, g.lon, 80]); t += 30; pts.push([t, g.lat, g.lon + 0.0008, 12]); t += 30; pts.push([t, g.lat + 0.003, g.lon, 80]); }
+    const n = route[i + 1]; if (n) { const dt = Math.round(N.gpsDistance([0, g.lat, g.lon], [0, n.lat, n.lon]) / (85 / 3.6) / 8); for (let k = 1; k <= 8; k++) { t += dt; pts.push([t, g.lat + ((n.lat - g.lat) * k) / 9, g.lon + ((n.lon - g.lon) * k) / 9, 85]); } }
+  }
+  return pts;
+}
+
+test("péage mesuré : passages devant les gares puis somme des sections ADM", () => {
+  const pts = traceAutoroute(["CASABLANCA", "RABAT", "KENITRA", "KENITRA NORD", "PORT TANGER MED"]);
+  const p = N.gpsPassagesGares(pts, GARES_T);
+  assert.deepStrictEqual([...p.map((x) => x.gare)], ["CASABLANCA", "RABAT", "KENITRA", "KENITRA NORD", "PORT TANGER MED"]);
+  const tr = N.gpsTrajetsPeage(p, 3);
+  assert.deepStrictEqual([...tr.map((x) => x.type)], ["section", "section", "liaison", "section"]); // Kénitra ↔ Kénitra Nord : aucun tarif dans la grille
+  assert.strictEqual(tr.reduce((s, x) => s + x.mad, 0), 253); // 43 + 28 + 0 + 182, comme la grille officielle
+  assert.strictEqual(N.gpsTrajetsPeage(p, 2).reduce((s, x) => s + x.mad, 0), 210);
+});
+
+test("gares : les ralentissements isolés en pleine conduite sont proposés, pas les arrêts ni les zones", () => {
+  const pts = traceAutoroute(["RABAT", "KENITRA"]);
+  const r = N.gpsRalentissements(pts, []);
+  assert.strictEqual(r.length, 2); assert.ok(r.every((x) => x.vmin <= 15));
+  assert.strictEqual(N.gpsRalentissements(pts, [{ id: "z", nom: "Z", type: "autre", lat: 34.05, lon: -6.8, rayon: 500 }]).length, 1); // un ralentissement dans une zone connue est ignoré
+  const arret = [[0, 33, -7, 80], [60, 33.01, -7, 80], [120, 33.02, -7, 0], [1800, 33.02, -7, 0], [1860, 33.03, -7, 80], [1920, 33.04, -7, 80]];
+  assert.strictEqual(N.gpsRalentissements(arret, []).length, 0); // arrêt de 30 min : pas un péage
+});
+
+test("gares : le trou de signal n'invente pas de passage", () => {
+  const pts = traceAutoroute(["RABAT"]).filter((p) => !(p[1] > 33.9 && p[1] < 34.2)); // les points autour de Rabat manquent
+  assert.strictEqual(N.gpsPassagesGares(pts, GARES_T).filter((x) => x.gare === "RABAT").length, 0);
+});
+
+test("simplification d'une trace : peu de points, passages conservés", () => {
+  const pts = traceAutoroute(["CASABLANCA", "RABAT", "KENITRA", "KENITRA NORD", "PORT TANGER MED"]);
+  const s = N.gpsSimplifier(pts, 30, 2500);
+  assert.ok(s.length < pts.length && s.length >= 5);
+  assert.strictEqual(N.gpsPassagesGares(s, GARES_T).length, 5);
+  assert.strictEqual(N.gpsSimplifier(Array.from({ length: 6000 }, (_, i) => [i * 10, 33 + Math.sin(i / 50) * 0.5, -7 + i * 1e-4, 50]), 1, 300).length, 300);
+});
+
+test("noms de gares : correspondance avec la grille ADM", () => {
+  assert.strictEqual(N.admGareProche("Gare de Kénitra Nord"), "KENITRA NORD");
+  assert.strictEqual(N.admGareProche("PORT TANGER MED"), "PORT TANGER MED");
+  assert.strictEqual(N.admGareProche("Casablanca"), "CASABLANCA");
+  assert.strictEqual(N.admGareProche("xyz inconnu"), null);
+  assert.strictEqual(N.admGares().length, 92);
+});
+
+test("relevé de péages : colonnes reconnues et lecture", () => {
+  const csv = "Date;Heure;Pass;Gare d'entrée;Gare de sortie;Montant (MAD)\n10/11/2026;08:45:10;PASS-77;CASABLANCA;RABAT;43,00\n10/11/2026;10:05:00;PASS-77;RABAT;KENITRA;28,00\nerreur;;;;;\n";
+  const r = N.releveParse(csv);
+  assert.strictEqual(r.ok, true); assert.strictEqual(r.lignes.length, 2); assert.strictEqual(r.rejetes, 1);
+  assert.strictEqual(r.lignes[0].gareB, "RABAT"); assert.strictEqual(r.lignes[0].gareA, "CASABLANCA"); assert.strictEqual(r.lignes[0].mad, 43); assert.strictEqual(r.lignes[0].ref, "PASS-77");
+  assert.strictEqual(N.releveParse("a;b\n1;2").ok, false);
+});
+
+test("rapprochement Jawaz : conforme, écart, non facturé, facturé sans passage", () => {
+  const pts = traceAutoroute(["CASABLANCA", "RABAT", "KENITRA", "KENITRA NORD", "PORT TANGER MED"]);
+  const tr = N.gpsTrajetsPeage(N.gpsPassagesGares(pts, GARES_T), 3);
+  const L = (gare, delta, mad) => ({ t: tr.find((x) => x.vers === gare).tVers + delta, gareA: "", gareB: gare, mad, ref: "P" });
+  const lignes = [L("RABAT", 120, 43), L("KENITRA", -300, 30) /* écart de 2 MAD */, /* PORT TANGER MED : non facturé */ { t: pts[0][0] + 600, gareA: "", gareB: "AIN DALIA", mad: 14, ref: "P" } /* sans passage GPS */];
+  const r = N.gpsRapprocher(tr, lignes, { debut: pts[0][0], fin: pts[pts.length - 1][0] });
+  const s = N.gpsResumeRapprochement(r);
+  assert.deepStrictEqual({ ...s }, { ok: 1, ecart: 1, nonFacture: 1, sansPassage: 1, manque: 182, surplus: 14 });
+  assert.strictEqual(r.find((x) => x.statut === "ecart").difference, 2);
+  assert.strictEqual(r.filter((x) => x.statut === "liaison").length, 1);
+});
+
+test("péage mesuré prioritaire sur le trajet type dans le coût du voyage", () => {
+  N.S.camions = [{ id: "c", essieux: 5 }];
+  assert.strictEqual(N.peagesMarocVoyage({ camionId: "c", peageTrajet: "casa-tmed" }), 253);
+  assert.strictEqual(N.peagesMarocVoyage({ camionId: "c", peageTrajet: "casa-tmed", peagesReelMad: 261 }), 261);
+});
+
+test("import OpenStreetMap : GeoJSON d'overpass-turbo et JSON d'Overpass", () => {
+  const geo = JSON.stringify({ type: "FeatureCollection", features: [
+    { type: "Feature", id: "node/1", properties: { "@id": "node/1", barrier: "toll_booth", name: "Gare de péage de Kénitra Nord" }, geometry: { type: "Point", coordinates: [-6.58, 34.35] } },
+    { type: "Feature", id: "way/2", properties: { barrier: "toll_booth", "name:fr": "Rabat" }, geometry: { type: "LineString", coordinates: [[-6.80, 34.05], [-6.802, 34.051]] } },
+    { type: "Feature", id: "node/3", properties: { barrier: "toll_booth" }, geometry: { type: "Point", coordinates: [-5.0, 35.0] } } ] });
+  const r = N.osmGaresParse(geo);
+  assert.strictEqual(r.ok, true); assert.strictEqual(r.gares.length, 3);
+  assert.strictEqual(r.gares[0].adm, "KENITRA NORD"); assert.strictEqual(r.gares[1].adm, "RABAT"); assert.strictEqual(r.gares[2].adm, null);
+  assert.ok(Math.abs(r.gares[1].lat - 34.0505) < 1e-6);
+  const o = N.osmGaresParse(JSON.stringify({ elements: [{ type: "node", id: 9, lat: 33.65, lon: -7.55, tags: { name: "Casablanca" } }, { type: "way", id: 8, center: { lat: 34.0, lon: -6.8 }, tags: {} }] }));
+  assert.strictEqual(o.gares.length, 2); assert.strictEqual(o.gares[0].adm, "CASABLANCA");
+  assert.strictEqual(N.osmGaresParse("pas du json").ok, false); assert.strictEqual(N.osmGaresParse("{}").ok, false);
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

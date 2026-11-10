@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.0 — Péages mesurés par GPS et rapprochement Jawaz Pro (phase 2)
+
+- **Gares de péage localisées** : ADM ne publie pas leurs coordonnées. Trois façons de les renseigner, une seule fois : (1) **« Relever les gares » sur une trace** — l'application repère les ralentissements isolés en pleine conduite (typiques d'un péage), vous les affectez à une gare ADM sur une carte ; (2) **import OpenStreetMap** (GeoJSON exporté d'overpass-turbo, requête fournie, correspondances à valider) ; (3) saisie manuelle.
+- **Péage mesuré** : chaque trace donne les passages devant les gares puis la somme des sections de la grille officielle, **selon la classe du camion**. Un clic l'applique au voyage (prioritaire sur le trajet type). Casablanca → Tanger Med reconstitué = 253 MAD, comme la grille.
+- **Rapprochement avec le relevé Jawaz Pro** (CSV, colonnes reconnues ou désignées) : péages **conformes**, **écarts de montant**, **non facturés**, **facturés sans passage GPS** (Pass prêté, autre camion) avec les montants en jeu.
+- Traces conservées plus finement (simplification à 30 m, passages devant les gares préservés) ; schéma de données **v6** (migration automatique) ; 70 tests.
+
 ## 2.2.0 — Traces GPS (phase 1)
 
 - Nouvelle page **Traces GPS** : import de l'export de vos balises en **CSV ou GPX**, lu sur l'appareil. Colonnes reconnues automatiquement (français ou anglais, `;` ou `,`, virgule décimale, dates `JJ/MM/AAAA` ou ISO, date et heure séparées) ; sinon choix manuel des colonnes. Fuseau horaire du fichier au choix.

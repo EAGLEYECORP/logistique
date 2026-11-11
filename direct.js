@@ -122,6 +122,24 @@ function directFlotte() {
   }
   return res.sort((a, b) => (b.alertes.length - a.alertes.length) || a.nom.localeCompare(b.nom));
 }
+/**
+ * Avant la connexion aux balises (ou tant qu'aucune position n'arrive) : la flotte telle qu'on la connaît déjà —
+ * chaque camion avec sa dernière position tirée des traces importées, s'il y en a. La carte est prête, il ne manque que les positions en direct.
+ */
+function directFlotteAttente() {
+  const zones = zonesActives(), res = [];
+  for (const cam of S.camions) {
+    let dern = null;
+    for (const t of S.traces || []) { const cid = t.camionId || parId(S.voyages, t.voyageId)?.camionId; if (cid !== cam.id || !t.pts?.length) continue; const p = t.pts[t.pts.length - 1]; if (!dern || p[0] > dern[0]) dern = p; }
+    const hist = dern ? [[dern[0], dern[1], dern[2], null, null]] : [];
+    res.push({ id: `cam:${cam.id}`, nom: cam.immat, camion: cam, chauffeur: S.chauffeurs.find((c) => c.camionId === cam.id) || null, voyage: voyageActif(cam.id) || null, hist, derniere: hist[0] || null, eta: null, conduite: { serieH: 0, arretMin: 0 }, alertes: [], attente: true,
+      etat: { code: "inconnu", libelle: dern ? "Dernière position connue" : "En attente de la balise", niveau: "neutral", zone: dern ? gpsZoneDe(hist[0], zones) : null, ageMin: null, arretMin: 0 } });
+  }
+  return res;
+}
+/** Ce que la page affiche : la flotte en direct dès qu'une position arrive, sinon la flotte en attente. */
+function flotteAffichee() { const live = directFlotte(); return live.length ? live : directFlotteAttente(); }
+
 /** Étapes automatiques des voyages en cours d'après les passages dans les zones. */
 function directMajVoyages(flotte) {
   let change = false;
@@ -205,10 +223,11 @@ function directCarteInit() {
   if (carte.map) { carte.map.remove(); carte.map = null; carte.marqueurs.clear(); carte.traces.clear(); }
   if (typeof L === "undefined") { el.innerHTML = `<p class="hint" style="padding:16px">La bibliothèque de carte n'a pas pu être chargée (vendor/leaflet).</p>`; return; }
   const c = directCfg();
-  carte.map = L.map(el, { zoomControl: true, worldCopyJump: true, preferCanvas: false }).setView(carte.vue ? [carte.vue.lat, carte.vue.lon] : [34.5, -5.5], carte.vue ? carte.vue.zoom : 6);
+  carte.map = L.map(el, { zoomControl: true, worldCopyJump: true, preferCanvas: false });
+  if (carte.vue) carte.map.setView([carte.vue.lat, carte.vue.lon], carte.vue.zoom); else carte.map.fitBounds(CORRIDOR);
   const url = tuilesUrlValide(c.tuilesUrl) ? c.tuilesUrl : TUILES_OSM;
   if (c.tuiles) L.tileLayer(url, { maxZoom: 19, crossOrigin: true, attribution: url === TUILES_OSM ? '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' : "Fond de carte : fournisseur configuré" }).addTo(carte.map);
-  carte.zones = L.layerGroup(zonesActives().map((z) => L.circle([z.lat, z.lon], { radius: z.rayon, color: "#2563eb", weight: 1, fillOpacity: 0.1 }).bindTooltip(esc(z.nom), { sticky: true }))).addTo(carte.map);
+  carte.zones = L.layerGroup(zonesActives().flatMap((z) => [L.circle([z.lat, z.lon], { radius: z.rayon, color: "#2563eb", weight: 1, fillOpacity: 0.1 }), L.circleMarker([z.lat, z.lon], { radius: 5, color: "#fff", weight: 2, fillColor: "#2563eb", fillOpacity: 1 }).bindTooltip(esc(z.nom), { direction: "top" })])).addTo(carte.map);
   carte.groupeTraces = L.layerGroup().addTo(carte.map);
   L.control.layers(null, { "Zones (ports, frontières, dépôts)": carte.zones, "Trajet des 3 dernières heures": carte.groupeTraces }, { collapsed: true }).addTo(carte.map);
   const Tout = L.Control.extend({ options: { position: "topleft" }, onAdd() { const b = L.DomUtil.create("button", "leaflet-bar direct-tout"); b.type = "button"; b.title = "Voir toute la flotte"; b.textContent = "Tout voir"; L.DomEvent.disableClickPropagation(b); b.onclick = () => directToutVoir(); return b; } });
@@ -217,16 +236,19 @@ function directCarteInit() {
   carte.map.on("dragstart zoomstart", () => { carte.cadre = true; });
   setTimeout(() => carte.map?.invalidateSize(), 50);
 }
-function directToutVoir(flotte = directFlotte()) {
-  if (!carte.map || !flotte.length) return;
-  const pts = flotte.map((f) => [f.derniere[1], f.derniere[2]]);
+const CORRIDOR = [[29.5, -11], [50.5, 9.5]]; // Maroc → Espagne → France → Allemagne : vue par défaut tant qu'aucun camion n'est positionné
+function directToutVoir(flotte = flotteAffichee()) {
+  if (!carte.map) return;
+  const pts = flotte.filter((f) => f.derniere).map((f) => [f.derniere[1], f.derniere[2]]);
+  if (!pts.length) return carte.map.fitBounds(CORRIDOR);
   if (pts.length === 1) carte.map.setView(pts[0], 11); else carte.map.fitBounds(L.latLngBounds(pts).pad(0.25), { maxZoom: 12 });
 }
 function directCarteMaj(flotte) {
   if (!carte.map) return;
-  const now = maintenantS(), ids = new Set(flotte.map((f) => f.id));
+  const now = maintenantS(), ids = new Set(flotte.filter((f) => f.derniere).map((f) => f.id));
   for (const [id, m] of carte.marqueurs) if (!ids.has(id)) { m.remove(); carte.marqueurs.delete(id); carte.traces.get(id)?.remove(); carte.traces.delete(id); }
   for (const f of flotte) {
+    if (!f.derniere) continue;
     const ll = [f.derniere[1], f.derniere[2]];
     let m = carte.marqueurs.get(f.id);
     if (!m) { m = L.marker(ll, { icon: iconeCamion(f), riseOnHover: true, title: f.nom }).addTo(carte.map); m.on("click", () => directSelectionner(f.id, { centrer: true })); carte.marqueurs.set(f.id, m); }
@@ -237,14 +259,14 @@ function directCarteMaj(flotte) {
     if (l.length > 1) { if (!t) { t = L.polyline(l, { weight: 3, opacity: 0.7 }).addTo(carte.groupeTraces); carte.traces.set(f.id, t); } else t.setLatLngs(l); t.setStyle({ color: COULEUR_ETAT[f.etat.niveau] }); }
     else if (t) { t.remove(); carte.traces.delete(f.id); }
   }
-  if (!carte.cadre && flotte.length) { directToutVoir(flotte); carte.cadre = true; }
+  if (!carte.cadre) { directToutVoir(flotte); carte.cadre = flotte.some((f) => f.derniere && !f.attente); }
 }
 
 /* ---------- fiche complète d'un camion ---------- */
 const ligneInfo = (k, v) => (v === "" || v === null || v === undefined ? "" : `<div class="fi"><span>${k}</span><b>${v}</b></div>`);
 const echeanceBadge = (iso) => { const j = joursAvant(iso); return j === null ? badge("non renseigné", "neutral") : j < 0 ? badge(`expiré (${dateFr(iso)})`, "danger") : badge(`${dateFr(iso)} · J-${j}`, j <= S.params.alerteJours ? "warn" : "ok"); };
 function directPanneauHtml(f) {
-  const now = maintenantS(), cam = f.camion, ch = f.chauffeur, v = f.voyage, p = f.derniere, d = directDonnees.derniere.get(f.id);
+  const now = maintenantS(), cam = f.camion, ch = f.chauffeur, v = f.voyage, aPos = !!f.derniere, p = f.derniere || [now, 0, 0, null, null], d = directDonnees.derniere.get(f.id);
   const cap = capDe(f), km24 = f.hist.filter((q) => now - q[0] < 24 * 3600), dist = km24.reduce((s, q, i) => (i ? s + gpsDistance(km24[i - 1], q) / 1000 : 0), 0);
   const vmax = Math.max(0, ...km24.map((q) => q[3] ?? 0));
   const sec = (titre, corps) => (corps.trim() ? `<section class="fiche"><h4>${titre}</h4>${corps}</section>` : "");
@@ -252,7 +274,7 @@ function directPanneauHtml(f) {
   if (ch?.tel) acces.push(`<a class="btn sm" href="tel:${esc(ch.tel.replace(/\s/g, ""))}">${ic("phone")}Appeler</a>`);
   if (ch?.tel && lienWhatsApp(ch.tel, "")) acces.push(`<a class="btn ghost sm" href="${esc(lienWhatsApp(ch.tel, `Bonjour ${ch.nom.split(" ")[0]}, `))}" target="_blank" rel="noopener">WhatsApp</a>`);
   if (ch?.tel && lienSMS(ch.tel, "")) acces.push(`<a class="btn ghost sm" href="${esc(lienSMS(ch.tel, ""))}">SMS</a>`);
-  const position = sec("Position et déplacement", [
+  const position = !aPos ? sec("Position", `<p class="hint" style="margin:0">Aucune position connue pour ce camion. Elle apparaîtra dès que sa balise enverra une position${cam?.balise ? "" : " — renseignez d'abord l'identifiant de sa balise"}.</p>`) : f.attente ? sec("Dernière position connue", [ligneInfo("Relevée", `il y a ${ilYa(now - p[0])} (${jhmFr(p[0])})`), ligneInfo("Coordonnées", `<a href="https://www.openstreetmap.org/?mlat=${p[1]}&mlon=${p[2]}#map=13/${p[1]}/${p[2]}" target="_blank" rel="noopener">${p[1].toFixed(5)}, ${p[2].toFixed(5)}</a>`), ligneInfo("Zone", f.etat.zone ? esc(f.etat.zone.nom) : ""), ligneInfo("Origine", "trace GPS importée — pas une position en direct")].join("")) : sec("Position et déplacement", [
     ligneInfo("Dernière position", `il y a ${ilYa(now - p[0])} (${hmFr(p[0])})`), ligneInfo("Vitesse", p[3] != null ? `${Math.round(p[3])} km/h` : ""), ligneInfo("Cap", cap !== null ? `${Math.round(cap)}°` : ""),
     ligneInfo("Coordonnées", `<a href="https://www.openstreetmap.org/?mlat=${p[1]}&mlon=${p[2]}#map=13/${p[1]}/${p[2]}" target="_blank" rel="noopener">${p[1].toFixed(5)}, ${p[2].toFixed(5)}</a>`),
     ligneInfo("Zone", f.etat.zone ? esc(f.etat.zone.nom) : ""), ligneInfo("État", `${f.etat.libelle}${f.etat.code === "traversee" ? " — silence normal en mer" : ""}`),
@@ -260,7 +282,7 @@ function directPanneauHtml(f) {
     ligneInfo("Parcouru (24 h)", dist ? `${fmt(dist, 0)} km · vitesse max ${Math.round(vmax)} km/h` : ""),
     ligneInfo("Conduite sans pause de 45 min", `<span class="${f.conduite.serieH >= 4.5 ? "neg" : ""}">${dureeTxt(f.conduite.serieH)}</span> (estimation GPS)`), ligneInfo("Conduite du jour", `${dureeTxt(conduiteJour(f.hist, now))} (estimation)`),
     d?.batterie != null ? ligneInfo("Batterie balise", `${d.batterie} %`) : ""].join(""));
-  const froid = f.derniere[4] != null ? (() => { const pts = f.hist.map((q) => [q[0], q[4]]).filter((q) => q[1] != null && now - q[0] < 12 * 3600); const a = v && Number.isFinite(v.tempMin) ? froidAnalyser(pts, v.tempMin, v.tempMax) : froidAnalyser(pts, -100, 100); const c = String(f.derniere[4]).replace(".", ",");
+  const froid = aPos && f.derniere[4] != null ? (() => { const pts = f.hist.map((q) => [q[0], q[4]]).filter((q) => q[1] != null && now - q[0] < 12 * 3600); const a = v && Number.isFinite(v.tempMin) ? froidAnalyser(pts, v.tempMin, v.tempMax) : froidAnalyser(pts, -100, 100); const c = String(f.derniere[4]).replace(".", ",");
     return sec("Chaîne du froid", ligneInfo("Température actuelle", `${badge(`${c} °C`, f.alertes.some((x) => x.cle.startsWith("froid:")) ? "danger" : "ok")}`) + (v && Number.isFinite(v.tempMin) ? ligneInfo("Consigne", `${v.tempMin} à ${v.tempMax} °C`) : "") + (a ? ligneInfo("12 dernières heures", `${a.min.toFixed(1).replace(".", ",")} à ${a.max.toFixed(1).replace(".", ",")} °C${a.excursions.length ? ` · ${a.excursions.length} excursion(s)` : ""}`) : "")); })() : "";
   let voyageHtml = "";
   if (v) {
@@ -291,10 +313,10 @@ function directPanneauHtml(f) {
     `<div class="row" style="margin-top:8px">${btn("fiche-camion", "Fiche camion", { icone: "truck", cls: "btn ghost sm" })}</div>`].join("")) : sec("Camion", `<p class="hint" style="margin:0">Balise <strong>${esc(f.id)}</strong> non liée à un camion.</p><div class="row">${btn("lier-balise", "Lier à un camion", { id: f.id, icone: "truck", cls: "btn sm" })}</div>`);
   const alertesHtml = f.alertes.length ? sec("Alertes", `<ul class="ctl">${f.alertes.map((a) => `<li class="${a.niveau}">${ic(a.niveau === "danger" ? "alert" : "clock")}<span>${esc(a.texte)}</span></li>`).join("")}</ul>`) : "";
   return `<header><div><h3>${esc(f.nom)}</h3><div class="sub" style="margin:0">${cam?.marque ? esc(cam.marque) + " · " : ""}balise ${esc(f.id)}</div></div>${badge(f.etat.libelle, f.etat.niveau)}<button type="button" class="icon-btn" data-act="fermer-fiche" aria-label="Fermer">${ic("x")}</button></header>
-    <div class="row" style="padding:0 14px 8px">${btn("centrer", "Centrer", { icone: "pin", cls: "btn ghost sm" })}${btn("trace-complete", "Voir son trajet", { icone: "route", cls: "btn ghost sm" })}</div>
+    <div class="row" style="padding:0 14px 8px">${aPos ? btn("centrer", "Centrer", { icone: "pin", cls: "btn ghost sm" }) : ""}${aPos && f.hist.length > 1 ? btn("trace-complete", "Voir son trajet", { icone: "route", cls: "btn ghost sm" }) : ""}${cam && !cam.balise ? btn("balise-saisir", "Renseigner sa balise", { id: cam.id, icone: "radar", cls: "btn sm" }) : ""}</div>
     <div class="corps">${alertesHtml}${position}${voyageHtml}${chauffeurHtml}${camionHtml}${froid}</div>`;
 }
-function directPanneauMaj(flotte = directFlotte()) {
+function directPanneauMaj(flotte = flotteAffichee()) {
   const el = $("#direct-panneau"); if (!el) return;
   const f = flotte.find((x) => x.id === directSelection);
   if (!f) { el.hidden = true; el.innerHTML = ""; carte.panneauOuvert = false; $("#direct-zone")?.classList.remove("avec-panneau"); return; }
@@ -304,9 +326,9 @@ function directPanneauMaj(flotte = directFlotte()) {
   setTimeout(() => carte.map?.invalidateSize(), 30);
 }
 function directSelectionner(id, { centrer = false } = {}) {
-  directSelection = id; const f = directFlotte().find((x) => x.id === id);
+  directSelection = id; const f = flotteAffichee().find((x) => x.id === id);
   directMettreAJour();
-  if (centrer && f && carte.map) { directCentrer(f, Math.max(carte.map.getZoom(), 9)); carte.cadre = true; }
+  if (centrer && f?.derniere && carte.map) { directCentrer(f, Math.max(carte.map.getZoom(), 9)); carte.cadre = true; }
 }
 
 /** Centre la carte sur un camion en tenant compte de la fiche ouverte à droite (sur grand écran, elle recouvre une partie de la carte). */
@@ -339,17 +361,35 @@ function directListe(flotte) {
       ${f.eta ? `<p class="hint" style="margin:0 0 8px"><strong>Arrivée estimée ${jhmFr(f.eta.arrivee)}</strong> (${hmFr(f.eta.min)} – ${hmFr(f.eta.max)}) · ${fmt(f.eta.kmRestants)} km restants${f.eta.retardMin !== null && f.eta.retardMin > 30 ? ` · ${badge("retard probable", f.eta.retardMin > 60 ? "danger" : "warn")}` : ""}</p>` : ""}
       <div class="row">${f.derniere[4] != null ? badge(`${String(f.derniere[4]).replace(".", ",")} °C`, f.alertes.some((a) => a.cle.startsWith("froid:")) ? "danger" : "ok") : ""}${badge(`Conduite : ${dureeTxt(f.conduite.serieH)} sans pause`, f.conduite.serieH >= 4.5 ? "danger" : f.conduite.serieH >= 4.25 ? "warn" : "neutral")}</div></div>`).join("")}`;
 }
+/** En-tête tant que les positions en direct n'arrivent pas : la carte est prête, voici ce qui manque. */
+function directEnteteAttente(flotte) {
+  const c = directCfg(), avecBalise = S.camions.filter((x) => x.balise).length, connues = flotte.filter((f) => f.derniere).length;
+  const etapes = [[c.mode !== "off", "Source des positions réglée (relais, Traccar ou démonstration)"], [S.camions.length > 0 && avecBalise === S.camions.length, `Balise renseignée sur chaque camion (${avecBalise} sur ${S.camions.length})`], [false, "Première position reçue"]];
+  return `<div class="card"><div class="card-head"><h2>La carte est prête : il ne manque que vos balises</h2>${c.mode === "off" ? badge("Non connecté", "neutral") : directDonnees.erreur ? badge(directDonnees.erreur, "danger") : badge("En attente de positions", "warn")}</div>
+    <p class="hint" style="margin-top:0">Dès que les identifiants de votre plateforme GPS sont saisis, vos camions apparaissent ici en direct, avec leur fiche complète au clic. ${connues ? `En attendant, ${connues} camion(s) sont placés à leur <strong>dernière position connue</strong> (traces importées).` : "En attendant, la carte montre votre corridor et vos zones (ports, frontière, dépôts)."}</p>
+    <ul class="ctl" style="margin-bottom:10px">${etapes.map(([ok, t]) => `<li class="${ok ? "" : "warn"}" ${ok ? 'style="color:var(--ok)"' : ""}>${ic(ok ? "check" : "clock")}<span>${esc(t)}</span></li>`).join("")}</ul>
+    <div class="row">${btn("connecter", "Connecter mes balises", { icone: "radar" })}${btn("demo", "Voir une démonstration", { icone: "play", cls: "btn ghost" })}${c.mode !== "off" ? btn("actualiser", "Actualiser", { icone: "clock", cls: "btn ghost" }) : ""}</div></div>`;
+}
+function directListeAttente(flotte) {
+  if (!S.camions.length) return `<div class="card">${vide("truck", "Aucun camion", "Ajoutez vos camions (page Camions) : ils apparaîtront sur la carte dès que leur balise enverra une position.", btn("fiche-camion", "Ajouter un camion", { icone: "plus" }))}</div>`;
+  const now = maintenantS();
+  return `<div class="section-title">Votre flotte · cliquez pour la fiche complète</div>
+    ${flotte.map((f) => `<div class="card direct-camion ${f.id === directSelection ? "sel" : ""}" data-direct-camion="${esc(f.id)}" tabindex="0" role="button">
+      <div class="card-head"><h2>${esc(f.nom)}${f.camion?.marque ? ` <span class="sub" style="display:inline">· ${esc(f.camion.marque)}</span>` : ""}</h2>${f.camion?.balise ? badge(`Balise ${f.camion.balise}`, "ok") : badge("Balise à renseigner", "warn")}</div>
+      <p class="hint" style="margin:0 0 8px">${[f.derniere ? `dernière position connue il y a ${ilYa(now - f.derniere[0])}${f.etat.zone ? " · " + esc(f.etat.zone.nom) : ""}` : "aucune position connue", f.chauffeur && esc(f.chauffeur.nom), f.voyage && `voyage ${esc(f.voyage.ref)} · ${esc(f.voyage.origine)} ⇄ ${esc(f.voyage.destination)}`].filter(Boolean).join(" · ")}</p>
+      ${f.camion?.balise ? "" : `<div class="row">${btn("balise-saisir", "Renseigner sa balise", { id: f.camion.id, icone: "radar", cls: "btn ghost sm" })}</div>`}</div>`).join("")}`;
+}
 /** Recalcule la flotte une fois et met à jour l'en-tête, la carte, la liste et la fiche ouverte. */
 function directMettreAJour() {
   if (ongletActif !== "direct") return;
-  const flotte = directFlotte();
-  const h = $("#direct-entete"); if (h) h.innerHTML = directEntete(flotte);
-  const l = $("#direct-liste"); if (l) l.innerHTML = directListe(flotte);
+  const flotte = flotteAffichee(), attente = !flotte.length || flotte[0].attente;
+  const h = $("#direct-entete"); if (h) h.innerHTML = attente ? directEnteteAttente(flotte) : directEntete(flotte);
+  const l = $("#direct-liste"); if (l) l.innerHTML = attente ? directListeAttente(flotte) : directListe(flotte);
   directCarteMaj(flotte); directPanneauMaj(flotte);
 }
 const directFlotteRendu = directMettreAJour;
 
-const cfgFormulaire = (c) => `<details class="card" ${c.mode === "off" ? "open" : ""}><summary style="cursor:pointer;font-weight:600">Réglages de la source et de la carte</summary>
+const cfgFormulaire = (c) => `<details class="card"><summary style="cursor:pointer;font-weight:600">Réglages de la source et de la carte</summary>
   <form id="f-direct" style="margin-top:12px"><div class="form-grid">
     <label class="f full">Source des positions<select name="mode">${[["off", "Désactivé"], ["relais", "Relais de ce projet (serveur à vous)"], ["traccar", "Serveur Traccar existant"], ["demo", "Démonstration (camions fictifs)"]].map(([k, l]) => `<option value="${k}" ${k === c.mode ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     <label class="f full">Adresse du serveur (https://…)<input name="url" value="${esc(c.url)}" placeholder="https://suivi.mon-entreprise.ma" autocomplete="off" inputmode="url"></label>
@@ -363,20 +403,18 @@ const cfgFormulaire = (c) => `<details class="card" ${c.mode === "off" ? "open" 
   <p class="hint">Carte <strong>gratuite</strong> : bibliothèque Leaflet embarquée, fond OpenStreetMap. Le serveur public d'OpenStreetMap est <strong>réservé à un usage léger</strong> (quelques personnes qui consultent la carte) : les tuiles vues sont gardées sur l'appareil pour limiter les requêtes. Pour un usage intensif, indiquez le modèle d'adresse d'un autre fournisseur (offre gratuite avec clé, ou serveur de tuiles à vous), au format <code>https://…/{z}/{x}/{y}.png</code>. Le jeton et l'adresse restent sur cet appareil et ne sont jamais inclus dans une sauvegarde. Voir <code>serveur/README.md</code> (relais ou Traccar) ; une page <strong>https</strong> exige un serveur en <strong>https</strong>.</p></details>`;
 
 VUES.direct = {
-  titre: "Suivi en direct",
+  titre: "Carte de la flotte",
   sous: "Carte de la flotte, fiche complète de chaque camion, alertes",
   actions: () => "",
   rendu() {
-    const c = directCfg();
-    if (c.mode === "off") return `<div class="card">${vide("pin", "Suivez vos camions en direct", "Carte de la flotte, fiche complète de chaque camion (position, voyage, chauffeur, camion, température), conduite sans pause et alertes. Il faut un petit serveur : essayez d'abord la démonstration.", btn("demo", "Essayer la démonstration", { icone: "play" }))}</div>${cfgFormulaire(c)}`;
-    const flotte = directFlotte();
-    return `<div id="direct-entete">${directEntete(flotte)}</div>
+    const c = directCfg(), flotte = flotteAffichee(), attente = !flotte.length || flotte[0].attente;
+    return `<div id="direct-entete">${attente ? directEnteteAttente(flotte) : directEntete(flotte)}</div>
       <div id="direct-zone" class="direct-zone ${directSelection ? "avec-panneau" : ""}"><div id="direct-map" class="direct-map"></div><aside id="direct-panneau" class="direct-panneau" ${directSelection ? "" : "hidden"}></aside></div>
-      <div id="direct-liste">${directListe(flotte)}</div>${cfgFormulaire(c)}`;
+      <div id="direct-liste">${attente ? directListeAttente(flotte) : directListe(flotte)}</div>${cfgFormulaire(c)}`;
   },
   apres() {
-    if (directCfg().mode === "off") return;
-    directCarteInit(); directMettreAJour(); directRafraichir();
+    directCarteInit(); directMettreAJour();
+    if (directCfg().mode !== "off") directRafraichir();
   },
   async soumettre(fid, v) {
     if (fid !== "f-direct") return false;
@@ -390,8 +428,15 @@ VUES.direct = {
     if (act === "demo") { directSauverCfg({ ...directCfg(), mode: "demo" }); directDemarrer(); return afficher("direct"); }
     if (act === "actualiser") { await directRafraichir(); return; }
     if (act === "fermer-fiche") { directSelection = ""; return directMettreAJour(); }
-    if (act === "centrer") { const f = directFlotte().find((x) => x.id === directSelection); if (f && carte.map) directCentrer(f, Math.max(carte.map.getZoom(), 12)); return; }
-    if (act === "trace-complete") { const f = directFlotte().find((x) => x.id === directSelection); if (f && carte.map && f.hist.length > 1) { const el = $("#direct-panneau"), w = el && !el.hidden && getComputedStyle(el).position === "absolute" ? el.offsetWidth : 0; carte.map.fitBounds(L.latLngBounds(f.hist.map((q) => [q[1], q[2]])), { paddingTopLeft: [30, 30], paddingBottomRight: [w + 30, 30] }); carte.cadre = true; } return; }
+    if (act === "connecter") { const d = document.querySelector("details:has(#f-direct)"); if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); d.querySelector("[name=mode]")?.focus(); } return; }
+    if (act === "balise-saisir") {
+      const cam = parId(S.camions, id); if (!cam) return;
+      const f = await formulaire(`Balise GPS de ${cam.immat}`, [{ name: "balise", label: "Identifiant de la balise (IMEI ou nom dans la plateforme GPS)", value: cam.balise, required: true, placeholder: "ex. 865432100123456" }], { valider: "Enregistrer", aide: "C'est l'identifiant sous lequel la balise envoie ses positions : il relie chaque position au bon camion." });
+      if (f?.balise) { cam.balise = f.balise.trim(); sauver(); toast(`Balise enregistrée pour ${cam.immat}`); directMettreAJour(); }
+      return;
+    }
+    if (act === "centrer") { const f = flotteAffichee().find((x) => x.id === directSelection && x.derniere); if (f && carte.map) directCentrer(f, Math.max(carte.map.getZoom(), 12)); return; }
+    if (act === "trace-complete") { const f = flotteAffichee().find((x) => x.id === directSelection); if (f && carte.map && f.hist.length > 1) { const el = $("#direct-panneau"), w = el && !el.hidden && getComputedStyle(el).position === "absolute" ? el.offsetWidth : 0; carte.map.fitBounds(L.latLngBounds(f.hist.map((q) => [q[1], q[2]])), { paddingTopLeft: [30, 30], paddingBottomRight: [w + 30, 30] }); carte.cadre = true; } return; }
     if (act === "fiche-voyage") { voyagesOuverts.add(id); return afficher("voyages"); }
     if (act === "fiche-partager") return ouvrirPartage(id);
     if (act === "fiche-camion") return afficher("camions");

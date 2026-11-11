@@ -146,7 +146,7 @@ let ongletActif = "tableau";
 const ONGLETS = [
   ["tableau", "Accueil", "home", ""],
   ["commandes", "Commandes", "box", "Exploitation"],
-  ["direct", "Suivi en direct", "radar", "Exploitation"],
+  ["direct", "Carte", "radar", "Exploitation"],
   ["voyages", "Voyages", "ship", "Exploitation"],
   ["gps", "Traces GPS", "pin", "Exploitation"],
   ["itineraires", "Trajets", "route", "Exploitation"],
@@ -163,7 +163,7 @@ const ONGLETS = [
   ["nomenclature", "Codes SH", "search", "Outils"],
   ["parametres", "Réglages", "settings", "Outils"],
 ];
-const ONGLETS_MOBILE = ["tableau", "commandes", "itineraires", "camions"];
+const ONGLETS_MOBILE = ["tableau", "direct", "commandes", "camions"];
 
 function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   if (typeof modeChauffeurActif === "function") {

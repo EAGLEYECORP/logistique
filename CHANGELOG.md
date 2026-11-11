@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.7.0 — La carte est là avant toute connexion GPS
+
+- La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.
+- Chaque camion de la flotte a sa fiche au clic même sans position ; sa balise se renseigne en un geste.
+- « Carte » passe dans la barre du bas sur téléphone.
+- Décisions pour la version 4 : `docs/11-decisions-v4.md`.
+
 ## 3.6.0 — Synchronisation des photos
 
 - **Les photos se synchronisent** entre appareils par le relais (CMR, livraisons, dommages, tickets de gasoil, papiers) : une photo prise sur le téléphone du chauffeur arrive au bureau, et inversement. Chaque photo est **chiffrée sur l'appareil** (image, miniature, nom et rattachement) : le serveur ne garde que des fichiers illisibles.

@@ -66,6 +66,7 @@ const champsVoyage = (v = {}) => [
   { name: "ref", label: "Référence", required: true, value: v.ref ?? `V-${new Date().getFullYear()}-${String(S.voyages.length + 1).padStart(4, "0")}` },
   { name: "statut", label: "Statut", type: "select", options: STATUTS_VOYAGE, value: v.statut || "prevu" },
   { name: "clientId", label: "Client", type: "select", options: optsClients("— Aucun —"), value: v.clientId },
+  { name: "commandeId", label: "Commande liée (comptée une seule fois dans la rentabilité)", type: "select", options: [["", "— Aucune —"], ...S.commandes.map((c) => [c.id, `${c.ref} · ${nomClient(c.clientId)}`])], value: v.commandeId },
   { name: "marchandise", label: "Marchandise", value: v.marchandise },
   { name: "origine", label: "Départ (ville)", value: v.origine, required: true, placeholder: "Agadir" },
   { name: "destination", label: "Destination (ville)", value: v.destination, required: true, placeholder: "Perpignan" },
@@ -103,7 +104,7 @@ const champsVoyage = (v = {}) => [
   { name: "notes", label: "Notes", type: "textarea", full: true, value: v.notes },
 ];
 const lireVoyage = (f) => ({
-  ref: f.ref, statut: f.statut, clientId: f.clientId, marchandise: f.marchandise, origine: f.origine, destination: f.destination, dateDepart: f.dateDepart, dateRetourPrevue: f.dateRetourPrevue,
+  ref: f.ref, statut: f.statut, clientId: f.clientId, commandeId: f.commandeId, marchandise: f.marchandise, origine: f.origine, destination: f.destination, dateDepart: f.dateDepart, dateRetourPrevue: f.dateRetourPrevue,
   chauffeurId: f.chauffeurId, camionId: f.camionId, remorque: f.remorque, autorisationId: f.autorisationId, ptacT: num(f.ptacT), transportCombine: !!f.transportCombine,
   livraisonPrevue: f.livraisonPrevue ? new Date(f.livraisonPrevue).toISOString() : "", destLat: f.destLat === "" ? undefined : num(f.destLat), destLon: f.destLon === "" ? undefined : num(f.destLon),
   prix: num(f.prix), devise: f.devise, peageTrajet: f.peageTrajet, peageAR: !!f.peageAR, peagesMad: num(f.peagesMad), peagesEur: num(f.peagesEur), kmPays: f.kmPays, peageFr1: f.peageFr1, peageFr2: f.peageFr2, peageFr3: f.peageFr3, peageFrAR: !!f.peageFrAR, tempMin: f.tempMin === "" ? undefined : num(f.tempMin), tempMax: f.tempMax === "" ? undefined : num(f.tempMax), carburantMad: num(f.carburantMad),
@@ -166,7 +167,7 @@ function carteVoyage(v) {
       ${ctl.length ? `<div class="section-title">À régler avant le départ</div><ul class="ctl">${ctl.map((x) => `<li class="${niveauCtl[x.niveau]}">${ic(x.niveau === "danger" ? "alert" : "clock")}<span>${esc(x.texte)}</span></li>`).join("")}</ul>` : v.statut === "prevu" ? `<p class="hint" style="color:var(--ok)">${ic("check")} Aucun point bloquant détecté.</p>` : ""}
       ${interd.length ? `<p class="hint">Départ un ${new Date(dateD + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long" })} : interdictions de circuler possibles (${interd.map((i) => i.pays).join(", ")}) — voir le tableau en bas de page.</p>` : ""}
       ${blocEta(v)}${blocFroid(v)}${blocPreuve(v)}
-      <div class="section-title">Coût et marge</div>
+      <div class="fin"><div class="section-title">Coût et marge</div>
       <div class="table-wrap"><table class="plain"><tbody>
         ${v.kmPays && peagesEuropeVoyage(v).manquants.length ? `<tr><td colspan="2" class="sub">Péages d'Europe : tarif au km non renseigné pour ${peagesEuropeVoyage(v).manquants.join(", ")} (Réglages → calculs) — ces pays ne sont pas comptés.</td></tr>` : ""}
         ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages France (VINCI)" ? `<span class="sub">${peagesFranceVoyage(v).detail.map((d) => `${esc(d.liaison)} ${fmt(d.eur, 2)} €`).join(" · ")}${v.peageFrAR ? " ×2" : ""} · classe ${peagesFranceVoyage(v).classe} · tarif officiel du ${dateFr(FR_LIAISONS_DATE)}</span>` : ""}${l === "Péages Europe" && v.peagesEurReel ? `<span class="sub">relevé de télépéage : ${Object.entries(v.peagesEurPays || {}).map(([p, m]) => `${p} ${fmt(m, 2)} €`).join(", ") || "total du relevé"}</span>` : ""}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
@@ -176,7 +177,7 @@ function carteVoyage(v) {
         ${num(v.kmGps) ? `<tr><td>Distance mesurée par le GPS</td><td class="r num">${fmt(v.kmGps)} km</td></tr>` : ""}
         ${c.km ? `<tr><td>Coût au km (${fmt(c.km)} km)</td><td class="r num">${fmt(c.coutKm, 2)} MAD/km</td></tr>` : ""}
         ${num(v.kmRetourVide) ? `<tr><td>Retour à vide</td><td class="r num">${fmt(v.kmRetourVide)} km · ≈ ${fmt(c.coutKm * num(v.kmRetourVide))} MAD</td></tr>` : ""}
-      </tbody></table></div>
+      </tbody></table></div></div>
       <div class="section-title">Étapes</div>
       <ol class="timeline">${JALONS_VOYAGE.map(([k, l]) => { const j = jalons.find((x) => x.type === k); return `<li class="${j ? "fait" : ""}"><span class="pt"></span><div><strong>${esc(l)}</strong>${j ? `<span class="sub">${dateHeureFr(j.date)}${j.source === "gps" ? " · " + badge("GPS", "ok") : ""}</span>` : ""}</div></li>`; }).join("")}</ol>
       <div class="row">${prochain && v.statut !== "annule" ? btn("jalon", `Marquer : ${prochain[1]}`, { id: v.id, icone: "flag", cls: "btn sm" }) : ""}${jalons.length ? btn("annuler-jalon", "Annuler la dernière étape", { id: v.id, cls: "btn ghost sm" }) : ""}</div>
@@ -190,6 +191,7 @@ function carteVoyage(v) {
         ${v.statut === "annule" ? "" : btn("preuve", v.pod ? "Refaire la preuve de livraison" : "Preuve de livraison", { id: v.id, icone: "check", cls: "btn ghost sm" })}
         ${v.statut === "annule" ? "" : btn("cmr", "CMR (impression)", { id: v.id, icone: "print", cls: "btn ghost sm" })}
         ${btn("releve-eu", "Relevé péages Europe", { id: v.id, icone: "upload", cls: "btn ghost sm", titre: "Importer le relevé CSV de votre fournisseur de télépéage (DKV, UTA, Eurowag, Telepass…)" })}
+        ${btn("dossier", "Dossier complet", { id: v.id, icone: "file", cls: "btn ghost sm", titre: "Tout le voyage en un document : papiers, étapes, traversées, preuve de livraison, trace, photos" })}
         ${btn("partager", v.partage ? "Lien client" : "Partager le suivi", { id: v.id, icone: "mail", cls: "btn ghost sm" })}
         ${boutonPhotos("voyage:" + v.id, `Documents — ${v.ref}`, { texte: true })}
         ${btn("modifier", "Modifier", { id: v.id, icone: "edit", cls: "btn ghost sm" })}

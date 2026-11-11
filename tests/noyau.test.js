@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1041,6 +1041,85 @@ test("carte : cap entre deux positions et modèle d'adresse de tuiles", () => {
   assert.strictEqual(N.tuilesUrlValide("https://tile.openstreetmap.org/{z}/{x}/{y}.png"), true);
   assert.strictEqual(N.tuilesUrlValide("https://api.exemple.com/styles/v1/{z}/{x}/{y}.png?key=ABC"), true);
   for (const x of ["", "http://tile.test/{z}/{x}/{y}.png", "https://tile.test/z/x/y.png", "https://tile.test/{z}/{x}.png", "javascript:alert(1)", null]) assert.strictEqual(N.tuilesUrlValide(x), false);
+});
+
+/* ---------- pilotage : rentabilité, prévisions, conformité du voyage ---------- */
+function etatRentabilite() {
+  N.S.params.tauxEUR = 10; N.S.params.fraisGenerauxMois = 6000; N.S.params.peagesEu = {};
+  N.S.camions = [{ id: "c1", immat: "AAA", fixeMensuel: 15000, km: 0, kmVidange: 0, intervalleVidange: 40000, kmPneus: 0, intervallePneus: 100000 }, { id: "c2", immat: "BBB", km: 0, kmVidange: 0, intervalleVidange: 40000, kmPneus: 0, intervallePneus: 100000 }];
+  N.S.clients = [{ id: "k1", nom: "Souss Export" }, { id: "k2", nom: "Textile Nord" }];
+  N.S.voyages = [
+    { id: "v1", ref: "V1", statut: "termine", camionId: "c1", clientId: "k1", origine: "agadir", destination: "Perpignan (France)", dateDepart: "2026-10-01", dateRetourPrevue: "2026-10-10", prix: 3000, devise: "EUR", carburantMad: 9000, peagesMad: 1000, kmAller: 2000, kmRetourVide: 2000, traversees: [] },
+    { id: "v2", ref: "V2", statut: "termine", camionId: "c1", clientId: "k1", origine: "Agadir", destination: "perpignan", dateDepart: "2026-10-15", dateRetourPrevue: "2026-10-22", prix: 3200, devise: "EUR", kmAller: 2000, kmRetourCharge: 2000, traversees: [], commandeId: "o1" },
+    { id: "v3", ref: "V3", statut: "annule", camionId: "c1", clientId: "k2", origine: "Tanger", destination: "Madrid", dateDepart: "2026-10-05", dateRetourPrevue: "2026-10-08", prix: 9999, devise: "EUR", traversees: [] },
+    { id: "v4", ref: "V4", statut: "termine", camionId: "c2", clientId: "k2", origine: "Tanger", destination: "Madrid", dateDepart: "2026-09-01", dateRetourPrevue: "2026-09-05", prix: 1500, devise: "EUR", carburantMad: 4000, kmAller: 1100, kmRetourVide: 1100, traversees: [] }];
+  N.S.pleins = [{ id: "p1", camionId: "c1", date: "2026-10-16", km: 1000, litres: 500, prix: 12, plein: true }, { id: "p2", camionId: "c1", date: "2026-10-20", km: 3000, litres: 400, prix: 10, plein: true }, { id: "p3", camionId: "c1", date: "2026-11-05", km: 3500, litres: 100, prix: 10, plein: true }];
+  N.S.interventions = [{ id: "i1", camionId: "c1", date: "2026-10-12", cout: 2000 }, { id: "i2", camionId: "c1", date: "2026-08-01", cout: 7777 }];
+  N.S.commandes = [{ id: "o1", statut: "livre", clientId: "k1", camionId: "c1", origine: "Agadir", destination: "Perpignan", dateChargement: "2026-10-15", prix: 3200, devise: "EUR" }, // liée au voyage v2 : ne compte pas deux fois
+    { id: "o2", statut: "livre", clientId: "k2", camionId: "c2", origine: "Tanger", destination: "Casablanca", dateChargement: "2026-10-20", dateLivraison: "2026-10-20", prix: 6000, devise: "MAD", autres: 1000 }, { id: "o3", statut: "devis", clientId: "k2", camionId: "c2", origine: "A", destination: "B", dateChargement: "2026-10-21", prix: 5000, devise: "MAD" }];
+  N.S.trajets = [];
+}
+test("rentabilité : carburant saisi ou estimé d'après les pleins, fin de voyage réelle", () => {
+  etatRentabilite();
+  assert.deepStrictEqual({ ...N.carburantVoyage(N.S.voyages[0]) }, { mad: 9000, estime: false });
+  assert.deepStrictEqual({ ...N.carburantVoyage(N.S.voyages[1]) }, { mad: 10000, estime: true }); // pleins du 16 et du 20 octobre, pas celui de novembre
+  const c = N.coutCompletVoyage(N.S.voyages[1]); assert.strictEqual(c.total, 10000); assert.strictEqual(c.marge, 22000); assert.strictEqual(c.carburantEstime, true); assert.strictEqual(c.jours, 8);
+  assert.strictEqual(N.finVoyage({ dateRetourPrevue: "2026-10-10", jalons: [{ type: "retour", date: "2026-10-12T08:00:00Z" }] }), "2026-10-12");
+  assert.strictEqual(N.corridorDe("agadir", "PERPIGNAN (France)"), "Agadir → Perpignan");
+});
+
+test("rentabilité : coût complet par camion (charges fixes, entretien), commande liée non comptée deux fois, annulés et devis exclus", () => {
+  etatRentabilite();
+  const r = N.rentabilite({ debut: "2026-10-01", fin: "2026-10-31" });
+  assert.strictEqual(r.periode.jours, 31);
+  const c1 = r.camions.find((x) => x.id === "c1"), c2 = r.camions.find((x) => x.id === "c2");
+  assert.strictEqual(c1.nb, 2); assert.strictEqual(c1.ca, 62000); assert.strictEqual(c1.variable, 10000 + 10000); assert.strictEqual(c1.entretien, 2000); // l'entretien d'août est hors période
+  const mois = 31 / 30.4375; assert.ok(Math.abs(c1.fixes - (15000 * mois + (6000 * mois) / 2)) < 0.01);
+  assert.ok(Math.abs(c1.cout - (22000 + c1.fixes)) < 0.01); assert.ok(Math.abs(c1.marge - (62000 - c1.cout)) < 0.01);
+  assert.strictEqual(c1.km, 8000); assert.strictEqual(c1.kmVide, 2000); assert.strictEqual(c1.pctVide, 25); assert.ok(Math.abs(c1.coutKm - c1.cout / 8000) < 1e-9);
+  assert.strictEqual(c2.nb, 1); assert.strictEqual(c2.ca, 6000); assert.strictEqual(c2.variable, 1000); assert.strictEqual(c2.fixeRenseigne, false); // seule la commande o2 : v4 est en septembre, o3 est un devis
+  assert.strictEqual(r.totaux.ca, 68000); assert.strictEqual(r.totaux.nb, 3);
+  assert.ok(Math.abs(r.totaux.coutKmCharge - r.totaux.cout / 6000) < 1e-9);
+  assert.strictEqual(r.avertissements.carburantEstime, 1); assert.strictEqual(r.avertissements.camionsSansFixe, 1); assert.strictEqual(r.avertissements.sansFraisGeneraux, false);
+});
+
+test("rentabilité : par client, par corridor, par mois, période complète", () => {
+  etatRentabilite();
+  const r = N.rentabilite({});
+  const k1 = r.clients.find((x) => x.nom === "Souss Export"), k2 = r.clients.find((x) => x.nom === "Textile Nord");
+  assert.strictEqual(k1.ca, 62000); assert.strictEqual(k1.nb, 2); assert.strictEqual(k2.ca, 15000 + 6000); assert.strictEqual(k2.nb, 2);
+  const ap = r.corridors.find((x) => x.nom === "Agadir → Perpignan"); assert.strictEqual(ap.nb, 2); assert.strictEqual(ap.km, 8000); assert.strictEqual(ap.marge, 62000 - 20000); // « agadir » et « Agadir », « Perpignan (France) » : même corridor
+  assert.ok(r.corridors.some((x) => x.nom === "Tanger → Madrid")); assert.ok(!r.corridors.some((x) => /9999/.test(String(x.ca))));
+  assert.deepStrictEqual([...r.mois.map((m) => m.nom)], ["2026-09", "2026-10"]);
+  assert.strictEqual(r.totaux.entretien, 2000 + 7777); // toute la période : l'entretien d'août est compté
+  N.S.voyages = []; N.S.commandes = []; N.S.interventions = []; const v = N.rentabilite({}); assert.strictEqual(v.totaux.ca, 0); assert.strictEqual(v.totaux.coutKm, 0);
+});
+
+test("prévisions : entretien d'après les kilomètres par jour, attente aux ports, autorisations, Schengen", () => {
+  N.S.camions = [{ id: "c", immat: "AAA", km: 39000, kmVidange: 0, intervalleVidange: 40000, kmPneus: 0, intervallePneus: 100000 }];
+  N.S.pleins = [{ id: "a", camionId: "c", date: jour(-20), km: 35000, litres: 1, prix: 1 }, { id: "b", camionId: "c", date: jour(0), km: 39000, litres: 1, prix: 1 }];
+  assert.strictEqual(N.kmParJour("c"), 200);
+  const e = N.previsionsEntretien(); assert.strictEqual(e[0].type, "Vidange"); assert.strictEqual(e[0].jours, 5); assert.strictEqual(e[0].date, jour(5));
+  N.S.traces = [{ visites: [{ zone: "Port de Tanger Med", type: "port_maroc", entree: 0, sortie: 7200 }, { zone: "Port de Tanger Med", type: "port_maroc", entree: 0, sortie: 10800 }, { zone: "Port de Tanger Med", type: "port_maroc", entree: 0, sortie: 21600 }, { zone: "Port de Tanger Med", type: "port_maroc", entree: 0, sortie: 60 }, { zone: "Dépôt", type: "depot", entree: 0, sortie: 99999 }] }];
+  const sp = N.statsPorts(); assert.strictEqual(sp.length, 1); assert.strictEqual(sp[0].n, 3); assert.strictEqual(sp[0].medianeH, 3); assert.strictEqual(sp[0].maxH, 6); // le passage d'une minute et le dépôt sont ignorés
+  N.S.voyages = [{ id: "v", ref: "V", statut: "prevu", dateDepart: jour(3), dateRetourPrevue: jour(9) }, { id: "w", ref: "W", statut: "prevu", dateDepart: jour(20), dateRetourPrevue: jour(25) }];
+  N.S.autorisations = [{ id: "a", type: "E", mode: "voyage", fin: jour(60) }];
+  N.S.chauffeurs = [{ id: "h", nom: "Karim", sejours: [{ entree: jour(-70), sortie: "" }] }];
+  const p = N.previsions().map((x) => x.texte).join(" | ");
+  assert.ok(/AAA — vidange probable vers le/.test(p)); assert.ok(/2 voyage\(s\) prévu\(s\) sous 30 jours sans autorisation, pour 1 autorisation/.test(p));
+  assert.ok(/habituellement 3,0 h au port de Tanger Med/.test(p)); assert.ok(/Karim — s'il reste en Europe, la limite Schengen/.test(p));
+  assert.strictEqual(N.previsions()[0].niveau, "warn");
+});
+
+test("dossier de voyage : papiers valides, expirant pendant le voyage, expirés au départ, non renseignés", () => {
+  N.S.chauffeurs = [{ id: "h", nom: "Karim", permis: "2027-01-01", visa: "2026-11-15", passeport: "2026-10-01" }];
+  N.S.camions = [{ id: "c", immat: "AAA", assurance: "2027-06-01" }];
+  N.S.autorisations = [{ id: "a", type: "E", fin: "2026-12-31" }];
+  const r = N.conformiteVoyage({ chauffeurId: "h", camionId: "c", autorisationId: "a", dateDepart: "2026-11-10", dateRetourPrevue: "2026-11-20" });
+  const s = (piece) => r.find((x) => x.piece === piece).statut;
+  assert.strictEqual(s("Permis"), "valide"); assert.strictEqual(s("Visa Schengen"), "expire_pendant"); assert.strictEqual(s("Passeport"), "expire_au_depart"); assert.strictEqual(s("Carte conducteur"), "non_renseigne");
+  assert.strictEqual(s("Assurance"), "valide"); assert.strictEqual(s("Autorisation bilatérale"), "valide");
+  assert.strictEqual(N.conformiteVoyage({ dateDepart: "2026-11-10", dateRetourPrevue: "2026-11-20" }).find((x) => x.piece === "Autorisation bilatérale").statut, "non_renseigne");
 });
 
 (async () => {

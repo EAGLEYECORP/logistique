@@ -63,7 +63,7 @@ VUES.commandes = {
       `<button role="tab" data-act="filtre" data-id="${k}" aria-selected="${k === filtreCmd}">${lib}<span>${compte(k)}</span></button>`).join("")}</div>
     <div class="card">
       ${liste.length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Commande</th><th>Trajet</th><th>Dates</th><th>Équipe</th><th class="r">Prix · marge</th><th>Étape</th><th></th></tr></thead><tbody>
+        <thead><tr><th>Commande</th><th>Trajet</th><th>Dates</th><th>Équipe</th><th class="r fin">Prix · marge</th><th>Étape</th><th></th></tr></thead><tbody>
         ${liste.map((c) => {
           const m = margeCommande(c);
           const nx = suivant(c.statut);
@@ -74,7 +74,7 @@ VUES.commandes = {
             <td>${esc(lieu(c.origine, c.paysOrigine))} → ${esc(lieu(c.destination, c.paysDest))}<span class="sub">${[c.poids && fmt(c.poids) + " kg", c.palettes && fmt(c.palettes) + " pal.", c.cmr && "CMR " + c.cmr].filter(Boolean).map(esc).join(" · ")}</span></td>
             <td>${dateFr(c.dateChargement)}${c.statut === "devis" || c.statut === "confirme" ? (jc === 0 ? " " + badge("Aujourd'hui", "warn") : jc < 0 ? " " + badge("En retard", "danger") : "") : ""}<span class="sub">→ ${dateFr(c.dateLivraison)}</span></td>
             <td>${c.chauffeurId ? esc(nomChauffeur(c.chauffeurId)) : badge("À affecter", "warn")}<span class="sub">${c.camionId ? esc(nomCamion(c.camionId)) : ""}</span></td>
-            <td class="r num">${fmtDevise(c.prix, c.devise)}<span class="sub ${m.marge < 0 ? "neg" : ""}">${c.trajetId || coutCommande(c) ? `marge ${fmt(m.marge)} MAD · ${fmt(m.taux)} %${c.trajetId ? "" : " · hors gasoil"}` : "coûts non saisis"}</span></td>
+            <td class="r num fin">${fmtDevise(c.prix, c.devise)}<span class="sub ${m.marge < 0 ? "neg" : ""}">${c.trajetId || coutCommande(c) ? `marge ${fmt(m.marge)} MAD · ${fmt(m.taux)} %${c.trajetId ? "" : " · hors gasoil"}` : "coûts non saisis"}</span></td>
             <td>${badge(libStatutCmd(c.statut), niveauStatut[c.statut])}${facture ? `<span class="sub">${esc(facture.numero)}</span>` : ""}</td>
             <td><div class="actions">
               ${nx ? btn("avancer", libStatutCmd(nx), { id: c.id, icone: "arrow", cls: "btn ghost sm", titre: `Passer à l'étape « ${libStatutCmd(nx)} »` }) : ""}

@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.5.0 — Rentabilité, dossier de voyage, prévisions, profils par rôle
+
+- **Rentabilité** (nouvelle page) : **coût complet au kilomètre** par camion (coûts des voyages, entretien, charges fixes du camion, frais généraux répartis), marge nette, part de kilomètres à vide, **prix de revient par kilomètre chargé** ; par corridor et par client en coûts directs ; évolution par mois ; export CSV. Carburant pris sur le voyage, sinon estimé d'après les pleins de la période. Une commande reliée à un voyage n'est comptée qu'une fois.
+- **Retours à combler** : les voyages sans fret de retour, avec une annonce prête à envoyer par WhatsApp aux partenaires.
+- **Dossier de voyage en un clic** : papiers valides sur toute la durée du voyage (ou expirant pendant), étapes avec leur origine (GPS, saisie, preuve de livraison), traversées, preuve de livraison signée, trace GPS, chaîne du froid, temps de conduite, listes de contrôle, photos. Impression / PDF, ou **archive ZIP** (dossier, données, photos en taille réelle, trace et températures en CSV). Coûts et marge inclus seulement sur demande.
+- **À prévoir** (accueil) : entretien probable d'après les kilomètres par jour, date d'atteinte de la limite Schengen, autorisations insuffisantes pour les voyages prévus, temps habituel au port d'après vos propres traces.
+- **Profil de l'appareil** : Direction, Exploitation (sans prix ni marges), Commercial, Comptabilité — chaque poste ne montre que ses pages, retour protégé par un code et un code de secours. C'est un tri de l'affichage, pas un contrôle d'accès.
+- 113 tests (103 application + 10 relais).
+
 ## 3.4.0 — Carte de flotte interactive et fiche complète du camion, à coût zéro
 
 - **Carte de la flotte** refaite avec **Leaflet** (open source, embarqué dans l'application : ni clé, ni compte, ni facturation) : zoom, déplacement, bouton « Tout voir », marqueurs colorés par état avec **flèche de cap**, trajet des 3 dernières heures, zones, couches à afficher ou masquer. Le cadrage choisi est conservé entre deux actualisations.

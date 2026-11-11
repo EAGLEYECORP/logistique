@@ -21,6 +21,9 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Voyages** | Maroc ⇄ Europe : aller, **traversée Tanger Med ⇄ Algeciras (aller et retour)**, étapes, contrôles avant départ (visa, passeport, papiers, autorisation, Schengen, poids), coût complet, marge, retour à vide, listes de contrôle |
 | **Autorisations & visas** | Autorisations bilatérales « E » / « MA », comptes-rendus de voyage, **compteur Schengen 90/180** par chauffeur |
 | **Suivi en direct** | **Carte interactive de la flotte** (Leaflet + OpenStreetMap, gratuite), **camion cliquable avec fiche complète** (position, voyage, chauffeur, camion, température), état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques, heure d'arrivée estimée ; nécessite le relais ou Traccar (`serveur/`) |
+| **Rentabilité** | Coût complet au kilomètre par camion (charges fixes comprises), marge par corridor et par client, prix de revient au km chargé, retours à combler, export CSV |
+| **Dossier de voyage** | Tout le voyage en un document (papiers, étapes GPS, traversées, preuve de livraison, trace, températures, photos) : PDF ou archive ZIP |
+| **Profils** | Direction, Exploitation, Commercial, Comptabilité : chaque poste ne montre que ses pages (tri de l'affichage protégé par un code) |
 | **Synchronisation** | Mêmes données sur le bureau et les téléphones des chauffeurs par votre relais : chiffrée sur l'appareil, fusion par enregistrement, copies de sécurité (Réglages → Données) |
 | **Tachygraphe** | Import de la **carte conducteur (.ddd)** ou d'un CSV d'activités, dépassements des temps de conduite et de repos (CE 561/2006, version simplifiée), alertes |
 | **Chaîne du froid** | Température des balises, consigne par voyage, excursions, alerte et rapport (fiche voyage) |
@@ -136,6 +139,8 @@ Automatique et sans action de votre part.
 | `commercial.js` | Commandes, clients, factures |
 | `voyages.js` | Voyages internationaux, traversées, autorisations, Schengen, péages |
 | `gps.js` | Lecture CSV/GPX, nettoyage, analyse, zones, jalons, passages aux gares, péage mesuré, rapprochement Jawaz (testé) |
+| `pilotage.js` | Rentabilité, prévisions, conformité du voyage (logique pure, testée) |
+| `cockpit.js`, `dossier.js`, `profils.js` | Page Rentabilité et prévisions ; dossier de voyage (PDF, ZIP) ; profils par rôle |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |
 | `conformite.js` | WhatsApp / SMS, analyse du tachygraphe, chaîne du froid, balise du téléphone (testé) |
 | `terrain.js` | Balise de secours du téléphone et preuve de livraison |
@@ -158,7 +163,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 108 tests |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 113 tests |
 
 ```bash
 npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres

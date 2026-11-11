@@ -317,6 +317,9 @@ Le **suivi en temps réel exige un serveur** : une application hors ligne sans s
 
 | 10 | Synchronisation entre appareils (chiffrée, fusion par enregistrement), péages de France officiels (réseau VINCI Autoroutes) | ✅ v3.2 |
 
+| 11 | Carte de flotte interactive (Leaflet, coût zéro) et fiche complète du camion | ✅ v3.4 |
+| 12 | Rentabilité (coût complet au km), dossier de voyage, prévisions, profils par rôle, retours à combler | ✅ v3.5 |
+
 **Reste hors de portée d'une application autonome** (dépend d'un tiers, d'un compte ou d'une information non confirmée) :
 
 - **API Jawaz Pro et télépéage européen (EETS)** : aucune API documentée publiquement. Les relevés CSV les remplacent (Jawaz Pro : rapprochement avec les passages GPS ; télépéage européen : montant réel du voyage).

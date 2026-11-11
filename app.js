@@ -159,6 +159,7 @@ const ONGLETS = [
   ["carburant", "Gasoil", "fuel", "Flotte"],
   ["clients", "Clients", "building", "Gestion"],
   ["factures", "Factures", "receipt", "Gestion"],
+  ["rentabilite", "Rentabilité", "gauge", "Gestion"],
   ["nomenclature", "Codes SH", "search", "Outils"],
   ["parametres", "Réglages", "settings", "Outils"],
 ];
@@ -254,8 +255,8 @@ VUES.tableau = {
     const quand = (d) => d < today() ? badge("En retard", "danger") : d === today() ? badge("Aujourd'hui", "warn") : badge("Demain", "neutral");
     return `
       <div class="kpis">
-        ${kpi("box", "Chiffre d'affaires 30 j", `${fmt(act.ca)}<small> MAD</small>`, act.nb ? `Marge ${fmt(act.marge)} MAD · ${fmt(act.taux)} %` : "Aucune livraison sur la période", act.marge < 0 ? "danger" : "", "commandes")}
-        ${kpi("receipt", "Encours clients", `${fmt(enc.total)}<small> MAD</small>`, enc.retard ? `${fmt(enc.retard)} MAD en retard` : "Aucun retard", enc.retard ? "danger" : "", "factures")}
+        ${kpi("box", "Chiffre d'affaires 30 j", `${fmt(act.ca)}<small> MAD</small>`, act.nb ? `Marge ${fmt(act.marge)} MAD · ${fmt(act.taux)} %` : "Aucune livraison sur la période", act.marge < 0 ? "danger" : "", "commandes").replace('class="kpi"', 'class="kpi fin"')}
+        ${kpi("receipt", "Encours clients", `${fmt(enc.total)}<small> MAD</small>`, enc.retard ? `${fmt(enc.retard)} MAD en retard` : "Aucun retard", enc.retard ? "danger" : "", "factures").replace('class="kpi"', 'class="kpi fin"')}
         ${kpi("route", "Commandes en cours", actives.length, `${enRoute} sur la route`, "", "commandes")}
         ${kpi("users", "Chauffeurs disponibles", `${dispo}<small>/${S.chauffeurs.length}</small>`, enRepos ? `${enRepos} en repos` : "", "", "chauffeurs")}
         ${kpi("truck", "Flotte", S.camions.length, aEntretenir ? `${aEntretenir} à entretenir ou papiers à renouveler` : "Tout est à jour", aEntretenir ? "warn" : "", "camions")}
@@ -345,6 +346,7 @@ const champsCamion = (c = {}) => [
   { name: "carteVerte", label: "Carte verte (assurance internationale)", type: "date", value: c.carteVerte },
   { name: "tachygraphe", label: "Prochain contrôle tachygraphe", type: "date", value: c.tachygraphe },
   { name: "autorisation", label: "Autorisation de transport international", type: "date", value: c.autorisation },
+  { name: "fixeMensuel", label: "Charges fixes par mois (MAD) : crédit ou amortissement, assurance, taxes, salaire", type: "number", min: 0, value: c.fixeMensuel, full: true },
   { name: "balise", label: "Identifiant de la balise GPS (IMEI ou nom dans la plateforme)", value: c.balise, full: true, placeholder: "ex. 865432100123456" },
   { name: "essieux", label: "Essieux (tracteur + semi-remorque)", type: "number", step: 1, min: 2, value: c.essieux, placeholder: "5" },
   { name: "hauteurBasse", label: "Hauteur de l'essieu avant ≤ 1,30 m (rare : véhicule léger)", type: "checkbox", value: c.hauteurBasse, full: true },
@@ -355,7 +357,7 @@ function lireCamion(v) {
     kmVidange: num(v.kmVidange, num(v.km)), intervalleVidange: num(v.intervalleVidange, S.params.intervalleVidange),
     kmPneus: num(v.kmPneus, num(v.km)), intervallePneus: num(v.intervallePneus, S.params.intervallePneus),
     ...Object.fromEntries(DOCS_CAMION.map(([k]) => [k, v[k]])),
-    essieux: num(v.essieux) || undefined, hauteurBasse: !!v.hauteurBasse, balise: (v.balise || "").trim() || undefined,
+    essieux: num(v.essieux) || undefined, hauteurBasse: !!v.hauteurBasse, balise: (v.balise || "").trim() || undefined, fixeMensuel: v.fixeMensuel === "" ? undefined : num(v.fixeMensuel),
   };
 }
 

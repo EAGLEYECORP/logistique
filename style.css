@@ -661,3 +661,14 @@ table.plain td { padding: 8px 10px; }
 .direct-tout { background: #fff; border: 2px solid rgba(0, 0, 0, .2); border-radius: 4px; padding: 6px 10px; font: 600 12px -apple-system, "Segoe UI", sans-serif; cursor: pointer; color: #111; }
 .direct-camion { cursor: pointer; } .direct-camion.sel { outline: 2px solid var(--primary); }
 .leaflet-container { font-family: inherit; z-index: 0; }
+
+/* rentabilité */
+.mois { display: grid; grid-template-columns: 70px 1fr 90px; gap: 10px; align-items: center; padding: 5px 0; font-size: .9rem; }
+.mois .barres { display: grid; gap: 3px; }
+.mois .barres i { display: block; height: 8px; border-radius: 99px; background: var(--primary); min-width: 2px; }
+.mois .barres i.c { background: var(--muted); opacity: .55; }
+.mois b { text-align: right; }
+.kpi .v.neg, .neg { color: var(--danger); }
+
+/* profil sans finances (exploitation) : prix et marges masqués */
+body.sans-finances .fin { display: none !important; }

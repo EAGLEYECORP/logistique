@@ -273,7 +273,7 @@ function directPanneauHtml(f) {
       f.eta ? ligneInfo("Arrivée estimée", `<strong>${jhmFr(f.eta.arrivee)}</strong> (${hmFr(f.eta.min)} – ${hmFr(f.eta.max)})${f.eta.retardMin !== null && f.eta.retardMin > 30 ? ` ${badge("retard probable", f.eta.retardMin > 60 ? "danger" : "warn")}` : ""}`) + ligneInfo("Reste à parcourir", `${fmt(f.eta.kmRestants)} km · ${f.eta.pauses} pause(s), ${f.eta.reposJournaliers} repos de 11 h${f.eta.traversee ? " · traversée du détroit comprise" : ""}`) : "",
       ligneInfo("Traversées", trav), ligneInfo("Dernières étapes", jalons),
       v.pod ? ligneInfo("Livraison", `Reçue par ${esc(v.pod.signataire || "?")} le ${dateHeureFr(v.pod.date)}`) : "",
-      ligneInfo("Coût / marge", cout.prix ? `${fmt(cout.total)} MAD · marge ${fmt(cout.marge)} MAD (${fmt(cout.taux, 1)} %)` : `${fmt(cout.total)} MAD de coûts saisis`),
+      ligneInfo("Coût / marge", cout.prix ? `${fmt(cout.total)} MAD · marge ${fmt(cout.marge)} MAD (${fmt(cout.taux, 1)} %)` : `${fmt(cout.total)} MAD de coûts saisis`).replace('class="fi"', 'class="fi fin"'),
       `<div class="row" style="margin-top:8px">${btn("fiche-voyage", "Ouvrir le voyage", { id: v.id, icone: "ship", cls: "btn ghost sm" })}${btn("fiche-partager", v.partage ? "Lien client" : "Partager le suivi", { id: v.id, icone: "mail", cls: "btn ghost sm" })}</div>`].join(""))
   } else voyageHtml = sec("Voyage", `<p class="hint" style="margin:0">Aucun voyage en cours pour ce camion.</p>`);
   const chauffeurHtml = ch ? (() => { const e = etatChauffeur(ch), sc = schengenEtat(ch.sejours), tx = ch.tachy; return sec(`Chauffeur · ${esc(ch.nom)}`, [

@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.6.0 — Synchronisation des photos
+
+- **Les photos se synchronisent** entre appareils par le relais (CMR, livraisons, dommages, tickets de gasoil, papiers) : une photo prise sur le téléphone du chauffeur arrive au bureau, et inversement. Chaque photo est **chiffrée sur l'appareil** (image, miniature, nom et rattachement) : le serveur ne garde que des fichiers illisibles.
+- Envoi et réception **par lots de 20**, la suite au tour suivant sans bloquer l'application ; une photo supprimée sur un appareil l'est sur les autres ; option pour ne pas synchroniser les photos (données mobiles).
+- **Sécurité** : un appareil vidé (données effacées, navigateur réinitialisé) n'efface plus rien sur le serveur — il récupère les données et les photos. Ce garde-fou couvre aussi la synchronisation des données livrée en 3.2.
+- Relais 1.5 : stockage des photos (`/api/sync/photos`), 6 Mo par photo, quota réglable (`PHOTOS_MAX_MO`, 2 Go par défaut), trace des suppressions gardée 90 jours.
+- 116 tests (105 application + 11 relais).
+
 ## 3.5.0 — Rentabilité, dossier de voyage, prévisions, profils par rôle
 
 - **Rentabilité** (nouvelle page) : **coût complet au kilomètre** par camion (coûts des voyages, entretien, charges fixes du camion, frais généraux répartis), marge nette, part de kilomètres à vide, **prix de revient par kilomètre chargé** ; par corridor et par client en coûts directs ; évolution par mois ; export CSV. Carburant pris sur le voyage, sinon estimé d'après les pleins de la période. Une commande reliée à un voyage n'est comptée qu'une fois.

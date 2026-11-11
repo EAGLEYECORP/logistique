@@ -83,7 +83,9 @@ Dans Traccar, créez un **jeton d'API** (profil utilisateur) et autorisez l'orig
 
 ## Synchronisation entre appareils
 
-Réglages → Données → « Synchronisation entre appareils » : adresse du relais, jeton de lecture et un **mot de passe de synchronisation** identique sur tous les appareils. L'application chiffre l'état (AES-256-GCM, dérivé du mot de passe) avant l'envoi : le relais ne garde qu'un bloc illisible et un numéro de version (`GET /api/sync`, `PUT /api/sync` avec la version de base ; 409 si elle est périmée). Mot de passe perdu = données du serveur irrécupérables. Les photos ne sont pas synchronisées. Taille maximale : 40 Mo.
+Réglages → Données → « Synchronisation entre appareils » : adresse du relais, jeton de lecture et un **mot de passe de synchronisation** identique sur tous les appareils. L'application chiffre l'état (AES-256-GCM, dérivé du mot de passe) avant l'envoi : le relais ne garde qu'un bloc illisible et un numéro de version (`GET /api/sync`, `PUT /api/sync` avec la version de base ; 409 si elle est périmée). Mot de passe perdu = données du serveur irrécupérables. Taille maximale de l'état : 40 Mo.
+
+**Photos** : chaque photo est un fichier chiffré (`donnees/photos/<identifiant>.bin`), envoyé ou reçu par lots de 20 (`GET /api/sync/photos` pour la liste, `PUT` / `GET` / `DELETE /api/sync/photos/<id>`). 6 Mo au plus par photo ; quota total réglable par `PHOTOS_MAX_MO` (2048 Mo par défaut, réponse 507 quand il est atteint). Une suppression laisse une trace 90 jours pour que les autres appareils suppriment aussi. Un appareil vidé ne supprime rien sur le serveur : il récupère tout. Comptez environ 300 Ko par photo de téléphone.
 
 ## Téléphone du chauffeur comme balise de secours
 

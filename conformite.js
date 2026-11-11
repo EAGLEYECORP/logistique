@@ -338,3 +338,34 @@ function tachyDiagnosticDDD(octets) {
 
 /** Modèle d'adresse de tuiles de carte valide : https, avec {z}, {x} et {y} (et {s} facultatif). Vide = non fourni. */
 const tuilesUrlValide = (t) => typeof t === "string" && /^https:\/\/[^\s{}]+\/[^\s]*\{z\}[^\s]*\{x\}[^\s]*\{y\}[^\s]*$|^https:\/\/[^\s{}]+\/[^\s]*\{z\}[^\s]*\{y\}[^\s]*\{x\}[^\s]*$/.test(t.trim());
+
+/* ============================================================
+   Synchronisation des photos : chaque photo est un fichier chiffré sur le relais.
+   Comparaison à trois voies par identifiant : photos de cet appareil, photos du serveur (vivantes ou supprimées), photos déjà synchronisées ici.
+   ============================================================ */
+/**
+ * Que faire ? locaux : identifiants présents ici · vivants / tombes : identifiants sur le serveur (présents / supprimés ailleurs) ·
+ * connus : identifiants que cet appareil a déjà synchronisés. Renvoie { envoyer, recevoir, supprimerLocal, supprimerServeur }.
+ */
+function planPhotos(locaux, vivants, tombes, connus) {
+  const L = new Set(locaux), V = new Set(vivants), T = new Set(tombes), K = new Set(connus);
+  const plan = { envoyer: [], recevoir: [], supprimerLocal: [], supprimerServeur: [] };
+  for (const id of L) { if (V.has(id)) continue; if (T.has(id)) plan.supprimerLocal.push(id); else plan.envoyer.push(id); } // supprimée ailleurs → supprimée ici ; nouvelle (ou serveur réinitialisé) → envoyée
+  for (const id of V) { if (L.has(id)) continue; if (K.has(id)) plan.supprimerServeur.push(id); else plan.recevoir.push(id); }   // connue mais absente ici → supprimée ici → à supprimer sur le serveur
+  return plan;
+}
+/** Emballe une photo pour le chiffrement : [longueur des métadonnées sur 4 octets][métadonnées JSON][image][miniature]. */
+function photoEmballer(meta, image, mini) {
+  const m = new TextEncoder().encode(JSON.stringify({ ...meta, tImage: image.length, tMini: mini.length }));
+  const o = new Uint8Array(4 + m.length + image.length + mini.length);
+  new DataView(o.buffer).setUint32(0, m.length); o.set(m, 4); o.set(image, 4 + m.length); o.set(mini, 4 + m.length + image.length);
+  return o;
+}
+function photoDeballer(o) {
+  if (o.length < 4) throw new Error("Photo illisible.");
+  const n = new DataView(o.buffer, o.byteOffset, o.byteLength).getUint32(0);
+  if (n <= 0 || 4 + n > o.length) throw new Error("Photo illisible.");
+  const meta = JSON.parse(new TextDecoder().decode(o.subarray(4, 4 + n)));
+  if (4 + n + meta.tImage + meta.tMini !== o.length) throw new Error("Photo tronquée.");
+  return { meta, image: o.subarray(4 + n, 4 + n + meta.tImage), mini: o.subarray(4 + n + meta.tImage) };
+}

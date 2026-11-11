@@ -1122,6 +1122,29 @@ test("dossier de voyage : papiers valides, expirant pendant le voyage, expirés 
   assert.strictEqual(N.conformiteVoyage({ dateDepart: "2026-11-10", dateRetourPrevue: "2026-11-20" }).find((x) => x.piece === "Autorisation bilatérale").statut, "non_renseigne");
 });
 
+test("synchronisation des photos : plan à trois voies", () => {
+  const p = N.planPhotos(["a", "b", "c", "d"], ["a", "e", "f"], ["c"], ["a", "d", "f"]);
+  assert.deepStrictEqual([...p.envoyer], ["b", "d"]);        // b : nouvelle ici · d : connue mais disparue du serveur sans trace (serveur réinitialisé) → renvoyée
+  assert.deepStrictEqual([...p.supprimerLocal], ["c"]);       // supprimée sur un autre appareil
+  assert.deepStrictEqual([...p.recevoir], ["e"]);             // nouvelle ailleurs
+  assert.deepStrictEqual([...p.supprimerServeur], ["f"]);     // déjà synchronisée ici puis supprimée ici
+  const rien = N.planPhotos(["a"], ["a"], [], ["a"]); assert.strictEqual(rien.envoyer.length + rien.recevoir.length + rien.supprimerLocal.length + rien.supprimerServeur.length, 0);
+  assert.deepStrictEqual([...N.planPhotos([], ["x"], [], []).recevoir], ["x"]); // premier appareil vide : tout est reçu, rien n'est supprimé
+});
+
+test("synchronisation des photos : emballage, chiffrement et restitution à l'identique", async () => {
+  const image = new Uint8Array(3000).map((_, i) => (i * 7) % 256), mini = new Uint8Array(400).map((_, i) => (i * 3) % 256);
+  const meta = { id: "ph1", cible: "voyage:v1", nom: "CMR signé.jpg", date: "2026-11-10T10:00:00.000Z", w: 1600, h: 1200, taille: 3000 };
+  const paquet = N.photoEmballer(meta, image, mini);
+  const chiffre = await N.chiffrer(paquet, "secret123");
+  assert.ok(!new TextDecoder("latin1").decode(chiffre).includes("voyage:v1"), "ni la cible ni le nom ne sont lisibles sur le serveur");
+  const r = N.photoDeballer(await N.dechiffrer(chiffre, "secret123"));
+  assert.strictEqual(r.meta.cible, "voyage:v1"); assert.strictEqual(r.meta.nom, "CMR signé.jpg"); assert.strictEqual(r.image.length, 3000); assert.strictEqual(r.mini.length, 400);
+  assert.ok(r.image.every((x, i) => x === image[i]) && r.mini.every((x, i) => x === mini[i]));
+  await assert.rejects(() => N.dechiffrer(chiffre, "autre"));
+  assert.throws(() => N.photoDeballer(paquet.subarray(0, paquet.length - 10)), /tronquée/); assert.throws(() => N.photoDeballer(new Uint8Array([0, 0])), /illisible/);
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

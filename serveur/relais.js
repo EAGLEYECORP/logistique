@@ -12,7 +12,7 @@ const crypto = require("crypto");
 const { charger } = require("./moteur.js");
 const { page } = require("./page-client.js");
 
-const VERSION = "1.4.0";
+const VERSION = "1.5.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -34,7 +34,7 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null, ...(temp !== null ? { temp } : {}) };
 }
 
-function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a) } = {}) {
+function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048 } = {}) {
   if (!jetonEcriture || !jetonLecture) throw new Error("JETON_ECRITURE et JETON_LECTURE sont obligatoires.");
   const historique = new Map(); // id -> [positions triées]
   const noms = new Map();
@@ -46,6 +46,15 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
   let synchro = { version: 0, blob: "", appareil: "", t: 0 };
   const fichierSynchro = () => path.join(dossier, "synchro.json");
   if (dossier) { try { synchro = JSON.parse(fs.readFileSync(path.join(dossier, "synchro.json"), "utf8")); } catch { /* aucune synchro */ } }
+  /* Photos synchronisées : un fichier chiffré par photo (le serveur ne peut pas les lire). Une suppression laisse une trace 90 jours pour les autres appareils. */
+  const photos = new Map(), photosMem = new Map(); // id -> { t, taille, supprime } ; contenu en mémoire si aucun dossier
+  const dossierPhotos = dossier ? path.join(dossier, "photos") : null, ID_PHOTO = /^[A-Za-z0-9_-]{6,40}$/, PHOTO_MAX = 6 * 1024 * 1024;
+  const sauverPhotos = () => { if (dossier) { try { fs.writeFileSync(path.join(dossier, "photos.json"), JSON.stringify([...photos.entries()]), { mode: 0o600 }); } catch { /* ignoré */ } } };
+  if (dossier) { fs.mkdirSync(dossierPhotos, { recursive: true }); try { for (const [k, v] of JSON.parse(fs.readFileSync(path.join(dossier, "photos.json"), "utf8"))) photos.set(k, v); } catch { /* aucune photo */ }
+    const limiteTombe = Date.now() / 1000 - 90 * 86400; for (const [k, v] of photos) if (v.supprime && v.t < limiteTombe) photos.delete(k); }
+  const photosTotal = () => { let n = 0; for (const v of photos.values()) if (!v.supprime) n += v.taille; return n; };
+  // Au-delà de la limite, on cesse de garder les octets mais on laisse l'envoi se terminer pour pouvoir répondre proprement (413) ; coupure nette au-delà de 4 fois la limite.
+  const corpsOctets = (req, max) => new Promise((ok, ko) => { let n = 0, trop = false; const b = []; req.on("data", (c) => { n += c.length; if (n > max) { trop = true; b.length = 0; if (n > max * 4) req.destroy(); } else if (!trop) b.push(c); }); req.on("end", () => (trop ? ko(new Error("trop gros")) : ok(Buffer.concat(b)))); req.on("error", ko); req.on("close", () => { if (trop) ko(new Error("trop gros")); }); });
   const fichierPartages = () => path.join(dossier, "partages.json");
   const sauverPartages = () => { if (dossier) { try { fs.writeFileSync(fichierPartages(), JSON.stringify([...partages.values()]), { mode: 0o600 }); } catch { /* ignoré */ } } };
 
@@ -204,6 +213,31 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           if (id && req.method === "DELETE") { partages.delete(id); sauverPartages(); return json(res, 200, { ok: true }); }
           if (id && req.method === "GET") return json(res, 200, donneesPartage(part));
         }
+        const mph = p.match(/^\/api\/sync\/photos(?:\/([^/]+))?$/);
+        if (mph) {
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          const id = mph[1];
+          if (!id && req.method === "GET") return json(res, 200, { photos: [...photos.entries()].map(([k, v]) => ({ id: k, t: v.t, taille: v.taille, supprime: !!v.supprime })), octets: photosTotal(), maxOctets: photosMaxMo * 1024 * 1024 });
+          if (!id || !ID_PHOTO.test(id)) return json(res, 400, { erreur: "Identifiant de photo invalide." });
+          const fichier = dossierPhotos && path.join(dossierPhotos, `${id}.bin`), e = photos.get(id);
+          if (req.method === "PUT") {
+            let o; try { o = await corpsOctets(req, PHOTO_MAX); } catch { return json(res, 413, { erreur: "Photo trop volumineuse (6 Mo au plus)." }); }
+            if (!o.length) return json(res, 400, { erreur: "Photo vide." });
+            if (photosTotal() - (e && !e.supprime ? e.taille : 0) + o.length > photosMaxMo * 1024 * 1024) return json(res, 507, { erreur: `Espace photos plein sur le serveur (${photosMaxMo} Mo).` });
+            if (fichier) { try { fs.writeFileSync(fichier, o, { mode: 0o600 }); } catch { return json(res, 500, { erreur: "Écriture impossible sur le serveur." }); } } else photosMem.set(id, o);
+            photos.set(id, { t: Math.floor(Date.now() / 1000), taille: o.length }); sauverPhotos(); return json(res, 200, { ok: true });
+          }
+          if (req.method === "GET") {
+            if (!e || e.supprime) return json(res, 404, { erreur: "Photo introuvable." });
+            let o; try { o = fichier ? fs.readFileSync(fichier) : photosMem.get(id); } catch { o = null; }
+            if (!o) return json(res, 404, { erreur: "Photo introuvable." });
+            res.writeHead(200, entetes({ "Content-Type": "application/octet-stream", "Content-Length": o.length })); return res.end(o);
+          }
+          if (req.method === "DELETE") {
+            if (fichier) { try { fs.unlinkSync(fichier); } catch { /* déjà absente */ } } else photosMem.delete(id);
+            photos.set(id, { t: Math.floor(Date.now() / 1000), taille: 0, supprime: true }); sauverPhotos(); return json(res, 200, { ok: true });
+          }
+        }
         if (p === "/api/sync") { // synchronisation entre appareils : le serveur ne voit qu'un bloc chiffré par l'application
           if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
           if (req.method === "GET") return json(res, 200, { version: synchro.version, appareil: synchro.appareil, t: synchro.t, blob: url.searchParams.get("meta") ? undefined : synchro.blob });
@@ -260,7 +294,7 @@ if (require.main === module) {
   if (e.TELEGRAM_TOKEN && e.TELEGRAM_CHAT) canaux.telegram = { token: e.TELEGRAM_TOKEN, chat: e.TELEGRAM_CHAT, api: e.TELEGRAM_API || undefined };
   if (e.WHATSAPP_TOKEN && e.WHATSAPP_PHONE_ID) canaux.whatsapp = { token: e.WHATSAPP_TOKEN, phoneId: e.WHATSAPP_PHONE_ID, destinataires: String(e.WHATSAPP_DEST || "").split(",").map((x) => x.trim()).filter(Boolean), modele: e.WHATSAPP_MODELE || "", langue: e.WHATSAPP_LANGUE || "fr", api: e.WHATSAPP_API || undefined };
   if (e.WEBHOOK_URL) canaux.webhook = { url: e.WEBHOOK_URL };
-  const { serveur } = creer({ ...jetons, dossier, retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux });
+  const { serveur } = creer({ ...jetons, dossier, retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048) });
   const port = Number(e.PORT || 8787);
   serveur.listen(port, e.HOTE || "0.0.0.0", () => {
     console.log(`Relais de positions ${VERSION} sur le port ${port}`);

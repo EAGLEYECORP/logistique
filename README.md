@@ -24,7 +24,7 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Rentabilité** | Coût complet au kilomètre par camion (charges fixes comprises), marge par corridor et par client, prix de revient au km chargé, retours à combler, export CSV |
 | **Dossier de voyage** | Tout le voyage en un document (papiers, étapes GPS, traversées, preuve de livraison, trace, températures, photos) : PDF ou archive ZIP |
 | **Profils** | Direction, Exploitation, Commercial, Comptabilité : chaque poste ne montre que ses pages (tri de l'affichage protégé par un code) |
-| **Synchronisation** | Mêmes données sur le bureau et les téléphones des chauffeurs par votre relais : chiffrée sur l'appareil, fusion par enregistrement, copies de sécurité (Réglages → Données) |
+| **Synchronisation** | Mêmes données **et mêmes photos** sur le bureau et les téléphones des chauffeurs par votre relais : chiffrées sur l'appareil, fusion par enregistrement, copies de sécurité (Réglages → Données) |
 | **Tachygraphe** | Import de la **carte conducteur (.ddd)** ou d'un CSV d'activités, dépassements des temps de conduite et de repos (CE 561/2006, version simplifiée), alertes |
 | **Chaîne du froid** | Température des balises, consigne par voyage, excursions, alerte et rapport (fiche voyage) |
 | **CMR** | Lettre de voiture CMR (24 rubriques, français / anglais) préremplie et imprimable ; relevés de télépéage européen importés |
@@ -163,7 +163,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 113 tests |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 116 tests |
 
 ```bash
 npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres

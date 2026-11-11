@@ -9,7 +9,7 @@
    ============================================================ */
 
 const CLE_DIRECT = "logistique-direct";
-const DIRECT_DEFAUT = { mode: "off", url: "", jeton: "", intervalle: 20, vitesseMax: 90, tuiles: true, ntfy: "" };
+const DIRECT_DEFAUT = { mode: "off", url: "", jeton: "", intervalle: 20, vitesseMax: 90, tuiles: true, tuilesUrl: "", ntfy: "" };
 const directCfg = () => { try { return { ...DIRECT_DEFAUT, ...JSON.parse(localStorage.getItem(CLE_DIRECT) || "{}") }; } catch { return { ...DIRECT_DEFAUT }; } };
 const directSauverCfg = (c) => { try { localStorage.setItem(CLE_DIRECT, JSON.stringify(c)); } catch { /* ignoré */ } };
 
@@ -170,7 +170,7 @@ async function directRafraichir() {
     if (typeof partagesSynchroniser === "function") partagesSynchroniser();
   } catch (e) { directDonnees.erreur = e.message || "Erreur inconnue."; }
   directDonnees.enCours = false;
-  if (ongletActif === "direct") { const z = $("#direct-live"); if (z) { z.innerHTML = directLive(); majSelectionCarte(); } }
+  if (ongletActif === "direct") directMettreAJour();
 }
 function directDemarrer() {
   clearInterval(directMinuteur); directMinuteur = null;
@@ -180,29 +180,145 @@ function directDemarrer() {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && directCfg().mode !== "off") directRafraichir(); });
 
-/* ---------- rendu ---------- */
+/* ---------- rendu : carte Leaflet (open source, embarquée, sans clé ni facturation) + panneau de détail ---------- */
 const COULEUR_ETAT = { ok: "#16a34a", warn: "#d97706", danger: "#dc2626", neutral: "#64748b" };
 const ilYa = (s) => (s < 90 ? `${Math.max(0, Math.round(s))} s` : s < 5400 ? `${Math.round(s / 60)} min` : s < 172800 ? `${Math.round(s / 3600)} h` : `${Math.round(s / 86400)} j`);
+const TUILES_OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const hmFr = (t) => new Date(t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const jhmFr = (t) => new Date(t * 1000).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const carte = { map: null, marqueurs: new Map(), traces: new Map(), zones: null, groupeTraces: null, vue: null, panneauOuvert: false, cadre: false };
 
-function directCarte(flotte) {
-  if (!flotte.length) return "";
-  const c = directCfg(), L = 800, H = 440, now = maintenantS();
-  const pts = flotte.flatMap((f) => [[f.derniere[1], f.derniere[2]], ...f.hist.filter((p) => now - p[0] < 3 * 3600).filter((_, i) => i % 8 === 0).map((p) => [p[1], p[2]])]);
-  const vue = directVue(pts, { largeur: L, hauteur: H, marge: 60, zMax: 13 });
-  const P = (lat, lon) => vue.vers(lat, lon).map((x) => x.toFixed(1));
-  const tuiles = c.tuiles && navigator.onLine !== false ? vue.tuiles.map((t) => `<image href="https://tile.openstreetmap.org/${vue.z}/${t.x}/${t.y}.png" x="${t.px.toFixed(1)}" y="${t.py.toFixed(1)}" width="256" height="256" opacity=".9" onerror="this.remove()"/>`).join("") : "";
-  const zones = zonesActives().map((z) => { const [x, y] = vue.vers(z.lat, z.lon); const r = z.rayon / (156543.03 * Math.cos(gpsRad(z.lat)) / 2 ** vue.z); return x > -50 && x < L + 50 && y > -50 && y < H + 50 ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${Math.max(4, r).toFixed(1)}" fill="#2563eb" fill-opacity=".12" stroke="#2563eb" stroke-opacity=".5"/>` : ""; }).join("");
-  const traces = flotte.map((f) => { const l = f.hist.filter((p) => now - p[0] < 3 * 3600); return l.length > 1 ? `<path d="${l.map((p, i) => `${i ? "L" : "M"}${P(p[1], p[2]).join(" ")}`).join("")}" fill="none" stroke="${COULEUR_ETAT[f.etat.niveau]}" stroke-width="2.4" stroke-opacity=".75" stroke-linejoin="round"/>` : ""; }).join("");
-  const camions = flotte.map((f) => { const [x, y] = P(f.derniere[1], f.derniere[2]); const sel = f.id === directSelection;
-    return `<g data-direct-camion="${esc(f.id)}" style="cursor:pointer"><circle cx="${x}" cy="${y}" r="${sel ? 13 : 9}" fill="${COULEUR_ETAT[f.etat.niveau]}" stroke="#fff" stroke-width="2.5"/>
-      <text x="${(+x + 14).toFixed(1)}" y="${(+y + 4).toFixed(1)}" font-size="13" font-weight="700" fill="#111" stroke="#fff" stroke-width="3.5" paint-order="stroke">${esc(f.nom)}</text></g>`; }).join("");
-  return `<svg viewBox="0 0 ${L} ${H}" class="direct-carte" role="img" aria-label="Carte de la flotte"><rect width="${L}" height="${H}" fill="var(--surface-2, #eef2f7)"/>${tuiles}${zones}${traces}${camions}
-    ${tuiles ? `<text x="${L - 6}" y="${H - 6}" text-anchor="end" font-size="10" fill="#333" stroke="#fff" stroke-width="3" paint-order="stroke">© OpenStreetMap</text>` : ""}</svg>`;
+/** Cap (degrés) de la dernière position : donné par la balise, sinon déduit des deux derniers points distants d'au moins 30 m. */
+function capDe(f) {
+  const d = directDonnees.derniere.get(f.id); if (d && Number.isFinite(d.cap)) return d.cap;
+  for (let i = f.hist.length - 1; i > 0; i--) if (gpsDistance(f.hist[i - 1], f.hist[i]) >= 30) return gpsCap(f.hist[i - 1], f.hist[i]);
+  return null;
 }
-function directLive() {
-  const c = directCfg(), D = directDonnees, flotte = directFlotte(), now = maintenantS();
-  const compte = (...codes) => flotte.filter((f) => codes.includes(f.etat.code)).length;
-  const alertes = flotte.flatMap((f) => f.alertes);
+function iconeCamion(f) {
+  const c = COULEUR_ETAT[f.etat.niveau], cap = capDe(f), sel = f.id === directSelection;
+  const fleche = cap === null ? `<circle cx="14" cy="14" r="4.5" fill="#fff"/>` : `<g transform="rotate(${cap} 14 14)"><path d="M14 4 L21 22 L14 18 L7 22 Z" fill="#fff"/></g>`;
+  return L.divIcon({ className: `direct-marq ${sel ? "sel" : ""}`, iconSize: [30, 30], iconAnchor: [15, 15],
+    html: `<svg viewBox="0 0 28 28" width="30" height="30"><circle cx="14" cy="14" r="13" fill="${c}" stroke="#fff" stroke-width="2"/>${fleche}</svg><span class="direct-nom">${esc(f.nom)}</span>` });
+}
+function directCarteInit() {
+  const el = $("#direct-map"); if (!el) return;
+  if (carte.map) { carte.map.remove(); carte.map = null; carte.marqueurs.clear(); carte.traces.clear(); }
+  if (typeof L === "undefined") { el.innerHTML = `<p class="hint" style="padding:16px">La bibliothèque de carte n'a pas pu être chargée (vendor/leaflet).</p>`; return; }
+  const c = directCfg();
+  carte.map = L.map(el, { zoomControl: true, worldCopyJump: true, preferCanvas: false }).setView(carte.vue ? [carte.vue.lat, carte.vue.lon] : [34.5, -5.5], carte.vue ? carte.vue.zoom : 6);
+  const url = tuilesUrlValide(c.tuilesUrl) ? c.tuilesUrl : TUILES_OSM;
+  if (c.tuiles) L.tileLayer(url, { maxZoom: 19, crossOrigin: true, attribution: url === TUILES_OSM ? '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' : "Fond de carte : fournisseur configuré" }).addTo(carte.map);
+  carte.zones = L.layerGroup(zonesActives().map((z) => L.circle([z.lat, z.lon], { radius: z.rayon, color: "#2563eb", weight: 1, fillOpacity: 0.1 }).bindTooltip(esc(z.nom), { sticky: true }))).addTo(carte.map);
+  carte.groupeTraces = L.layerGroup().addTo(carte.map);
+  L.control.layers(null, { "Zones (ports, frontières, dépôts)": carte.zones, "Trajet des 3 dernières heures": carte.groupeTraces }, { collapsed: true }).addTo(carte.map);
+  const Tout = L.Control.extend({ options: { position: "topleft" }, onAdd() { const b = L.DomUtil.create("button", "leaflet-bar direct-tout"); b.type = "button"; b.title = "Voir toute la flotte"; b.textContent = "Tout voir"; L.DomEvent.disableClickPropagation(b); b.onclick = () => directToutVoir(); return b; } });
+  new Tout().addTo(carte.map);
+  carte.map.on("moveend", () => { const m = carte.map.getCenter(); carte.vue = { lat: m.lat, lon: m.lng, zoom: carte.map.getZoom() }; });
+  carte.map.on("dragstart zoomstart", () => { carte.cadre = true; });
+  setTimeout(() => carte.map?.invalidateSize(), 50);
+}
+function directToutVoir(flotte = directFlotte()) {
+  if (!carte.map || !flotte.length) return;
+  const pts = flotte.map((f) => [f.derniere[1], f.derniere[2]]);
+  if (pts.length === 1) carte.map.setView(pts[0], 11); else carte.map.fitBounds(L.latLngBounds(pts).pad(0.25), { maxZoom: 12 });
+}
+function directCarteMaj(flotte) {
+  if (!carte.map) return;
+  const now = maintenantS(), ids = new Set(flotte.map((f) => f.id));
+  for (const [id, m] of carte.marqueurs) if (!ids.has(id)) { m.remove(); carte.marqueurs.delete(id); carte.traces.get(id)?.remove(); carte.traces.delete(id); }
+  for (const f of flotte) {
+    const ll = [f.derniere[1], f.derniere[2]];
+    let m = carte.marqueurs.get(f.id);
+    if (!m) { m = L.marker(ll, { icon: iconeCamion(f), riseOnHover: true, title: f.nom }).addTo(carte.map); m.on("click", () => directSelectionner(f.id, { centrer: true })); carte.marqueurs.set(f.id, m); }
+    else { m.setLatLng(ll); m.setIcon(iconeCamion(f)); }
+    m.setZIndexOffset(f.id === directSelection ? 1000 : f.alertes.length ? 500 : 0);
+    const l = f.hist.filter((p) => now - p[0] < 3 * 3600).map((p) => [p[1], p[2]]);
+    let t = carte.traces.get(f.id);
+    if (l.length > 1) { if (!t) { t = L.polyline(l, { weight: 3, opacity: 0.7 }).addTo(carte.groupeTraces); carte.traces.set(f.id, t); } else t.setLatLngs(l); t.setStyle({ color: COULEUR_ETAT[f.etat.niveau] }); }
+    else if (t) { t.remove(); carte.traces.delete(f.id); }
+  }
+  if (!carte.cadre && flotte.length) { directToutVoir(flotte); carte.cadre = true; }
+}
+
+/* ---------- fiche complète d'un camion ---------- */
+const ligneInfo = (k, v) => (v === "" || v === null || v === undefined ? "" : `<div class="fi"><span>${k}</span><b>${v}</b></div>`);
+const echeanceBadge = (iso) => { const j = joursAvant(iso); return j === null ? badge("non renseigné", "neutral") : j < 0 ? badge(`expiré (${dateFr(iso)})`, "danger") : badge(`${dateFr(iso)} · J-${j}`, j <= S.params.alerteJours ? "warn" : "ok"); };
+function directPanneauHtml(f) {
+  const now = maintenantS(), cam = f.camion, ch = f.chauffeur, v = f.voyage, p = f.derniere, d = directDonnees.derniere.get(f.id);
+  const cap = capDe(f), km24 = f.hist.filter((q) => now - q[0] < 24 * 3600), dist = km24.reduce((s, q, i) => (i ? s + gpsDistance(km24[i - 1], q) / 1000 : 0), 0);
+  const vmax = Math.max(0, ...km24.map((q) => q[3] ?? 0));
+  const sec = (titre, corps) => (corps.trim() ? `<section class="fiche"><h4>${titre}</h4>${corps}</section>` : "");
+  const acces = [];
+  if (ch?.tel) acces.push(`<a class="btn sm" href="tel:${esc(ch.tel.replace(/\s/g, ""))}">${ic("phone")}Appeler</a>`);
+  if (ch?.tel && lienWhatsApp(ch.tel, "")) acces.push(`<a class="btn ghost sm" href="${esc(lienWhatsApp(ch.tel, `Bonjour ${ch.nom.split(" ")[0]}, `))}" target="_blank" rel="noopener">WhatsApp</a>`);
+  if (ch?.tel && lienSMS(ch.tel, "")) acces.push(`<a class="btn ghost sm" href="${esc(lienSMS(ch.tel, ""))}">SMS</a>`);
+  const position = sec("Position et déplacement", [
+    ligneInfo("Dernière position", `il y a ${ilYa(now - p[0])} (${hmFr(p[0])})`), ligneInfo("Vitesse", p[3] != null ? `${Math.round(p[3])} km/h` : ""), ligneInfo("Cap", cap !== null ? `${Math.round(cap)}°` : ""),
+    ligneInfo("Coordonnées", `<a href="https://www.openstreetmap.org/?mlat=${p[1]}&mlon=${p[2]}#map=13/${p[1]}/${p[2]}" target="_blank" rel="noopener">${p[1].toFixed(5)}, ${p[2].toFixed(5)}</a>`),
+    ligneInfo("Zone", f.etat.zone ? esc(f.etat.zone.nom) : ""), ligneInfo("État", `${f.etat.libelle}${f.etat.code === "traversee" ? " — silence normal en mer" : ""}`),
+    f.etat.code === "arret" || f.etat.code === "arret_long" ? ligneInfo("Arrêt depuis", `${f.etat.arretMin} min`) : "",
+    ligneInfo("Parcouru (24 h)", dist ? `${fmt(dist, 0)} km · vitesse max ${Math.round(vmax)} km/h` : ""),
+    ligneInfo("Conduite sans pause de 45 min", `<span class="${f.conduite.serieH >= 4.5 ? "neg" : ""}">${dureeTxt(f.conduite.serieH)}</span> (estimation GPS)`), ligneInfo("Conduite du jour", `${dureeTxt(conduiteJour(f.hist, now))} (estimation)`),
+    d?.batterie != null ? ligneInfo("Batterie balise", `${d.batterie} %`) : ""].join(""));
+  const froid = f.derniere[4] != null ? (() => { const pts = f.hist.map((q) => [q[0], q[4]]).filter((q) => q[1] != null && now - q[0] < 12 * 3600); const a = v && Number.isFinite(v.tempMin) ? froidAnalyser(pts, v.tempMin, v.tempMax) : froidAnalyser(pts, -100, 100); const c = String(f.derniere[4]).replace(".", ",");
+    return sec("Chaîne du froid", ligneInfo("Température actuelle", `${badge(`${c} °C`, f.alertes.some((x) => x.cle.startsWith("froid:")) ? "danger" : "ok")}`) + (v && Number.isFinite(v.tempMin) ? ligneInfo("Consigne", `${v.tempMin} à ${v.tempMax} °C`) : "") + (a ? ligneInfo("12 dernières heures", `${a.min.toFixed(1).replace(".", ",")} à ${a.max.toFixed(1).replace(".", ",")} °C${a.excursions.length ? ` · ${a.excursions.length} excursion(s)` : ""}`) : "")); })() : "";
+  let voyageHtml = "";
+  if (v) {
+    const trav = ["aller", "retour"].map((s) => traversee(v, s)).filter(Boolean).map((t) => `${t.sens === "aller" ? "Aller" : "Retour"} : ${esc(libLigne(t.ligne))}${t.date ? " " + dateFr(t.date) : ""} · ${esc((STATUTS_TRAV.find(([k]) => k === t.statut) || [])[1] || "")}`).join("<br>");
+    const jalons = (v.jalons || []).slice(-3).map((j) => `${esc(nomJalon(j.type))} <span class="sub" style="display:inline">${dateHeureFr(j.date)}</span>`).join("<br>");
+    const cout = coutVoyage(v);
+    voyageHtml = sec(`Voyage ${esc(v.ref)}`, [
+      ligneInfo("Itinéraire", `${esc(v.origine)} ⇄ ${esc(v.destination)}`), ligneInfo("Client", v.clientId ? esc(nomClient(v.clientId)) : ""), ligneInfo("Marchandise", esc(v.marchandise || "")),
+      ligneInfo("Départ → retour prévu", `${dateFr(v.dateDepart)} → ${dateFr(v.dateRetourPrevue)}`), ligneInfo("Livraison promise", v.livraisonPrevue ? jhmFr(Date.parse(v.livraisonPrevue) / 1000) : ""),
+      f.eta ? ligneInfo("Arrivée estimée", `<strong>${jhmFr(f.eta.arrivee)}</strong> (${hmFr(f.eta.min)} – ${hmFr(f.eta.max)})${f.eta.retardMin !== null && f.eta.retardMin > 30 ? ` ${badge("retard probable", f.eta.retardMin > 60 ? "danger" : "warn")}` : ""}`) + ligneInfo("Reste à parcourir", `${fmt(f.eta.kmRestants)} km · ${f.eta.pauses} pause(s), ${f.eta.reposJournaliers} repos de 11 h${f.eta.traversee ? " · traversée du détroit comprise" : ""}`) : "",
+      ligneInfo("Traversées", trav), ligneInfo("Dernières étapes", jalons),
+      v.pod ? ligneInfo("Livraison", `Reçue par ${esc(v.pod.signataire || "?")} le ${dateHeureFr(v.pod.date)}`) : "",
+      ligneInfo("Coût / marge", cout.prix ? `${fmt(cout.total)} MAD · marge ${fmt(cout.marge)} MAD (${fmt(cout.taux, 1)} %)` : `${fmt(cout.total)} MAD de coûts saisis`),
+      `<div class="row" style="margin-top:8px">${btn("fiche-voyage", "Ouvrir le voyage", { id: v.id, icone: "ship", cls: "btn ghost sm" })}${btn("fiche-partager", v.partage ? "Lien client" : "Partager le suivi", { id: v.id, icone: "mail", cls: "btn ghost sm" })}</div>`].join(""))
+  } else voyageHtml = sec("Voyage", `<p class="hint" style="margin:0">Aucun voyage en cours pour ce camion.</p>`);
+  const chauffeurHtml = ch ? (() => { const e = etatChauffeur(ch), sc = schengenEtat(ch.sejours), tx = ch.tachy; return sec(`Chauffeur · ${esc(ch.nom)}`, [
+    ligneInfo("Téléphone", ch.tel ? `<a href="tel:${esc(ch.tel.replace(/\s/g, ""))}">${esc(ch.tel)}</a>` : "non renseigné"), ligneInfo("Service", badge(e.texte, e.niveau)),
+    ligneInfo("Permis", echeanceBadge(ch.permis)), ligneInfo("Carte conducteur", echeanceBadge(ch.carteConducteur)), ligneInfo("Passeport", echeanceBadge(ch.passeport)), ligneInfo("Visa", echeanceBadge(ch.visa)), ligneInfo("Visite médicale", echeanceBadge(ch.visiteMedicale)),
+    (ch.sejours || []).length ? ligneInfo("Schengen 90/180", sc.depasse ? badge("limite dépassée", "danger") : badge(`${sc.restant} jour(s) restant(s)`, sc.restant <= 10 ? "warn" : "ok")) : "",
+    tx ? ligneInfo("Tachygraphe", tx.infractions.length ? badge(`${tx.infractions.length} dépassement(s)`, tx.infractions.some((i) => i.gravite === "grave") ? "danger" : "warn") : badge("aucun dépassement", "ok")) : "",
+    `<div class="row" style="margin-top:8px">${acces.join("")}${btn("fiche-chauffeur", "Fiche chauffeur", { icone: "users", cls: "btn ghost sm" })}</div>`].join("")); })() : sec("Chauffeur", `<p class="hint" style="margin:0">Aucun chauffeur affecté.</p>`);
+  const camionHtml = cam ? sec(`Camion · ${esc(cam.immat)}`, [
+    ligneInfo("Modèle", esc(cam.marque || "")), ligneInfo("Kilométrage", `${fmt(cam.km)} km`), ligneInfo("Essieux", cam.essieux ? `${cam.essieux} (péage classe ${classeADM(cam) || "?"})` : ""), ligneInfo("Remorque", esc(v?.remorque || "")),
+    etatCamion(cam).filter((e) => e.pct !== undefined).map((e) => ligneInfo(e.type, badge(e.texte, e.niveau))).join(""),
+    DOCS_CAMION.map(([k, lib]) => (cam[k] ? ligneInfo(lib, echeanceBadge(cam[k])) : "")).join(""),
+    consoMoyenne(cam.id) ? ligneInfo("Consommation moyenne", `${fmt(consoMoyenne(cam.id), 1)} L/100 km`) : "",
+    ligneInfo("Entretien (cumul)", `${fmt(coutEntretien(cam.id))} MAD`),
+    `<div class="row" style="margin-top:8px">${btn("fiche-camion", "Fiche camion", { icone: "truck", cls: "btn ghost sm" })}</div>`].join("")) : sec("Camion", `<p class="hint" style="margin:0">Balise <strong>${esc(f.id)}</strong> non liée à un camion.</p><div class="row">${btn("lier-balise", "Lier à un camion", { id: f.id, icone: "truck", cls: "btn sm" })}</div>`);
+  const alertesHtml = f.alertes.length ? sec("Alertes", `<ul class="ctl">${f.alertes.map((a) => `<li class="${a.niveau}">${ic(a.niveau === "danger" ? "alert" : "clock")}<span>${esc(a.texte)}</span></li>`).join("")}</ul>`) : "";
+  return `<header><div><h3>${esc(f.nom)}</h3><div class="sub" style="margin:0">${cam?.marque ? esc(cam.marque) + " · " : ""}balise ${esc(f.id)}</div></div>${badge(f.etat.libelle, f.etat.niveau)}<button type="button" class="icon-btn" data-act="fermer-fiche" aria-label="Fermer">${ic("x")}</button></header>
+    <div class="row" style="padding:0 14px 8px">${btn("centrer", "Centrer", { icone: "pin", cls: "btn ghost sm" })}${btn("trace-complete", "Voir son trajet", { icone: "route", cls: "btn ghost sm" })}</div>
+    <div class="corps">${alertesHtml}${position}${voyageHtml}${chauffeurHtml}${camionHtml}${froid}</div>`;
+}
+function directPanneauMaj(flotte = directFlotte()) {
+  const el = $("#direct-panneau"); if (!el) return;
+  const f = flotte.find((x) => x.id === directSelection);
+  if (!f) { el.hidden = true; el.innerHTML = ""; carte.panneauOuvert = false; $("#direct-zone")?.classList.remove("avec-panneau"); return; }
+  const haut = el.querySelector(".corps")?.scrollTop || 0;
+  el.innerHTML = directPanneauHtml(f); el.hidden = false; carte.panneauOuvert = true; $("#direct-zone")?.classList.add("avec-panneau");
+  const c = el.querySelector(".corps"); if (c) c.scrollTop = haut;
+  setTimeout(() => carte.map?.invalidateSize(), 30);
+}
+function directSelectionner(id, { centrer = false } = {}) {
+  directSelection = id; const f = directFlotte().find((x) => x.id === id);
+  directMettreAJour();
+  if (centrer && f && carte.map) { directCentrer(f, Math.max(carte.map.getZoom(), 9)); carte.cadre = true; }
+}
+
+/** Centre la carte sur un camion en tenant compte de la fiche ouverte à droite (sur grand écran, elle recouvre une partie de la carte). */
+function directCentrer(f, zoom) {
+  const el = $("#direct-panneau"), recouvre = el && !el.hidden && getComputedStyle(el).position === "absolute" ? el.offsetWidth : 0;
+  const z = zoom ?? carte.map.getZoom(), cible = carte.map.project([f.derniere[1], f.derniere[2]], z).add([recouvre / 2, 0]);
+  carte.map.setView(carte.map.unproject(cible, z), z, { animate: true });
+}
+/* ---------- haut de page, liste, mise à jour ---------- */
+function directEntete(flotte) {
+  const c = directCfg(), D = directDonnees, now = maintenantS();
+  const compte = (...codes) => flotte.filter((f) => codes.includes(f.etat.code)).length, alertes = flotte.flatMap((f) => f.alertes);
   const statut = D.erreur ? badge(D.erreur, "danger") : D.maj ? badge(`Mis à jour il y a ${ilYa(now - D.maj)}`, "ok") : badge("Connexion…", "neutral");
   return `<div class="row" style="justify-content:space-between;margin-bottom:12px"><div>${statut} <span class="sub" style="display:inline">${c.mode === "demo" ? "Démonstration (camions fictifs)" : c.mode === "traccar" ? "Source : Traccar" : "Source : relais"}</span></div>${btn("actualiser", "Actualiser", { icone: "clock", cls: "btn ghost sm" })}</div>
     <div class="kpis">
@@ -210,21 +326,30 @@ function directLive() {
       <div class="kpi"><div class="l">En route</div><div class="v">${compte("en_route")}</div><div class="s">${compte("traversee")} en traversée · ${compte("au_port", "en_douane")} au port</div></div>
       <div class="kpi"><div class="l">À l'arrêt</div><div class="v">${compte("arret", "arret_long", "depot", "client")}</div></div>
       <div class="kpi"><div class="l">${ic("alert")} Alertes</div><div class="v">${alertes.length}</div><div class="s ${alertes.some((a) => a.niveau === "danger") ? "danger" : alertes.length ? "warn" : ""}">${compte("hors_ligne") ? `${compte("hors_ligne")} signal perdu` : alertes.length ? "à traiter" : "rien à signaler"}</div></div>
-    </div>
-    ${flotte.length ? `<div class="card" style="padding:0;overflow:hidden">${directCarte(flotte)}</div>` : `<div class="card">${vide("pin", D.maj ? "Aucune position reçue" : "En attente de positions", D.maj ? "Le serveur répond mais n'a encore reçu aucune position. Vérifiez que vos balises ou Traccar envoient bien vers le relais." : "Les camions apparaîtront ici dès la première réponse du serveur.")}</div>`}
-    ${flotte.some((f) => f.alertes.length) ? `<div class="section-title">Alertes</div><div class="card"><ul class="ctl">${flotte.flatMap((f) => f.alertes.map((a) => { const msg = `${a.texte} — merci de confirmer.`, wa = f.chauffeur ? lienWhatsApp(f.chauffeur.tel, msg) : "", sms = f.chauffeur ? lienSMS(f.chauffeur.tel, msg) : ""; return `<li class="${a.niveau}">${ic(a.niveau === "danger" ? "alert" : "clock")}<span>${esc(a.texte)}${wa ? ` <a class="btn ghost sm" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp ${esc(f.chauffeur.nom.split(" ")[0])}</a> <a class="btn ghost sm" href="${esc(sms)}">SMS</a>` : ""}</span></li>`; })).join("")}</ul></div>` : ""}
-    <div class="section-title">Camions</div>
-    ${flotte.map((f) => `<div class="card direct-camion ${f.id === directSelection ? "sel" : ""}" data-direct-camion="${esc(f.id)}">
-      <div class="card-head"><h2>${esc(f.nom)}${f.camion ? "" : ` <span class="sub" style="display:inline">· balise ${esc(f.id)}</span>`}</h2>${badge(f.etat.libelle, f.etat.niveau)}</div>
-      <p class="hint" style="margin:0 0 8px">${[f.derniere[3] != null ? `${Math.round(f.derniere[3])} km/h` : "", `dernière position il y a ${ilYa(now - f.derniere[0])}`, f.etat.zone && esc(f.etat.zone.nom), f.etat.code === "traversee" ? "silence normal en mer : le signal reviendra à l'arrivée" : "", f.etat.code === "arret" || f.etat.code === "arret_long" ? `arrêt de ${f.etat.arretMin} min` : "", f.voyage && `voyage ${esc(f.voyage.ref)} · ${esc(f.voyage.origine)} ⇄ ${esc(f.voyage.destination)}`].filter(Boolean).join(" · ")}</p>
-      ${f.derniere[4] != null ? `<p class="hint" style="margin:0 0 8px">${badge(`${String(f.derniere[4]).replace(".", ",")} °C`, f.alertes.some((a) => a.cle.startsWith("froid:")) ? "danger" : "ok")}${f.voyage && Number.isFinite(f.voyage.tempMin) ? ` consigne ${f.voyage.tempMin} à ${f.voyage.tempMax} °C` : ""}</p>` : ""}
-      ${f.eta ? `<p class="hint" style="margin:0 0 8px"><strong>Arrivée estimée ${new Date(f.eta.arrivee * 1000).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</strong> (${new Date(f.eta.min * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} – ${new Date(f.eta.max * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}) · ${fmt(f.eta.kmRestants)} km restants${f.eta.retardMin !== null && f.eta.retardMin > 30 ? ` · ${badge("retard probable", f.eta.retardMin > 60 ? "danger" : "warn")}` : ""}</p>` : ""}
-      <div class="row">${badge(`Conduite : ${dureeTxt(f.conduite.serieH)} sans pause de 45 min`, f.conduite.serieH >= 4.5 ? "danger" : f.conduite.serieH >= 4.25 ? "warn" : "neutral")}
-        ${f.camion ? "" : btn("lier-balise", "Lier à un camion", { id: f.id, icone: "truck", cls: "btn ghost sm" })}</div></div>`).join("")}`;
+    </div>`;
 }
-function majSelectionCarte() { /* la sélection ne change que le style : tout est redessiné par directLive */ }
+function directListe(flotte) {
+  const now = maintenantS();
+  if (!flotte.length) return `<div class="card">${vide("pin", directDonnees.maj ? "Aucune position reçue" : "En attente de positions", directDonnees.maj ? "Le serveur répond mais n'a encore reçu aucune position. Vérifiez que vos balises ou Traccar envoient bien vers le relais." : "Les camions apparaîtront ici dès la première réponse du serveur.")}</div>`;
+  return `${flotte.some((f) => f.alertes.length) ? `<div class="section-title">Alertes</div><div class="card"><ul class="ctl">${flotte.flatMap((f) => f.alertes.map((a) => { const msg = `${a.texte} — merci de confirmer.`, wa = f.chauffeur ? lienWhatsApp(f.chauffeur.tel, msg) : "", sms = f.chauffeur ? lienSMS(f.chauffeur.tel, msg) : ""; return `<li class="${a.niveau}">${ic(a.niveau === "danger" ? "alert" : "clock")}<span>${esc(a.texte)}${wa ? ` <a class="btn ghost sm" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp ${esc(f.chauffeur.nom.split(" ")[0])}</a> <a class="btn ghost sm" href="${esc(sms)}">SMS</a>` : ""}</span></li>`; })).join("")}</ul></div>` : ""}
+    <div class="section-title">Camions · cliquez pour la fiche complète</div>
+    ${flotte.map((f) => `<div class="card direct-camion ${f.id === directSelection ? "sel" : ""}" data-direct-camion="${esc(f.id)}" tabindex="0" role="button">
+      <div class="card-head"><h2>${esc(f.nom)}${f.camion ? "" : ` <span class="sub" style="display:inline">· balise ${esc(f.id)}</span>`}</h2>${badge(f.etat.libelle, f.etat.niveau)}</div>
+      <p class="hint" style="margin:0 0 8px">${[f.derniere[3] != null ? `${Math.round(f.derniere[3])} km/h` : "", `dernière position il y a ${ilYa(now - f.derniere[0])}`, f.etat.zone && esc(f.etat.zone.nom), f.chauffeur && esc(f.chauffeur.nom), f.voyage && `voyage ${esc(f.voyage.ref)} · ${esc(f.voyage.origine)} ⇄ ${esc(f.voyage.destination)}`].filter(Boolean).join(" · ")}</p>
+      ${f.eta ? `<p class="hint" style="margin:0 0 8px"><strong>Arrivée estimée ${jhmFr(f.eta.arrivee)}</strong> (${hmFr(f.eta.min)} – ${hmFr(f.eta.max)}) · ${fmt(f.eta.kmRestants)} km restants${f.eta.retardMin !== null && f.eta.retardMin > 30 ? ` · ${badge("retard probable", f.eta.retardMin > 60 ? "danger" : "warn")}` : ""}</p>` : ""}
+      <div class="row">${f.derniere[4] != null ? badge(`${String(f.derniere[4]).replace(".", ",")} °C`, f.alertes.some((a) => a.cle.startsWith("froid:")) ? "danger" : "ok") : ""}${badge(`Conduite : ${dureeTxt(f.conduite.serieH)} sans pause`, f.conduite.serieH >= 4.5 ? "danger" : f.conduite.serieH >= 4.25 ? "warn" : "neutral")}</div></div>`).join("")}`;
+}
+/** Recalcule la flotte une fois et met à jour l'en-tête, la carte, la liste et la fiche ouverte. */
+function directMettreAJour() {
+  if (ongletActif !== "direct") return;
+  const flotte = directFlotte();
+  const h = $("#direct-entete"); if (h) h.innerHTML = directEntete(flotte);
+  const l = $("#direct-liste"); if (l) l.innerHTML = directListe(flotte);
+  directCarteMaj(flotte); directPanneauMaj(flotte);
+}
+const directFlotteRendu = directMettreAJour;
 
-const cfgFormulaire = (c) => `<details class="card" ${c.mode === "off" ? "open" : ""}><summary style="cursor:pointer;font-weight:600">Réglages de la source</summary>
+const cfgFormulaire = (c) => `<details class="card" ${c.mode === "off" ? "open" : ""}><summary style="cursor:pointer;font-weight:600">Réglages de la source et de la carte</summary>
   <form id="f-direct" style="margin-top:12px"><div class="form-grid">
     <label class="f full">Source des positions<select name="mode">${[["off", "Désactivé"], ["relais", "Relais de ce projet (serveur à vous)"], ["traccar", "Serveur Traccar existant"], ["demo", "Démonstration (camions fictifs)"]].map(([k, l]) => `<option value="${k}" ${k === c.mode ? "selected" : ""}>${l}</option>`).join("")}</select></label>
     <label class="f full">Adresse du serveur (https://…)<input name="url" value="${esc(c.url)}" placeholder="https://suivi.mon-entreprise.ma" autocomplete="off" inputmode="url"></label>
@@ -232,33 +357,48 @@ const cfgFormulaire = (c) => `<details class="card" ${c.mode === "off" ? "open" 
     <label class="f">Actualisation (secondes)<input name="intervalle" type="number" min="10" max="300" value="${esc(c.intervalle)}"></label>
     <label class="f">Vitesse maximale (km/h)<input name="vitesseMax" type="number" min="60" max="130" value="${esc(c.vitesseMax)}"></label>
     <label class="f full">Alertes sur le téléphone du bureau (ntfy, gratuit) — adresse du sujet<input name="ntfy" value="${esc(c.ntfy || "")}" placeholder="https://ntfy.sh/mon-sujet-secret-long" autocomplete="off" inputmode="url"></label>
-    <label class="check full"><input type="checkbox" name="tuiles" ${c.tuiles ? "checked" : ""}><span>Fond de carte OpenStreetMap (nécessite internet ; sinon fond uni)</span></label></div>
+    <label class="check full"><input type="checkbox" name="tuiles" ${c.tuiles ? "checked" : ""}><span>Afficher le fond de carte (nécessite internet ; sans lui, seuls les camions, trajets et zones s'affichent)</span></label>
+    <label class="f full">Fournisseur de fond de carte (facultatif — vide = OpenStreetMap)<input name="tuilesUrl" value="${esc(c.tuilesUrl || "")}" placeholder="https://…/{z}/{x}/{y}.png" autocomplete="off" inputmode="url"></label></div>
     <div class="row" style="justify-content:flex-end;margin-top:8px">${btn("tester", "Tester la connexion", { cls: "btn ghost" })}${btn("tester-alertes", "Tester les canaux d'alerte", { cls: "btn ghost", titre: "Envoie un message d'essai sur ntfy, Telegram, WhatsApp… configurés sur le relais" })}<button class="btn">Enregistrer</button></div></form>
-  <p class="hint">Le jeton et l'adresse restent sur cet appareil et ne sont jamais inclus dans une sauvegarde. Le suivi en direct a besoin d'un serveur : voir <code>serveur/README.md</code> (relais ou Traccar). Les pages <strong>https</strong> exigent un serveur en <strong>https</strong>.</p></details>`;
+  <p class="hint">Carte <strong>gratuite</strong> : bibliothèque Leaflet embarquée, fond OpenStreetMap. Le serveur public d'OpenStreetMap est <strong>réservé à un usage léger</strong> (quelques personnes qui consultent la carte) : les tuiles vues sont gardées sur l'appareil pour limiter les requêtes. Pour un usage intensif, indiquez le modèle d'adresse d'un autre fournisseur (offre gratuite avec clé, ou serveur de tuiles à vous), au format <code>https://…/{z}/{x}/{y}.png</code>. Le jeton et l'adresse restent sur cet appareil et ne sont jamais inclus dans une sauvegarde. Voir <code>serveur/README.md</code> (relais ou Traccar) ; une page <strong>https</strong> exige un serveur en <strong>https</strong>.</p></details>`;
 
 VUES.direct = {
   titre: "Suivi en direct",
-  sous: "Position, état et alertes de vos camions en temps réel",
+  sous: "Carte de la flotte, fiche complète de chaque camion, alertes",
   actions: () => "",
   rendu() {
     const c = directCfg();
-    if (c.mode === "off") return `<div class="card">${vide("pin", "Suivez vos camions en direct", "Positions de vos balises GPS, état de chaque camion (en route, au port, en traversée, signal perdu), conduite sans pause et alertes. Il faut un petit serveur : essayez d'abord la démonstration.", btn("demo", "Essayer la démonstration", { icone: "play" }))}</div>${cfgFormulaire(c)}`;
-    return `<div id="direct-live">${directLive()}</div>${cfgFormulaire(c)}`;
+    if (c.mode === "off") return `<div class="card">${vide("pin", "Suivez vos camions en direct", "Carte de la flotte, fiche complète de chaque camion (position, voyage, chauffeur, camion, température), conduite sans pause et alertes. Il faut un petit serveur : essayez d'abord la démonstration.", btn("demo", "Essayer la démonstration", { icone: "play" }))}</div>${cfgFormulaire(c)}`;
+    const flotte = directFlotte();
+    return `<div id="direct-entete">${directEntete(flotte)}</div>
+      <div id="direct-zone" class="direct-zone ${directSelection ? "avec-panneau" : ""}"><div id="direct-map" class="direct-map"></div><aside id="direct-panneau" class="direct-panneau" ${directSelection ? "" : "hidden"}></aside></div>
+      <div id="direct-liste">${directListe(flotte)}</div>${cfgFormulaire(c)}`;
   },
-  apres() { if (directCfg().mode !== "off") directRafraichir(); },
+  apres() {
+    if (directCfg().mode === "off") return;
+    directCarteInit(); directMettreAJour(); directRafraichir();
+  },
   async soumettre(fid, v) {
     if (fid !== "f-direct") return false;
-    const c = { mode: v.mode, url: baseUrl(v.url), jeton: v.jeton, intervalle: Math.max(10, Math.min(300, Number(v.intervalle) || 20)), vitesseMax: Number(v.vitesseMax) || 90, tuiles: !!v.tuiles, ntfy: /^https:\/\//.test(v.ntfy || "") ? v.ntfy.trim() : "" };
+    const c = { mode: v.mode, url: baseUrl(v.url), jeton: v.jeton, intervalle: Math.max(10, Math.min(300, Number(v.intervalle) || 20)), vitesseMax: Number(v.vitesseMax) || 90, tuiles: !!v.tuiles, tuilesUrl: tuilesUrlValide(v.tuilesUrl) ? v.tuilesUrl.trim() : "", ntfy: /^https:\/\//.test(v.ntfy || "") ? v.ntfy.trim() : "" };
+    if (v.tuilesUrl && !c.tuilesUrl) { toast("Modèle de fond de carte invalide : il doit commencer par https:// et contenir {z}, {x} et {y}.", "danger"); return true; }
     if (c.mode === "relais" || c.mode === "traccar") { if (!/^https?:\/\//.test(c.url)) { toast("Adresse du serveur invalide (https://…).", "danger"); return true; } if (location.protocol === "https:" && /^http:\/\/(?!localhost|127\.0\.0\.1)/.test(c.url)) { toast("Une page https ne peut pas appeler un serveur http : utilisez une adresse https.", "danger"); return true; } }
-    directSauverCfg(c); directDonnees.hist.clear(); directDonnees.derniere.clear(); directDonnees.maj = null; directDonnees.erreur = "";
+    directSauverCfg(c); directDonnees.hist.clear(); directDonnees.derniere.clear(); directDonnees.maj = null; directDonnees.erreur = ""; carte.cadre = false;
     directDemarrer(); toast("Réglages enregistrés"); afficher("direct"); return true;
   },
   async agir(act, id, bouton) {
     if (act === "demo") { directSauverCfg({ ...directCfg(), mode: "demo" }); directDemarrer(); return afficher("direct"); }
     if (act === "actualiser") { await directRafraichir(); return; }
+    if (act === "fermer-fiche") { directSelection = ""; return directMettreAJour(); }
+    if (act === "centrer") { const f = directFlotte().find((x) => x.id === directSelection); if (f && carte.map) directCentrer(f, Math.max(carte.map.getZoom(), 12)); return; }
+    if (act === "trace-complete") { const f = directFlotte().find((x) => x.id === directSelection); if (f && carte.map && f.hist.length > 1) { const el = $("#direct-panneau"), w = el && !el.hidden && getComputedStyle(el).position === "absolute" ? el.offsetWidth : 0; carte.map.fitBounds(L.latLngBounds(f.hist.map((q) => [q[1], q[2]])), { paddingTopLeft: [30, 30], paddingBottomRight: [w + 30, 30] }); carte.cadre = true; } return; }
+    if (act === "fiche-voyage") { voyagesOuverts.add(id); return afficher("voyages"); }
+    if (act === "fiche-partager") return ouvrirPartage(id);
+    if (act === "fiche-camion") return afficher("camions");
+    if (act === "fiche-chauffeur") return afficher("chauffeurs");
     if (act === "lier-balise") {
       const f = await formulaire(`Lier la balise ${id}`, [{ name: "camionId", label: "Camion", type: "select", options: optsCamions("— Choisir —"), required: true }], { valider: "Lier", aide: "L'identifiant de la balise est enregistré sur la fiche du camion." });
-      if (f?.camionId) { parId(S.camions, f.camionId).balise = id; sauver(); toast("Balise liée"); directFlotteRendu(); }
+      if (f?.camionId) { parId(S.camions, f.camionId).balise = id; sauver(); toast("Balise liée"); directMettreAJour(); }
     }
     if (act === "tester-alertes") {
       const c = directCfg(); if (c.mode !== "relais" || !baseUrl(c.url) || !c.jeton) return toast("Réglez d'abord la source « Relais » (adresse et jeton).", "warn");
@@ -280,10 +420,14 @@ VUES.direct = {
     }
   },
 };
-const directFlotteRendu = () => { const z = $("#direct-live"); if (z) z.innerHTML = directLive(); };
 document.addEventListener("click", (e) => {
   if (ongletActif !== "direct") return;
-  const g = e.target.closest("[data-direct-camion]"); if (!g || e.target.closest("[data-act]")) return;
-  directSelection = directSelection === g.dataset.directCamion ? "" : g.dataset.directCamion; directFlotteRendu();
+  const g = e.target.closest(".direct-camion[data-direct-camion]"); if (!g || e.target.closest("[data-act], a")) return;
+  directSelectionner(g.dataset.directCamion, { centrer: true });
+});
+document.addEventListener("keydown", (e) => {
+  if (ongletActif !== "direct" || (e.key !== "Enter" && e.key !== " ")) return;
+  const g = e.target.closest?.(".direct-camion[data-direct-camion]"); if (g) { e.preventDefault(); directSelectionner(g.dataset.directCamion, { centrer: true }); }
+  if (e.key === "Escape") directSelection = "";
 });
 directDemarrer();

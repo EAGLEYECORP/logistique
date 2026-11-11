@@ -656,3 +656,10 @@ function etaVoyage(hist, maintenant, dest, { zones = [], facteurRoute = 1.3, vit
 }
 /** Retard probable (minutes) par rapport au créneau prévu ; négatif = en avance. */
 const etaRetardMin = (eta, prevuISO) => (eta && prevuISO && Number.isFinite(Date.parse(prevuISO)) ? Math.round((eta.arrivee - Date.parse(prevuISO) / 1000) / 60) : null);
+
+/** Cap initial (degrés, 0 = nord, sens horaire) de a vers b : points [t, lat, lon]. */
+function gpsCap(a, b) {
+  const p1 = gpsRad(a[1]), p2 = gpsRad(b[1]), dl = gpsRad(b[2] - a[2]);
+  const y = Math.sin(dl) * Math.cos(p2), x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}

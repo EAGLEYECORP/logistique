@@ -6,6 +6,22 @@ Le suivi en direct a besoin d'un **petit serveur** : l'application hors ligne ne
 balises GPS ──► (Traccar, facultatif) ──► relais ◄── application (lecture)
 ```
 
+## Rester à zéro dollar
+
+Rien dans ce projet n'exige de payer. Voici ce qui est gratuit, et ce qu'il faut éviter pour le rester.
+
+| Besoin | Solution gratuite | À savoir |
+|---|---|---|
+| Application | GitHub Pages (déjà en place) | dépôt public |
+| Carte | **Leaflet** (embarqué) + **OpenStreetMap** | Aucune clé. Le serveur public d'OpenStreetMap est réservé à un **usage léger** (quelques personnes qui regardent la carte, pas de téléchargement en masse) ; l'application garde les tuiles vues 7 jours sur l'appareil. Si l'usage grossit : un fournisseur à offre gratuite avec clé (son modèle d'adresse se colle dans les réglages) ou votre propre serveur de tuiles. |
+| Relais (suivi, lien client, alertes, synchronisation) | Un **PC du bureau**, un mini-PC ou un **vieux téléphone Android** (Termux) allumé en permanence | Node 18+, aucune dépendance. |
+| https devant le relais | Un **tunnel gratuit** (par exemple Cloudflare Tunnel ou Tailscale Funnel) | Vérifiez vous-même les conditions de l'offre gratuite ; certains tunnels « rapides » changent d'adresse à chaque redémarrage. |
+| Balises GPS | **Traccar** (open source) pour décoder les protocoles, renvoi vers le relais | sur la même machine que le relais |
+| Alertes | **Telegram** ou **ntfy** | WhatsApp passe par l'API de Meta, payante selon l'usage : à éviter pour rester à zéro. |
+| Géorepérage, états, ETA, péages | Calculés par l'application et le relais | aucune API de cartographie payante |
+
+**À ne pas activer si vous voulez rester à zéro** : l'assistant IA de classement SH (clé Anthropic payante à l'usage, facultatif et désactivé par défaut), WhatsApp Cloud API, un hébergeur payant. Google Maps, Mapbox et les API de géocodage ne sont utilisés nulle part.
+
 ## Deux façons de faire
 
 | | Quand | Ce qu'il faut |

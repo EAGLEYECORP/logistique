@@ -12,7 +12,7 @@ const CACHE = `logistique-${VERSION}`;
 const FICHIERS = [
   "./", "index.html", "style.css",
   "data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "ia.js", "stockage.js", "sauvegarde.js", "app.js", "commercial.js", "voyages.js", "traces.js", "gares.js", "direct.js", "partages.js", "photos.js", "impression.js", "onboarding.js", "reglages.js", "notifications.js", "chauffeur.js", "terrain.js", "tachy.js", "synchro.js", "langue.js", "boot.js",
-  "vendor/anthropic-sdk.js",
+  "vendor/anthropic-sdk.js", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css", "vendor/leaflet/images/layers.png", "vendor/leaflet/images/layers-2x.png",
   "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "manifest.webmanifest",
 ];
 
@@ -38,8 +38,27 @@ self.addEventListener("message", (e) => {
 });
 
 // Cache d'abord (l'application est versionnée : le cache est cohérent) ; sinon réseau ; hors ligne, la page d'accueil en dernier recours.
+/* Tuiles de carte (autre origine) : gardées 7 jours sur l'appareil, 600 au plus. Moins de requêtes vers le fournisseur (usage léger exigé par OpenStreetMap)
+   et carte encore lisible hors ligne là où elle a déjà été consultée. Seules les réponses lisibles (CORS) sont gardées : une réponse opaque pèserait sur le quota. */
+const CACHE_TUILES = "tuiles-logistique", TUILES_MAX = 600, TUILES_AGE_MS = 7 * 86400000;
+const estTuile = (u) => u.origin !== location.origin && /\/\d{1,2}\/\d+\/\d+(@2x)?\.(png|jpe?g|webp)$/.test(u.pathname);
+async function repondreTuile(req) {
+  const cache = await caches.open(CACHE_TUILES), trouve = await cache.match(req);
+  const frais = trouve && Date.now() - Number(trouve.headers.get("x-mis-en-cache") || 0) < TUILES_AGE_MS;
+  if (frais) return trouve;
+  try {
+    const r = await fetch(req);
+    if (r.ok && r.type !== "opaque") {
+      const corps = await r.clone().blob(), h = new Headers(r.headers); h.set("x-mis-en-cache", String(Date.now()));
+      await cache.put(req, new Response(corps, { status: 200, headers: h }));
+      cache.keys().then((cles) => { if (cles.length > TUILES_MAX) cles.slice(0, cles.length - TUILES_MAX).forEach((k) => cache.delete(k)); });
+    }
+    return r;
+  } catch { return trouve || Response.error(); } // hors ligne : la tuile déjà vue, même ancienne
+}
 self.addEventListener("fetch", (e) => {
   const req = e.request;
+  if (req.method === "GET" && estTuile(new URL(req.url))) return e.respondWith(repondreTuile(req));
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
   e.respondWith(caches.open(CACHE).then(async (cache) => {
     const trouve = await cache.match(req, { ignoreSearch: true });

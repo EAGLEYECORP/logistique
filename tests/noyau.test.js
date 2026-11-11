@@ -1034,6 +1034,15 @@ test("diagnostic .ddd : structure lue sans donnée personnelle", () => {
   assert.ok(/Aucun EF Driver_Activity_Data/.test(N.tachyDiagnosticDDD(new Uint8Array([0x05, 0x20, 0, 0, 1, 9]))));
 });
 
+test("carte : cap entre deux positions et modèle d'adresse de tuiles", () => {
+  const cap = (a, b) => Math.round(N.gpsCap([0, a[0], a[1]], [0, b[0], b[1]]));
+  assert.strictEqual(cap([33, -7], [34, -7]), 0); assert.strictEqual(cap([33, -7], [33, -6]), 90); assert.strictEqual(cap([34, -7], [33, -7]), 180); assert.strictEqual(cap([33, -6], [33, -7]), 270);
+  assert.ok(Math.abs(cap([35.889, -5.5], [36.13, -5.44]) - 14) <= 3); // Tanger Med → Algeciras : plein nord, un peu à l'est
+  assert.strictEqual(N.tuilesUrlValide("https://tile.openstreetmap.org/{z}/{x}/{y}.png"), true);
+  assert.strictEqual(N.tuilesUrlValide("https://api.exemple.com/styles/v1/{z}/{x}/{y}.png?key=ABC"), true);
+  for (const x of ["", "http://tile.test/{z}/{x}/{y}.png", "https://tile.test/z/x/y.png", "https://tile.test/{z}/{x}.png", "javascript:alert(1)", null]) assert.strictEqual(N.tuilesUrlValide(x), false);
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

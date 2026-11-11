@@ -20,7 +20,7 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Chauffeurs** | Un responsable par camion, service/repos, permis, visa, passeport, carte conducteur |
 | **Voyages** | Maroc ⇄ Europe : aller, **traversée Tanger Med ⇄ Algeciras (aller et retour)**, étapes, contrôles avant départ (visa, passeport, papiers, autorisation, Schengen, poids), coût complet, marge, retour à vide, listes de contrôle |
 | **Autorisations & visas** | Autorisations bilatérales « E » / « MA », comptes-rendus de voyage, **compteur Schengen 90/180** par chauffeur |
-| **Suivi en direct** | Carte de la flotte, état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques, **heure d'arrivée estimée** ; nécessite le relais ou Traccar (`serveur/`) |
+| **Suivi en direct** | **Carte interactive de la flotte** (Leaflet + OpenStreetMap, gratuite), **camion cliquable avec fiche complète** (position, voyage, chauffeur, camion, température), état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques, heure d'arrivée estimée ; nécessite le relais ou Traccar (`serveur/`) |
 | **Synchronisation** | Mêmes données sur le bureau et les téléphones des chauffeurs par votre relais : chiffrée sur l'appareil, fusion par enregistrement, copies de sécurité (Réglages → Données) |
 | **Tachygraphe** | Import de la **carte conducteur (.ddd)** ou d'un CSV d'activités, dépassements des temps de conduite et de repos (CE 561/2006, version simplifiée), alertes |
 | **Chaîne du froid** | Température des balises, consigne par voyage, excursions, alerte et rapport (fiche voyage) |
@@ -156,8 +156,9 @@ Automatique et sans action de votre part.
 | `boot.js` | Démarrage, récupération, thème, hors ligne, mises à jour |
 | `ia.js`, `vendor/anthropic-sdk.js` | Assistant IA de classement SH (facultatif, clé API de l'utilisateur) |
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
+| `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 107 tests |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 108 tests |
 
 ```bash
 npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres

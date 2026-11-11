@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.4.0 — Carte de flotte interactive et fiche complète du camion, à coût zéro
+
+- **Carte de la flotte** refaite avec **Leaflet** (open source, embarqué dans l'application : ni clé, ni compte, ni facturation) : zoom, déplacement, bouton « Tout voir », marqueurs colorés par état avec **flèche de cap**, trajet des 3 dernières heures, zones, couches à afficher ou masquer. Le cadrage choisi est conservé entre deux actualisations.
+- **Camion cliquable** (sur la carte ou dans la liste) : **fiche complète** — alertes, position (coordonnées, vitesse, cap, zone, distance des 24 h, conduite sans pause et du jour), **voyage** (itinéraire, client, marchandise, livraison promise, heure d'arrivée estimée, traversées, dernières étapes, coût et marge), **chauffeur** (téléphone, appel / WhatsApp / SMS, service, permis, carte, passeport, visa, visite médicale, Schengen, tachygraphe), **camion** (kilométrage, essieux, vidange, pneus, papiers, consommation, entretien), **chaîne du froid**. Accès direct au voyage, au lien client, aux fiches. Sur téléphone, la fiche s'ouvre sous la carte.
+- **Fond de carte gratuit** : OpenStreetMap par défaut ; les tuiles vues sont **gardées 7 jours sur l'appareil** (moins de requêtes, carte lisible hors ligne là où elle a déjà été consultée). Autre fournisseur possible par un simple modèle d'adresse. Sans fond de carte, camions, trajets et zones restent affichés.
+- Guide « coût zéro » dans `serveur/README.md`.
+- 108 tests (98 application + 10 relais).
+
 ## 3.3.0 — Outils de vérification et mise en service
 
 - **Tester les canaux d'alerte** (Suivi en direct → Réglages de la source) : envoie un message d'essai sur chaque canal du relais (ntfy, Telegram, WhatsApp, webhook) et indique **lequel échoue et pourquoi**. Permet de valider un compte WhatsApp ou un bot Telegram en un clic.

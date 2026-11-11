@@ -335,3 +335,6 @@ function tachyDiagnosticDDD(octets) {
   if (!fichiers.some((f) => f.fid === 0x0504)) lignes.push("  Aucun EF Driver_Activity_Data (0504) : fichier de véhicule ou téléchargement incomplet");
   return lignes.join("\n");
 }
+
+/** Modèle d'adresse de tuiles de carte valide : https, avec {z}, {x} et {y} (et {s} facultatif). Vide = non fourni. */
+const tuilesUrlValide = (t) => typeof t === "string" && /^https:\/\/[^\s{}]+\/[^\s]*\{z\}[^\s]*\{x\}[^\s]*\{y\}[^\s]*$|^https:\/\/[^\s{}]+\/[^\s]*\{z\}[^\s]*\{y\}[^\s]*\{x\}[^\s]*$/.test(t.trim());

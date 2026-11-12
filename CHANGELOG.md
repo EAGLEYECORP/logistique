@@ -1,6 +1,8 @@
 # Changelog
 
-## 4.0.0 (en cours) — la vérité de l'argent
+## 4.0.0 — 12/11/2026 — la vérité de l'argent, la direction, les deux bureaux
+
+Treize livrables, dans l'ordre de la valeur (décisions : `docs/11-decisions-v4.md`). **192 tests** (165 application, 27 relais ; 116 au départ), moins de 20 s. Documentation : `docs/05` à `docs/10`.
 
 ### D1 — Modèle de coût complet (schéma 7)
 - **Lignes de coût par voyage** (20 types : carburant, péages, traversée, per diem, parking, douane, inspection sanitaire, amendes, dépannage…), chacune avec montant, devise, source (saisie, GPS, carte carburant, facture de l'armateur, calculé), date et référence. Une ligne réelle **remplace** l'estimation de son type : jamais de double compte. Les anciens champs restent lus tels quels.

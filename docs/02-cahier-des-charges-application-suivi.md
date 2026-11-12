@@ -319,6 +319,7 @@ Le **suivi en temps réel exige un serveur** : une application hors ligne sans s
 
 | 11 | Carte de flotte interactive (Leaflet, coût zéro) et fiche complète du camion | ✅ v3.4 |
 | 12 | Rentabilité (coût complet au km), dossier de voyage, prévisions, profils par rôle, retours à combler | ✅ v3.5 |
+| 13 | Version 4 : coûts par ligne, marge en direct, capture automatique, résultat de l'entreprise, trésorerie, simulateur, anomalies, conseils, opérations, notifications par étape, attentes aux ports, relais chiffré, multi-utilisateur | ✅ v4.0 |
 
 **Reste hors de portée d'une application autonome** (dépend d'un tiers, d'un compte ou d'une information non confirmée) :
 
@@ -337,3 +338,12 @@ Le **suivi en temps réel exige un serveur** : une application hors ligne sans s
 5. Le chauffeur peut, **sans réseau**, voir sa mission, photographier un CMR et enregistrer un plein ; l'envoi se fait au retour du réseau.
 6. Le tableau de bord affiche le **taux de retour à vide** du mois et le **coût de chaque kilomètre à vide**.
 7. Tous les tarifs affichés indiquent **leur source et leur date**.
+
+## Annexe — Version 4 : modèle de coûts (schéma 7) et routage des notifications (schéma 8)
+
+**Schéma 7 — coûts.** Voyage : `lignesCout[] = { id, type, montant, devise, source, date, ref, camionId, chauffeurId, sens?, libelle?, cle? }` (20 types, 5 sources) ; les anciens champs de coût sont projetés en lignes à la lecture et remplacés type par type par les lignes réelles. Camion : `coutsFixes { leasing_mensuel, assurance_mensuel, taxe_routiere_annuelle, entretien_mensuel_budget }`, `amortissement { prix_acquisition, date_acquisition, duree_ans, methode, valeur_residuelle }`, `officeResponsable`, `carteCarburant`, `froid.consomMensuelle`. Chauffeur : `perDiemJournalier`, `perDiemDevise`. Entreprise : `chargesGenerales[] { id, libelle, montant_mensuel, categorie, cle_allocation }`, `echeances[] { id, libelle, type, montant, devise, date, recurs { frequence, jusqu_a } }`, `depensesAttente[]`, `attentesPort[]`. Détail et exemple chiffré : [05 — Modèle de coûts](05-modele-couts.md) ; simulateur : [06](06-decision-capitale.md).
+
+**Schéma 8 — notifications.** `routageJalons[] { jalon, auto, audiences { audience: [canal] }, modeles { fr, en, es, ar }, pre_notifications[], post_notifications[] }` (vide = routage par défaut), `notificationsApp[]`, `notifsEtat { annulees, reports }` ; client : `notificationsClientAutorisees`, `canalNotifPrefere`, `langueNotif` ; chauffeur : `ntfy`, `langueNotif` ; entreprise : `audiences`. Détail : [08 — Notifications par étape](08-notifications-jalons.md) ; arrivée estimée : [09](09-prevision-arrivee.md) ; multi-utilisateur (comptes côté relais, hors schéma) : [10](10-multi-utilisateur.md).
+
+Les migrations 6 → 7 → 8 sont additives et sans perte (copie de sécurité avant mise à niveau) ; les versions intermédiaires « 7.1 / 7.2 » du cahier des charges v4 sont devenues les entiers 8 (notifications) et, pour les comptes, un stockage côté relais (`donnees/comptes.json`) qui ne touche pas au schéma de l'application.
+

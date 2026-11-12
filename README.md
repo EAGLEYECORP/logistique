@@ -6,6 +6,7 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 - 🆓 **Gratuite** : aucun abonnement, aucun compte, aucun serveur obligatoire.
 - 📴 **100 % hors ligne** : sur la route, au port, en zone blanche. Seul l'assistant IA (facultatif) a besoin d'internet.
 - 🔒 **Vos données restent sur l'appareil**, avec sauvegarde ZIP (photos comprises), chiffrement par mot de passe et copies automatiques.
+- 👥 **Option équipe (gratuite)** : un petit relais sur un PC du bureau ou un serveur loué sert l'application à toute l'équipe (Maroc et Allemagne), avec comptes, droits appliqués par le serveur, temps réel et données chiffrées au repos — [docs/10](docs/10-multi-utilisateur.md).
 - 📱 **Installable** sur téléphone, tablette et ordinateur comme une vraie application.
 
 ## Fonctionnalités
@@ -21,9 +22,15 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Voyages** | Maroc ⇄ Europe : aller, **traversée Tanger Med ⇄ Algeciras (aller et retour)**, étapes, contrôles avant départ (visa, passeport, papiers, autorisation, Schengen, poids), coût complet, marge, retour à vide, listes de contrôle |
 | **Autorisations & visas** | Autorisations bilatérales « E » / « MA », comptes-rendus de voyage, **compteur Schengen 90/180** par chauffeur |
 | **Suivi en direct** | **Carte interactive de la flotte** (Leaflet + OpenStreetMap, gratuite), **camion cliquable avec fiche complète** (position, voyage, chauffeur, camion, température), état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques, heure d'arrivée estimée ; nécessite le relais ou Traccar (`serveur/`) |
+| **Direction** | Résultat de l'entreprise en direct (MAD et EUR), tableau croisé client × corridor × camion × chauffeur × mois jusqu'au voyage, tendance 12 mois, **trésorerie à 90 jours** (zone rouge, détail du jour), **simulateur d'achat de camion**, **anomalies par camion** |
+| **Opérations** | Une carte par camion (état, voyage, prochaine étape, arrivée estimée, alertes, marge), **conseils du moment** (prix plancher du retour, camion à l'arrêt, traversée à réserver, chauffeur hors règles, repos hebdomadaire) |
+| **Marge du voyage** | Pastille verte ou rouge et sa courbe, **dépenses par ligne** (20 types, source, reçu en photo), marge nette ; **carte carburant** importée et rattachée seule, per diem et froid calculés, rappels de facture aux étapes, amendes ; historique de chaque changement |
+| **Notifications par étape** | Qui est prévenu à chaque étape (équipe, client avec son accord, chauffeur), messages en français, anglais, espagnol, arabe, bouton « Notifier », **rappels programmés envoyés par le relais même application fermée** |
+| **Arrivée estimée** | Calée sur **vos attentes réelles aux ports** (Tanger Med, Algeciras avec contrôle sanitaire à part), fourchette qui se resserre à chaque port, même calcul sur le lien client |
+| **Multi-utilisateur** | Comptes (chef d'entreprise, exploitant, répartiteur, commercial, comptable, chauffeur, transitaire), double authentification, modifications simultanées avec fusion, temps réel, journal 24 mois |
 | **Rentabilité** | Coût complet au kilomètre par camion (charges fixes comprises), marge par corridor et par client, prix de revient au km chargé, retours à combler, export CSV |
 | **Dossier de voyage** | Tout le voyage en un document (papiers, étapes GPS, traversées, preuve de livraison, trace, températures, photos) : PDF ou archive ZIP |
-| **Profils** | Direction, Exploitation, Commercial, Comptabilité : chaque poste ne montre que ses pages (tri de l'affichage protégé par un code) |
+| **Profils** | Sans relais : chaque poste ne montre que ses pages (tri de l'affichage protégé par un code). Avec le relais multi-utilisateur : le profil suit le rôle du compte et les droits sont appliqués par le serveur |
 | **Synchronisation** | Mêmes données **et mêmes photos** sur le bureau et les téléphones des chauffeurs par votre relais : chiffrées sur l'appareil, fusion par enregistrement, copies de sécurité (Réglages → Données) |
 | **Tachygraphe** | Import de la **carte conducteur (.ddd)** ou d'un CSV d'activités, dépassements des temps de conduite et de repos (CE 561/2006, version simplifiée), alertes |
 | **Chaîne du froid** | Température des balises, consigne par voyage, excursions, alerte et rapport (fiche voyage) |
@@ -140,18 +147,25 @@ Automatique et sans action de votre part.
 | `voyages.js` | Voyages internationaux, traversées, autorisations, Schengen, péages |
 | `gps.js` | Lecture CSV/GPX, nettoyage, analyse, zones, jalons, passages aux gares, péage mesuré, rapprochement Jawaz (testé) |
 | `pilotage.js` | Rentabilité, prévisions, conformité du voyage (logique pure, testée) |
-| `cockpit.js`, `dossier.js`, `profils.js` | Page Rentabilité et prévisions ; dossier de voyage (PDF, ZIP) ; profils par rôle |
+| `cockpit.js`, `dossier.js`, `profils.js` | Page Rentabilité (charges fixes, charges générales, échéances) ; dossier de voyage (PDF, ZIP) ; profils par rôle |
+| `couts.js`, `rentabilite.js`, `capture.js` | Charges fixes, amortissement, répartition, échéances ; marge du voyage en direct ; carte carburant, per diem, froid, amendes, rappels de facture (logique pure, testée) |
+| `tresorerie.js`, `investissement.js`, `anomalies.js` | Résultat de l'entreprise et tableau croisé, trésorerie à 90 jours ; simulateur d'achat ; anomalies par camion (testés) |
+| `optimisation.js`, `journal.js`, `prevision.js` | Conseils et tableau des opérations ; historique des voyages ; attentes aux ports et arrivée estimée (testés) |
+| `jalons_notifications.js`, `comptes.js` | Routage et rédaction des notifications par étape ; rôles et droits partagés avec le relais (testés) |
+| `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Journal) |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |
 | `conformite.js` | WhatsApp / SMS, analyse du tachygraphe, chaîne du froid, balise du téléphone (testé) |
 | `terrain.js` | Balise de secours du téléphone et preuve de livraison |
 | `tachy.js` | Page Tachygraphe et tarifs des péages d'Europe |
 | `partages.js` | Lien de suivi client : création, partage WhatsApp / e-mail, révocation, synchronisation |
 | `direct.js` | Suivi en direct : sources (relais, Traccar, démo), carte, états, alertes |
-| `serveur/relais.js` | Relais de positions (Node, sans dépendance) : réception et lecture |
+| `serveur/relais.js` | Relais (Node, sans dépendance) : positions, lien client, alertes et historique, synchronisation, photos, notifications programmées, chiffrement au repos, journal d'accès, purge des photos |
+| `serveur/multi.js`, `serveur/auth.js` | Mode multi-utilisateur : comptes, sessions, double authentification, droits, versions, temps réel, journal, application servie |
+| `serveur/courriel.js`, `serveur/coffre.js`, `serveur/purge-photos.js`, `serveur/moteur.js` | E-mail SMTP ; chiffrement AES-256-GCM des fichiers ; purge des photos ; calculs partagés avec l'application |
 | `gares.js` | Gares de péage : relevé sur trace, import OpenStreetMap, relevés Jawaz Pro |
 | `traces.js` | Page Traces GPS : import, zones, application au voyage |
 | `adm.js` | Grille tarifaire officielle des Autoroutes du Maroc |
-| `langue.js` | Interface en arabe (RTL), partielle |
+| `langue.js` | Interface en arabe (RTL) : navigation, voyages, direction, opérations, rentabilité, notifications (testé) |
 | `photos.js` | Galerie et visionneuse de photos |
 | `impression.js` | Factures, ordres de transport, dossiers de douane (A4/PDF) |
 | `reglages.js` | Réglages en onglets, sauvegarde et restauration |
@@ -163,10 +177,10 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 116 tests |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 192 tests (165 application, 27 relais) |
 
 ```bash
-npm test      # logique métier, ZIP, chiffrement, migrations, rappels, verrou, montants en lettres
+npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s
 ```
 
 ## Assistant IA de classement SH (facultatif)

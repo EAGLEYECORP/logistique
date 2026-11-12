@@ -8,7 +8,11 @@
 | [02 — Cahier des charges de l'application de suivi](02-cahier-des-charges-application-suivi.md) | Modèle de données, 13 modules, exigences GPS, Mappy, architecture, moteur de péages, vie privée, feuille de route. |
 | [03 — Annexes](03-annexes.md) | Glossaire, check-lists imprimables, péages de référence, catalogue d'alertes, questions au transporteur, sources et confiance. |
 | [04 — Mise en service](04-mise-en-service.md) | Checklist de ce qui dépend de vous (relais, comptes, fichiers réels, déclarations) et comment chaque point se vérifie. |
+| [05 — Modèle de coûts](05-modele-couts.md) | Lignes de coût, sources, pas de double compte, charges fixes et générales, exemple Casablanca → Perpignan → Lyon → Casablanca chiffré par le moteur. |
+| [06 — Acheter un camion](06-decision-capitale.md) | Méthode du simulateur, formule d'équilibre, sensibilité, exemple. |
 | [07 — Déploiement RGPD et loi 09-08](07-rgpd-deploiement.md) | Données et durées, chiffrement (application, relais, disque), réglages du relais, textes applicables, notice chauffeur (français, arabe, allemand), liste de contrôle. |
+| [08 — Notifications par étape](08-notifications-jalons.md) | Routage, destinataires, canaux, messages en 4 langues, rappels programmés, accord du client. |
+| [09 — Arrivée estimée](09-prevision-arrivee.md) | Attentes aux ports mesurées, repli, contrôle sanitaire, fourchette qui se resserre, exemple. |
 | [10 — Multi-utilisateur](10-multi-utilisateur.md) | Comptes et rôles, matrice des droits appliqués par le serveur, connexion et double authentification, versions et conflits, temps réel, journal, API, sécurité. |
 | [11 — Décisions pour la version 4](11-decisions-v4.md) | Arbitrages (dépendances, chiffrement et comptes, coût zéro) et ordre de construction, d'après l'audit de valeur. |
 | [data/adm-grille-2026-11.csv](data/adm-grille-2026-11.csv) | Grille tarifaire officielle d'ADM (584 sections, 3 classes), relevée le 10/11/2026. |

@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1273,6 +1273,76 @@ test("échéances : ponctuelles et récurrentes (mensuel, trimestriel, annuel), 
   N.S.echeances = [{ id: "e1", libelle: "Leasing MAN", type: "credit_leasing", montant: 1200, devise: "EUR", date: "2026-11-10", recurs: { frequence: "mensuel" } }, { id: "e2", type: "taxe_tva", montant: 30000, devise: "MAD", date: "2026-11-30" }];
   const e = N.echeancier("2026-11-01", "2026-12-31");
   assert.strictEqual(JSON.stringify(e.map((x) => [x.date, x.mad, x.libelle])), JSON.stringify([["2026-11-10", 12000, "Leasing MAN"], ["2026-11-30", 30000, "TVA"], ["2026-12-10", 12000, "Leasing MAN"]]));
+});
+
+/* ---------- D2 : marge du voyage en direct ---------- */
+const etatMarge = () => {
+  N.S.params.tauxEUR = 10;
+  N.S.camions = [{ id: "c1", immat: "A", coutsFixes: { leasing_mensuel: 12175 } }, { id: "c2", immat: "B" }];
+  N.S.chargesGenerales = [{ id: "g1", libelle: "Loyer", montant_mensuel: 6000, categorie: "loyer", cle_allocation: "km" }, { id: "g2", libelle: "Comptable", montant_mensuel: 1000, categorie: "comptable", cle_allocation: "revenue" }];
+  N.S.voyages = [
+    { id: "v1", camionId: "c1", dateDepart: "2026-10-01", dateRetourPrevue: "2026-10-10", prix: 5000, devise: "EUR", kmAller: 2500, kmRetourCharge: 1500, kmRetourVide: 1000, carburantMad: 15000, peagesMad: 500, lignesCout: [] },
+    { id: "v2", camionId: "c2", dateDepart: "2026-10-12", dateRetourPrevue: "2026-10-20", prix: 30000, devise: "MAD", kmAller: 1000, lignesCout: [] },
+    { id: "v3", camionId: "c2", dateDepart: "2026-11-02", dateRetourPrevue: "2026-11-09", prix: 30000, devise: "MAD", kmAller: 1000, lignesCout: [] },
+    { id: "v4", camionId: "c2", dateDepart: "2026-10-15", statut: "annule", prix: 99999, devise: "MAD", kmAller: 9000, lignesCout: [] },
+  ];
+};
+const proche = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg || ""} ${a} ≠ ${b}`);
+
+test("marge d'un voyage : coûts directs, charges fixes au temps passé, charges générales selon leur clé", () => {
+  etatMarge();
+  const m = N.margeVoyage("v1");
+  assert.strictEqual(m.revenu, 50000); assert.strictEqual(m.total_direct, 15500); assert.strictEqual(m.marge_directe, 34500); assert.strictEqual(m.jours, 10);
+  proche(m.couts_fixes_alloues[0].montant, (12175 * 10) / 30.4375); assert.strictEqual(m.couts_fixes_alloues[0].cle, "jours"); // 4 000
+  // octobre : v1 (5 000 km, 50 000) et v2 (1 000 km, 30 000) — le voyage annulé et celui de novembre ne comptent pas
+  const g = Object.fromEntries(m.charges_generales_allouees.map((x) => [x.libelle, x.montant]));
+  proche(g.Loyer, 6000 * 5 / 6); proche(g.Comptable, 1000 * 5 / 8);
+  proche(m.total_structure, 4000 + 5000 + 625); proche(m.marge_nette, 34500 - 9625); proche(m.taux, ((34500 - 9625) / 50000) * 100);
+  assert.strictEqual(m.km, 5000); assert.strictEqual(m.km_charge, 4000); assert.strictEqual(m.km_vide, 1000);
+  proche(m.cout_total_par_km, 25125 / 5000); proche(m.cout_par_km_charge, 25125 / 4000); proche(m.cout_vide, 5025);
+  // la somme des parts de charges générales des voyages du mois redonne la charge du mois
+  const total = ["v1", "v2"].reduce((s, id) => s + N.margeVoyage(id).charges_generales_allouees.reduce((a, x) => a + x.montant, 0), 0); proche(total, 7000);
+  proche(N.margeVoyage("v3").charges_generales_allouees.reduce((a, x) => a + x.montant, 0), 7000, "seul voyage de novembre");
+  assert.strictEqual(N.margeVoyage("v4").charges_generales_allouees.length, 0); assert.strictEqual(N.margeVoyage("inconnu"), null);
+  assert.strictEqual(N.margeVoyage("v2").couts_fixes_alloues.length, 0, "camion sans charges fixes renseignées");
+});
+
+test("la marge se recalcule à chaque nouvelle ligne de coût et prévient les abonnés", () => {
+  etatMarge();
+  const recus = []; const stop = N.surMargeVoyage((e) => recus.push([e.voyageId, Math.round(e.marge.marge_directe)]));
+  const v = N.S.voyages[0];
+  N.recalculerMargeVoyage("v1"); assert.strictEqual(v.marge.directe, 34500);
+  N.ajouterLigneCout(v, { type: "parking_securise", montant: 30, devise: "EUR", date: "2026-10-03" }); N.recalculerMargeVoyage("v1");
+  N.ajouterLigneCout(v, { type: "carburant", montant: 16000, source: "fuel_card_csv", date: "2026-10-04" }); const m = N.recalculerMargeVoyage("v1");
+  assert.strictEqual(JSON.stringify(recus), JSON.stringify([["v1", 34500], ["v1", 34200], ["v1", 33200]]));
+  assert.strictEqual(v.marge.directe, 33200); assert.strictEqual(v.marge.couts, 16800); assert.ok(v.marge.nette < v.marge.directe); assert.ok(v.marge.maj);
+  const carb = m.couts_directs.filter((l) => l.type === "carburant"); assert.strictEqual(carb.length, 1); assert.strictEqual(carb[0].source, "fuel_card_csv"); assert.strictEqual(carb[0].projete, false);
+  assert.strictEqual(m.couts_directs.find((l) => l.type === "parking_securise").origine.montant, 30);
+  stop(); N.recalculerMargeVoyage("v1"); assert.strictEqual(recus.length, 3, "désabonné");
+  assert.strictEqual(N.recalculerMargeVoyage("inconnu"), null);
+});
+
+test("carburant estimé d'après les pleins : compté dans la marge et signalé", () => {
+  etatMarge(); const v = N.S.voyages[1];
+  N.S.pleins = [{ id: "p1", camionId: "c2", date: "2026-10-13", litres: 300, prix: 10 }, { id: "p2", camionId: "c2", date: "2026-11-20", litres: 300, prix: 10 }];
+  let m = N.margeVoyage(v); assert.strictEqual(m.carburant_estime, true); assert.strictEqual(m.total_direct, 3000); assert.strictEqual(m.couts_directs[0].source, "calcule");
+  N.ajouterLigneCout(v, { type: "carburant", montant: 3400, source: "fuel_card_csv" });
+  m = N.margeVoyage(v); assert.strictEqual(m.carburant_estime, false); assert.strictEqual(m.total_direct, 3400);
+});
+
+test("évolution de la marge : un point de départ puis un point par jour de dépense ; courbe miniature", () => {
+  etatMarge(); const v = N.S.voyages[0];
+  assert.strictEqual(JSON.stringify(N.historiqueMarge(v)), JSON.stringify([{ date: "2026-10-01", marge: 34500 }]));
+  N.ajouterLigneCout(v, { type: "traversee", montant: 400, devise: "EUR", date: "2026-10-02", source: "facture_armateur" });
+  N.ajouterLigneCout(v, { type: "parking_securise", montant: 500, date: "2026-10-05" }); N.ajouterLigneCout(v, { type: "amendes", montant: 3000, devise: "EUR", date: "2026-10-05" });
+  N.ajouterLigneCout(v, { type: "maintien", montant: 9000, date: "2026-10-07" });
+  const h = N.historiqueMarge(v);
+  assert.strictEqual(JSON.stringify(h), JSON.stringify([{ date: "2026-10-01", marge: 34500 }, { date: "2026-10-02", marge: 30500 }, { date: "2026-10-05", marge: 0 }, { date: "2026-10-07", marge: -9000 }]));
+  assert.strictEqual(h[h.length - 1].marge, N.margeVoyage(v).marge_directe, "le dernier point est la marge directe actuelle");
+  const c = N.courbeMini(h.map((p) => p.marge), 60, 20), pts = c.points.split(" ").map((p) => p.split(",").map(Number));
+  assert.strictEqual(pts.length, 4); assert.strictEqual(pts[0][0], 0); assert.strictEqual(pts[3][0], 60); assert.ok(pts.every(([x, y]) => y >= 0 && y <= 20));
+  assert.ok(pts[0][1] < c.zero && pts[3][1] > c.zero, "au-dessus puis au-dessous de la ligne d'équilibre"); assert.strictEqual(pts[2][1], c.zero);
+  assert.strictEqual(N.courbeMini([]).points, ""); assert.strictEqual(N.courbeMini([5]).points.split(" ").length, 2);
 });
 
 (async () => {

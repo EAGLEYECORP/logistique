@@ -672,3 +672,11 @@ table.plain td { padding: 8px 10px; }
 
 /* profil sans finances (exploitation) : prix et marges masqués */
 body.sans-finances .fin { display: none !important; }
+
+/* marge du voyage en direct */
+.marge-pastille { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: .82rem; white-space: nowrap; background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); }
+.marge-pastille.neg { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.marge-pastille svg polyline { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.marge-pastille svg .zero { stroke: currentColor; stroke-width: 1; stroke-dasharray: 2 2; opacity: .45; }
+.lignes-cout .row { margin-top: 8px; }
+@media (max-width: 600px) { details.dossier summary:has(.marge-pastille) { grid-template-columns: 1fr; } details.dossier summary:has(.marge-pastille) > .row { justify-content: flex-start; flex-wrap: wrap; } }

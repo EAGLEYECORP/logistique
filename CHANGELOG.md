@@ -8,6 +8,12 @@
 - **Charges générales** avec clé de répartition (au kilomètre, au chiffre d'affaires, par camion, à parts égales) et **échéances** datées, ponctuelles ou récurrentes.
 - Migration 6 → 7 sans perte ; 9 nouveaux tests.
 
+### D2 — Marge du voyage en direct
+- À côté du titre de chaque voyage : la **marge directe**, verte ou rouge, avec la courbe de son évolution à mesure que les dépenses arrivent.
+- **Dépenses enregistrées** sur la fiche du voyage (ajout en quelques secondes, en MAD ou en EUR) ; la facture de traversée d'un sens ne remplace que l'estimation de ce sens.
+- **Marge nette** : part des charges fixes du camion (au temps passé) et des charges générales (selon la clé de chaque charge, entre les voyages du mois), prix de revient par kilomètre chargé.
+- Le dossier de voyage et l'export reprennent les nouveaux postes (froid, amendes, dépannage).
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

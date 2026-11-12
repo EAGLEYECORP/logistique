@@ -154,12 +154,12 @@ function carteVoyage(v) {
   const faits = items.filter((_, i) => v.coches?.[ck]?.[i]).length;
   const dateD = v.dateDepart;
   const interd = dateD ? interdictionsLe(dateD, INTERDICTIONS) : [];
-  const parts = [["Péages Maroc", c.parts.peagesMaroc], ["Péages France (VINCI)", c.parts.peagesFrance], ["Péages Europe", c.parts.peagesEurope], ["Traversées (aller + retour)", c.parts.traversees], ["Carburant", c.parts.carburant], ["Per diem, hôtel", c.parts.fraisRoute], ["Douane", c.parts.douane], ["Autres", c.parts.autres]];
+  const parts = [["Péages Maroc", c.parts.peagesMaroc], ["Péages France (VINCI)", c.parts.peagesFrance], ["Péages Europe", c.parts.peagesEurope], ["Traversées (aller + retour)", c.parts.traversees], ["Carburant", c.parts.carburant], ["Per diem, hôtel", c.parts.fraisRoute], ["Douane", c.parts.douane], ["Énergie du groupe froid", c.parts.froid], ["Amendes", c.parts.amendes], ["Dépannage, pneus en route", c.parts.maintien], ["Autres", c.parts.autres]];
   return `<details class="card dossier" data-voyage="${v.id}" ${voyagesOuverts.has(v.id) ? "open" : ""}>
     <summary>
       <div><strong>${esc(v.ref)}</strong> · ${esc(v.origine)} ⇄ ${esc(v.destination)}${v.clientId ? " · " + esc(nomClient(v.clientId)) : ""}
         <div class="meta">${[dateFr(v.dateDepart) + " → " + dateFr(v.dateRetourPrevue), v.chauffeurId && nomChauffeur(v.chauffeurId), v.camionId && nomCamion(v.camionId), v.marchandise].filter(Boolean).map(esc).join(" · ")}</div></div>
-      <div class="row">${ctl.filter((x) => x.niveau === "danger").length ? badge(`${ctl.filter((x) => x.niveau === "danger").length} blocage(s)`, "danger") : ctl.length ? badge(`${ctl.length} point(s)`, "warn") : ""}${badge(STATUTS_VOYAGE.find(([k]) => k === v.statut)?.[1], niveauStatutVoyage[v.statut])}</div>
+      <div class="row">${pastilleMarge(v)}${ctl.filter((x) => x.niveau === "danger").length ? badge(`${ctl.filter((x) => x.niveau === "danger").length} blocage(s)`, "danger") : ctl.length ? badge(`${ctl.length} point(s)`, "warn") : ""}${badge(STATUTS_VOYAGE.find(([k]) => k === v.statut)?.[1], niveauStatutVoyage[v.statut])}</div>
     </summary>
     <div class="body">
       <div class="section-title" style="margin-top:4px">Traversée du détroit (Tanger Med ⇄ Algeciras)</div>
@@ -173,11 +173,12 @@ function carteVoyage(v) {
         ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages France (VINCI)" ? `<span class="sub">${peagesFranceVoyage(v).detail.map((d) => `${esc(d.liaison)} ${fmt(d.eur, 2)} €`).join(" · ")}${v.peageFrAR ? " ×2" : ""} · classe ${peagesFranceVoyage(v).classe} · tarif officiel du ${dateFr(FR_LIAISONS_DATE)}</span>` : ""}${l === "Péages Europe" && v.peagesEurReel ? `<span class="sub">relevé de télépéage : ${Object.entries(v.peagesEurPays || {}).map(([p, m]) => `${p} ${fmt(m, 2)} €`).join(", ") || "total du relevé"}</span>` : ""}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
         <tr><td><strong>Coût total</strong></td><td class="r num"><strong>${fmt(c.total)} MAD</strong></td></tr>
         <tr><td>Prix de vente</td><td class="r num">${c.prix ? fmt(c.prix) + " MAD" : "—"}</td></tr>
-        <tr><td><strong>Marge</strong></td><td class="r num ${c.marge < 0 ? "neg" : ""}"><strong>${c.prix ? `${fmt(c.marge)} MAD · ${fmt(c.taux, 1)} %` : "—"}</strong></td></tr>
+        <tr><td><strong>Marge directe</strong></td><td class="r num ${c.marge < 0 ? "neg" : ""}"><strong>${c.prix ? `${fmt(c.marge)} MAD · ${fmt(c.taux, 1)} %` : "—"}</strong></td></tr>
+        ${lignesMargeNette(v)}
         ${num(v.kmGps) ? `<tr><td>Distance mesurée par le GPS</td><td class="r num">${fmt(v.kmGps)} km</td></tr>` : ""}
         ${c.km ? `<tr><td>Coût au km (${fmt(c.km)} km)</td><td class="r num">${fmt(c.coutKm, 2)} MAD/km</td></tr>` : ""}
         ${num(v.kmRetourVide) ? `<tr><td>Retour à vide</td><td class="r num">${fmt(v.kmRetourVide)} km · ≈ ${fmt(c.coutKm * num(v.kmRetourVide))} MAD</td></tr>` : ""}
-      </tbody></table></div></div>
+      </tbody></table></div>${blocLignesCout(v)}</div>
       <div class="section-title">Étapes</div>
       <ol class="timeline">${JALONS_VOYAGE.map(([k, l]) => { const j = jalons.find((x) => x.type === k); return `<li class="${j ? "fait" : ""}"><span class="pt"></span><div><strong>${esc(l)}</strong>${j ? `<span class="sub">${dateHeureFr(j.date)}${j.source === "gps" ? " · " + badge("GPS", "ok") : ""}</span>` : ""}</div></li>`; }).join("")}</ol>
       <div class="row">${prochain && v.statut !== "annule" ? btn("jalon", `Marquer : ${prochain[1]}`, { id: v.id, icone: "flag", cls: "btn sm" }) : ""}${jalons.length ? btn("annuler-jalon", "Annuler la dernière étape", { id: v.id, cls: "btn ghost sm" }) : ""}</div>

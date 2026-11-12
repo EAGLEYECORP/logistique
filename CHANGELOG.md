@@ -35,6 +35,11 @@
 - Prix, financement (comptant, crédit avec tableau d'amortissement, leasing), répartition sur 1 à 3 corridors, taux de charge.
 - Réponses : charge fixe ajoutée par mois, **taux de charge d'équilibre**, délai de retour, trésorerie cumulée sur 36 mois, tableau de sensibilité — à partir de la **marge au kilomètre réellement observée** sur vos corridors.
 
+### D7 — Anomalies par camion
+- Chaque camion est comparé à **sa propre référence** (90 jours, recalculée et mémorisée chaque semaine) sur quatre mesures : coût au kilomètre, consommation, temps à l'arrêt, kilomètres à vide.
+- Alerte au-delà de 15 % d'écart sur 7 jours (seuil réglable), avec la **cause probable** : hausse brutale (fuite, vol, dépense exceptionnelle) ou progressive (usure, dérive), prix du gasoil, nouveau corridor, retours à vide.
+- Visible dans les alertes, sur la page Direction et sur l'accueil du chef d'entreprise (profil Direction) : chiffre d'affaires, marges, charges du mois, trésorerie et point bas à 90 jours.
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

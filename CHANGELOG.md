@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.0.0 (en cours) — la vérité de l'argent
+
+### D1 — Modèle de coût complet (schéma 7)
+- **Lignes de coût par voyage** (20 types : carburant, péages, traversée, per diem, parking, douane, inspection sanitaire, amendes, dépannage…), chacune avec montant, devise, source (saisie, GPS, carte carburant, facture de l'armateur, calculé), date et référence. Une ligne réelle **remplace** l'estimation de son type : jamais de double compte. Les anciens champs restent lus tels quels.
+- **Charges fixes détaillées par camion** (crédit, assurance, taxe à l'essieu, amortissement linéaire ou dégressif avec valeur restante) et bureau responsable.
+- **Charges générales** avec clé de répartition (au kilomètre, au chiffre d'affaires, par camion, à parts égales) et **échéances** datées, ponctuelles ou récurrentes.
+- Migration 6 → 7 sans perte ; 9 nouveaux tests.
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

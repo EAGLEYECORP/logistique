@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1143,6 +1143,136 @@ test("synchronisation des photos : emballage, chiffrement et restitution à l'id
   assert.ok(r.image.every((x, i) => x === image[i]) && r.mini.every((x, i) => x === mini[i]));
   await assert.rejects(() => N.dechiffrer(chiffre, "autre"));
   assert.throws(() => N.photoDeballer(paquet.subarray(0, paquet.length - 10)), /tronquée/); assert.throws(() => N.photoDeballer(new Uint8Array([0, 0])), /illisible/);
+});
+
+/* ---------- schéma 7 : lignes de coût, charges fixes, charges générales, échéances ---------- */
+test("migration 6 → 7 : rien n'est perdu, les anciens champs restent et sont projetés en lignes", () => {
+  const v6 = { meta: { version: 6 }, params: { tauxEUR: 10, fraisGenerauxMois: 3000 }, camions: [{ id: "c1", immat: "A", fixeMensuel: 9000 }],
+    voyages: [{ id: "v1", ref: "V1", prix: 30000, devise: "MAD", peagesMad: 500, peagesEur: 100, carburantMad: 8000, fraisRouteMad: 1500, douaneMad: 700, autresMad: 200, kmAller: 1000 }] };
+  const avant = JSON.stringify(v6.voyages[0]);
+  const r = N.migrer(JSON.parse(JSON.stringify(v6)));
+  assert.strictEqual(r.migre, true); assert.strictEqual(r.etat.meta.version, 7);
+  assert.deepStrictEqual([...r.etat.chargesGenerales], []); assert.deepStrictEqual([...r.etat.echeances], []);
+  const v = r.etat.voyages[0];
+  assert.deepStrictEqual([...v.lignesCout], []);
+  const { lignesCout, ...reste } = v; assert.strictEqual(JSON.stringify(reste), avant, "aucun ancien champ modifié");
+  N.S = r.etat;
+  const l = N.lignesVoyage(v), par = (t) => l.filter((x) => x.type === t).reduce((s, x) => s + x.mad, 0);
+  assert.ok(l.every((x) => x.projete));
+  assert.strictEqual(par("peage_ma"), 500); assert.strictEqual(par("peage_eu"), 1000); assert.strictEqual(par("carburant"), 8000);
+  assert.strictEqual(par("per_diem_chauffeur"), 1500); assert.strictEqual(par("douane_frais"), 700); assert.strictEqual(par("autre"), 200);
+  const c = N.coutVoyage(v); assert.strictEqual(c.total, 11900); assert.strictEqual(c.marge, 18100);
+  // aller-retour : une deuxième migration ne change rien
+  const r2 = N.migrer(JSON.parse(JSON.stringify(r.etat))); assert.strictEqual(r2.migre, false); assert.strictEqual(JSON.stringify(r2.etat.voyages), JSON.stringify(r.etat.voyages));
+  // l'ancien montant de charges fixes et de frais généraux reste lu
+  assert.strictEqual(N.fixesMensuelsCamion(N.S.camions[0]).total, 9000); assert.strictEqual(N.chargesGeneralesMois()[0].montant, 3000);
+});
+
+test("lignes de coût : validation, devise, camion et chauffeur du voyage par défaut", () => {
+  N.S.params.tauxEUR = 10;
+  const v = { id: "v1", camionId: "c1", chauffeurId: "h1" };
+  const l = N.ajouterLigneCout(v, { type: "parking_securise", montant: "25", devise: "EUR", date: "2026-11-02", ref: "P-88" });
+  assert.strictEqual(l.camionId, "c1"); assert.strictEqual(l.chauffeurId, "h1"); assert.strictEqual(l.source, "saisie"); assert.strictEqual(l.ref, "P-88"); assert.ok(l.id);
+  assert.strictEqual(N.ligneCoutMad(l), 250);
+  assert.throws(() => N.ajouterLigneCout(v, { type: "inconnu", montant: 5 }), /Type de coût inconnu/);
+  assert.throws(() => N.ajouterLigneCout(v, { type: "autre", montant: -5 }), /Montant invalide/);
+  assert.throws(() => N.ajouterLigneCout(v, { type: "autre", montant: 5, devise: "USD" }), /Devise/);
+  assert.throws(() => N.ajouterLigneCout(v, { type: "autre", montant: 5, source: "magie" }), /Source/);
+  assert.strictEqual(v.lignesCout.length, 1, "une ligne refusée n'est pas enregistrée");
+  assert.deepStrictEqual([...N.ligneCoutErreurs({ type: "autre", montant: 1, devise: "MAD", source: "saisie", date: "hier" })], ["Date invalide"]);
+  assert.strictEqual(N.retirerLigneCout(v, l.id), true); assert.strictEqual(N.retirerLigneCout(v, "x"), false); assert.strictEqual(v.lignesCout.length, 0);
+  assert.strictEqual(N.TYPES_COUT.length, 20); assert.strictEqual(new Set(N.TYPES_COUT.map((t) => t[0])).size, 20);
+});
+
+test("une ligne réelle remplace l'estimation de son type, sans double compte ; les autres types s'ajoutent", () => {
+  N.S.params.tauxEUR = 10;
+  const v = { id: "v1", prix: 50000, devise: "MAD", peagesMad: 500, carburantMad: 8000, fraisRouteMad: 1500, douaneMad: 700, kmAller: 2000 };
+  assert.strictEqual(N.coutVoyage(v).total, 10700);
+  N.ajouterLigneCout(v, { type: "carburant", montant: 600, devise: "EUR", source: "fuel_card_csv" });
+  N.ajouterLigneCout(v, { type: "carburant", montant: 3000, source: "fuel_card_csv" });
+  let c = N.coutVoyage(v); assert.strictEqual(c.parts.carburant, 9000, "les lignes remplacent les 8 000 saisis"); assert.strictEqual(c.total, 11700);
+  assert.strictEqual(N.carburantVoyage(v).mad, 9000); assert.strictEqual(N.coutCompletVoyage(v).total, 11700);
+  N.ajouterLigneCout(v, { type: "parking_securise", montant: 20, devise: "EUR" }); // autre type de la même rubrique : s'ajoute au per diem saisi
+  c = N.coutVoyage(v); assert.strictEqual(c.parts.fraisRoute, 1700);
+  N.ajouterLigneCout(v, { type: "per_diem_chauffeur", montant: 2000, source: "calcule" });
+  c = N.coutVoyage(v); assert.strictEqual(c.parts.fraisRoute, 2200, "le per diem calculé remplace l'ancienne saisie");
+  N.ajouterLigneCout(v, { type: "amendes", montant: 150, devise: "EUR" }); N.ajouterLigneCout(v, { type: "maintien", montant: 900 }); N.ajouterLigneCout(v, { type: "froid_energie", montant: 400 });
+  c = N.coutVoyage(v); assert.strictEqual(c.parts.amendes, 1500); assert.strictEqual(c.parts.maintien, 900); assert.strictEqual(c.parts.froid, 400);
+  assert.strictEqual(c.total, 500 + 9000 + 2200 + 700 + 1500 + 900 + 400); assert.strictEqual(c.marge, 50000 - c.total); assert.strictEqual(c.coutKm, c.total / 2000);
+  // un coût de structure enregistré sur le voyage n'entre pas dans les coûts directs
+  N.ajouterLigneCout(v, { type: "charges_fixes", montant: 9999, source: "calcule" }); assert.strictEqual(N.coutVoyage(v).total, c.total);
+  assert.strictEqual(N.lignesVoyage(v).filter((l) => l.projete).map((l) => l.type).sort().join(), "douane_frais,peage_ma");
+});
+
+test("traversée : la facture d'un sens ne remplace que l'estimation de ce sens", () => {
+  N.S.params.tauxEUR = 10;
+  const v = { id: "v1", traversees: [{ sens: "aller", ligne: "tmed-alg", fret: 300, ml: 16.5, baf: 2 }, { sens: "retour", ligne: "alg-tmed", fret: 280 }] };
+  const est = N.coutVoyage(v).parts.traversees, aller = N.coutTraversee(v.traversees[0]) * 10, retour = N.coutTraversee(v.traversees[1]) * 10;
+  assert.ok(aller > 0 && retour > 0); assert.strictEqual(est, aller + retour);
+  N.ajouterLigneCout(v, { type: "traversee", montant: 410, devise: "EUR", source: "facture_armateur", sens: "aller", ref: "FAC-1" });
+  assert.strictEqual(N.coutVoyage(v).parts.traversees, 4100 + retour);
+  N.ajouterLigneCout(v, { type: "traversee", montant: 390, devise: "EUR", source: "facture_armateur", sens: "retour" });
+  assert.strictEqual(N.coutVoyage(v).parts.traversees, 8000);
+  const w = { id: "v2", traversees: v.traversees }; N.ajouterLigneCout(w, { type: "traversee", montant: 700, devise: "EUR", source: "facture_armateur" }); // facture globale, sans sens
+  assert.strictEqual(N.coutVoyage(w).parts.traversees, 7000);
+});
+
+test("amortissement : linéaire, dégressif, valeur résiduelle, avant l'achat et après la fin", () => {
+  const c = { amortissement: { prix_acquisition: 1200000, date_acquisition: "2024-01-15", duree_ans: 5, valeur_residuelle: 200000, methode: "lineaire" } };
+  let a = N.amortissementCamion(c, "2025-01-15"); assert.ok(Math.abs(a.mensuel - 1000000 / 60) < 1e-6); assert.ok(Math.abs(a.cumul - 200000) < 1e-6); assert.ok(Math.abs(a.vnc - 1000000) < 1e-6);
+  a = N.amortissementCamion(c, "2023-06-01"); assert.strictEqual(a.mensuel, 0); assert.strictEqual(a.vnc, 1200000);
+  a = N.amortissementCamion(c, "2029-02-01"); assert.strictEqual(a.mensuel, 0); assert.strictEqual(a.vnc, 200000); assert.strictEqual(a.termine, true);
+  const d = { amortissement: { prix_acquisition: 1000000, date_acquisition: "2024-01-01", duree_ans: 5, methode: "degressif" } };
+  // coefficient 2 sur 5 ans : 40 % de la valeur restante, puis linéaire sur le reste — 400 000, 240 000, 144 000, 108 000, 108 000
+  const annuites = [0, 12, 24, 36, 48].map((m) => Math.round(N.amortissementCamion(d, N.ajouterMois("2024-01-01", m)).mensuel * 12));
+  assert.deepStrictEqual(annuites, [400000, 240000, 144000, 108000, 108000]); assert.strictEqual(annuites.reduce((x, y) => x + y, 0), 1000000);
+  assert.ok(Math.abs(N.amortissementCamion(d, "2025-07-01").vnc - (1000000 - 400000 - 120000)) < 1e-6);
+  assert.strictEqual(N.amortissementCamion({}).renseigne, false); assert.strictEqual(N.amortissementCamion({ amortissement: { prix_acquisition: 5 } }).mensuel, 0);
+});
+
+test("charges fixes d'un camion : le détail remplace l'ancien montant global ; le budget d'entretien n'est pas compté", () => {
+  const c = { fixeMensuel: 9000, coutsFixes: { leasing_mensuel: 12000, assurance_mensuel: 1500, taxe_routiere_annuelle: 6000, entretien_mensuel_budget: 2000 }, amortissement: { prix_acquisition: 600000, date_acquisition: "2025-01-01", duree_ans: 5 } };
+  const f = N.fixesMensuelsCamion(c, "2026-01-01");
+  assert.strictEqual(f.detail, true); assert.strictEqual(f.taxe, 500); assert.strictEqual(f.amortissement, 10000); assert.strictEqual(f.total, 24000); assert.strictEqual(f.entretienBudget, 2000);
+  assert.strictEqual(N.fixesMensuelsCamion({ fixeMensuel: 9000 }).total, 9000); assert.strictEqual(N.fixesMensuelsCamion({ fixeMensuel: 9000, coutsFixes: {} }).detail, false); assert.strictEqual(N.fixesMensuelsCamion({}).total, 0);
+});
+
+test("répartition des charges : au kilomètre, au chiffre d'affaires, par camion, à parts égales — la somme est exacte", () => {
+  const u = [{ id: "a", camionId: "c1", km: 1000, ca: 10000 }, { id: "b", camionId: "c1", km: 3000, ca: 10000 }, { id: "c", camionId: "c2", km: 4000, ca: 30000 }];
+  const obj = (m) => Object.fromEntries(m), somme = (m) => [...m.values()].reduce((x, y) => x + y, 0);
+  assert.deepStrictEqual(obj(N.repartir(8000, "km", u)), { a: 1000, b: 3000, c: 4000 });
+  assert.deepStrictEqual(obj(N.repartir(5000, "revenue", u)), { a: 1000, b: 1000, c: 3000 });
+  assert.deepStrictEqual(obj(N.repartir(8000, "camion_count", u)), { a: 2000, b: 2000, c: 4000 }); // moitié par camion, puis partagée entre les voyages du camion
+  const eg = N.repartir(1000, "equal", u); assert.ok(Math.abs(eg.get("a") - 1000 / 3) < 1e-9); assert.strictEqual(somme(eg), 1000);
+  assert.strictEqual(somme(N.repartir(100, "km", [{ id: "x", km: 1 }, { id: "y", km: 1 }, { id: "z", km: 1 }])), 100);
+  assert.deepStrictEqual(obj(N.repartir(900, "km", [{ id: "x", km: 0 }, { id: "y", km: 0 }])), { x: 450, y: 450 }); // aucun kilomètre connu : parts égales
+  assert.strictEqual(N.repartir(900, "km", []).size, 0);
+});
+
+test("charges générales : liste détaillée avec clé de répartition ; la rentabilité par camion les applique", () => {
+  N.S.camions = [{ id: "c1", immat: "A", fixeMensuel: 3000 }, { id: "c2", immat: "B", coutsFixes: { leasing_mensuel: 6000 } }];
+  N.S.params.fraisGenerauxMois = 500; // ignoré dès qu'une liste détaillée existe
+  N.S.chargesGenerales = [{ id: "g1", libelle: "Loyer Tanger", montant_mensuel: 4000, categorie: "loyer", cle_allocation: "km" }, { id: "g2", montant_mensuel: 2000, categorie: "comptable", cle_allocation: "equal" }, { id: "g3", montant_mensuel: 0, categorie: "autres" }];
+  const g = N.chargesGeneralesMois(); assert.strictEqual(g.length, 2); assert.strictEqual(g[1].libelle, "Comptable"); assert.strictEqual(g[0].cle, "km");
+  N.S.voyages = [{ id: "v1", camionId: "c1", dateDepart: "2026-10-01", dateRetourPrevue: "2026-10-08", prix: 40000, devise: "MAD", kmAller: 3000 }, { id: "v2", camionId: "c2", dateDepart: "2026-10-05", dateRetourPrevue: "2026-10-12", prix: 20000, devise: "MAD", kmAller: 1000 }];
+  const r = N.rentabilite({ debut: "2026-10-01", fin: "2026-10-31" }), mois = 31 / 30.4375, de = (id) => r.camions.find((x) => x.id === id);
+  assert.ok(Math.abs(de("c1").fixes - (3000 + 4000 * 0.75 + 1000) * mois) < 1e-6);
+  assert.ok(Math.abs(de("c2").fixes - (6000 + 4000 * 0.25 + 1000) * mois) < 1e-6);
+  assert.ok(Math.abs(r.totaux.fixes - 15000 * mois) < 1e-6); assert.strictEqual(r.avertissements.camionsSansFixe, 0); assert.strictEqual(r.avertissements.sansFraisGeneraux, false);
+});
+
+test("échéances : ponctuelles et récurrentes (mensuel, trimestriel, annuel), fin de mois, date limite, devise", () => {
+  const occ = (e, a, b) => [...N.occurrencesEcheance(e, a, b)];
+  assert.deepStrictEqual(occ({ date: "2026-12-20" }, "2026-12-01", "2026-12-31"), ["2026-12-20"]); assert.deepStrictEqual(occ({ date: "2026-12-20" }, "2027-01-01", "2027-12-31"), []);
+  assert.deepStrictEqual(occ({ date: "2026-01-31", recurs: { frequence: "mensuel" } }, "2026-02-01", "2026-04-30"), ["2026-02-28", "2026-03-31", "2026-04-30"]);
+  assert.deepStrictEqual(occ({ date: "2025-01-20", recurs: { frequence: "trimestriel" } }, "2026-11-01", "2027-05-01"), ["2027-01-20", "2027-04-20"]);
+  assert.deepStrictEqual(occ({ date: "2024-02-29", recurs: { frequence: "annuel" } }, "2025-01-01", "2028-12-31"), ["2025-02-28", "2026-02-28", "2027-02-28", "2028-02-29"]);
+  assert.deepStrictEqual(occ({ date: "2026-11-05", recurs: { frequence: "mensuel", jusqu_a: "2027-01-04" } }, "2026-11-01", "2027-06-30"), ["2026-11-05", "2026-12-05"]);
+  assert.deepStrictEqual(occ({ date: "2027-03-01", recurs: { frequence: "mensuel" } }, "2026-11-01", "2027-04-15"), ["2027-03-01", "2027-04-01"]);
+  N.S.params.tauxEUR = 10;
+  N.S.echeances = [{ id: "e1", libelle: "Leasing MAN", type: "credit_leasing", montant: 1200, devise: "EUR", date: "2026-11-10", recurs: { frequence: "mensuel" } }, { id: "e2", type: "taxe_tva", montant: 30000, devise: "MAD", date: "2026-11-30" }];
+  const e = N.echeancier("2026-11-01", "2026-12-31");
+  assert.strictEqual(JSON.stringify(e.map((x) => [x.date, x.mad, x.libelle])), JSON.stringify([["2026-11-10", 12000, "Leasing MAN"], ["2026-11-30", 30000, "TVA"], ["2026-12-10", 12000, "Leasing MAN"]]));
 });
 
 (async () => {

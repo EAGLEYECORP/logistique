@@ -19,6 +19,8 @@ function finVoyage(v) {
 const joursVoyage = (v) => (v.dateDepart && finVoyage(v) ? Math.max(1, joursEntre(v.dateDepart, finVoyage(v)) + 1) : 1);
 /** Carburant d'un voyage en MAD : le montant saisi, sinon les pleins du camion entre le départ et le retour (estimation). */
 function carburantVoyage(v) {
+  const lignes = (v.lignesCout || []).filter((l) => l.type === "carburant");
+  if (lignes.length) return { mad: lignes.reduce((s, l) => s + ligneCoutMad(l), 0), estime: false };
   if (num(v.carburantMad) > 0) return { mad: num(v.carburantMad), estime: false };
   if (!v.camionId || !v.dateDepart) return { mad: 0, estime: false };
   const fin = finVoyage(v);
@@ -45,13 +47,12 @@ function rentabilite({ debut = "", fin = "" } = {}) {
   const dates = [...voyages.map((v) => v.dateDepart), ...commandes.map((c) => c.dateChargement), ...S.interventions.map((i) => i.date).filter(dans)].filter(Boolean).sort();
   const d0 = debut || dates[0] || today(), d1 = fin || today();
   const jours = Math.max(1, joursEntre(d0, d1) + 1), mois = jours / JOURS_PAR_MOIS;
-  const nbCamions = Math.max(1, S.camions.length), generauxParCamion = (num(S.params.fraisGenerauxMois) * mois) / nbCamions;
 
   const vide = () => ({ nb: 0, km: 0, kmVide: 0, jours: 0, ca: 0, variable: 0, entretien: 0, fixes: 0 });
   const finir = (x) => { const cout = x.variable + x.entretien + x.fixes, marge = x.ca - cout; return { ...x, cout, marge, taux: x.ca ? (marge / x.ca) * 100 : 0, coutKm: x.km ? cout / x.km : 0, margeKm: x.km ? marge / x.km : 0, pctVide: x.km ? (x.kmVide / x.km) * 100 : 0 }; };
   const parCamion = new Map(), parClient = new Map(), parCorridor = new Map(), parMois = new Map();
   const de = (map, cle, init) => { if (!map.has(cle)) map.set(cle, { ...vide(), ...init }); return map.get(cle); };
-  for (const c of S.camions) de(parCamion, c.id, { id: c.id, nom: c.immat, fixeRenseigne: num(c.fixeMensuel) > 0 });
+  for (const c of S.camions) de(parCamion, c.id, { id: c.id, nom: c.immat, fixeRenseigne: fixesMensuelsCamion(c, d1).total > 0 });
   const avert = { carburantEstime: 0, sansKm: 0, sansPrix: 0, sansCamion: 0 };
 
   const ajouter = ({ camionId, clientId, corridor, date, km, kmVide, jours: j, ca, variable }) => {
@@ -69,7 +70,9 @@ function rentabilite({ debut = "", fin = "" } = {}) {
     ajouter({ camionId: c.camionId, clientId: c.clientId, corridor: corridorDe(c.origine, c.destination), date: c.dateChargement, km: t ? num(t.distance) : 0, kmVide: 0, jours: c.dateLivraison ? Math.max(1, joursEntre(c.dateChargement, c.dateLivraison) + 1) : 1, ca: m.prix, variable: m.cout });
   }
   for (const i of S.interventions) if (dans(i.date) && parCamion.has(i.camionId)) parCamion.get(i.camionId).entretien += num(i.cout);
-  for (const c of S.camions) parCamion.get(c.id).fixes = num(c.fixeMensuel) * mois + generauxParCamion;
+  for (const c of S.camions) parCamion.get(c.id).fixes = fixesMensuelsCamion(c, d1).total * mois;
+  const unites = S.camions.map((c) => ({ id: c.id, camionId: c.id, km: parCamion.get(c.id).km, ca: parCamion.get(c.id).ca }));
+  for (const g of chargesGeneralesMois()) for (const [id, m] of repartir(g.montant * mois, g.cle, unites)) parCamion.get(id).fixes += m; // charges générales : selon la clé de chaque charge
 
   const camions = [...parCamion.values()].map(finir).sort((a, b) => b.ca - a.ca);
   const totaux = finir(camions.reduce((s, x) => { for (const k of ["nb", "km", "kmVide", "jours", "ca", "variable", "entretien", "fixes"]) s[k] += x[k]; return s; }, vide()));
@@ -78,7 +81,7 @@ function rentabilite({ debut = "", fin = "" } = {}) {
     periode: { debut: d0, fin: d1, jours, mois }, totaux: { ...totaux, coutKmCharge: kmCharge > 0 ? totaux.cout / kmCharge : 0, variableKm: totaux.km ? totaux.variable / totaux.km : 0, fixesJour: (totaux.fixes + totaux.entretien) / jours },
     camions, clients: [...parClient.values()].map(finir).sort((a, b) => b.ca - a.ca), corridors: [...parCorridor.values()].map(finir).sort((a, b) => b.ca - a.ca),
     mois: [...parMois.values()].map(finir).sort((a, b) => a.nom.localeCompare(b.nom)),
-    avertissements: { ...avert, camionsSansFixe: S.camions.filter((c) => !(num(c.fixeMensuel) > 0)).length, sansFraisGeneraux: !(num(S.params.fraisGenerauxMois) > 0) },
+    avertissements: { ...avert, camionsSansFixe: S.camions.filter((c) => !(fixesMensuelsCamion(c, d1).total > 0)).length, sansFraisGeneraux: !chargesGeneralesMois().length },
   };
 }
 

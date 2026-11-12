@@ -27,8 +27,8 @@ const PARAMS_DEFAUT = {
   rappelSauvegarde: 7,     // jours sans sauvegarde avant rappel
 };
 
-/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones · 6 = + gares de péage et relevés Jawaz. */
-const VERSION_SCHEMA = 6;
+/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones · 6 = + gares de péage et relevés Jawaz · 7 = + lignes de coût des voyages, charges fixes détaillées, charges générales, échéances. */
+const VERSION_SCHEMA = 7;
 const COLLECTIONS = ["camions", "pleins", "interventions", "chauffeurs", "trajets", "dossiers", "codes", "clients", "commandes", "factures", "voyages", "autorisations", "traces"];
 
 // Documents suivis avec date d'expiration (transport national et international).
@@ -60,7 +60,7 @@ const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "P
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [],
+    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [],
     params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }
@@ -96,6 +96,10 @@ function migrer(brut) {
   if (depuis < 4) { e.voyages = Array.isArray(e.voyages) ? e.voyages : []; e.autorisations = Array.isArray(e.autorisations) ? e.autorisations : []; e.chauffeurs.forEach((c) => { c.sejours ||= []; }); }
   if (depuis < 5) { e.traces = Array.isArray(e.traces) ? e.traces : []; e.zones = Array.isArray(e.zones) ? e.zones : []; }
   if (depuis < 6) { e.gares = Array.isArray(e.gares) ? e.gares : []; e.releves = Array.isArray(e.releves) ? e.releves : []; }
+  if (depuis < 7) { // les anciens champs de coût restent en place : ils sont projetés en lignes à la lecture (lignesVoyage)
+    e.chargesGenerales = Array.isArray(e.chargesGenerales) ? e.chargesGenerales : []; e.echeances = Array.isArray(e.echeances) ? e.echeances : [];
+    e.voyages.forEach((v) => { v.lignesCout = Array.isArray(v.lignesCout) ? v.lignesCout : []; });
+  }
   e.meta.version = VERSION_SCHEMA;
   return { etat: e, depuis, migre: depuis < VERSION_SCHEMA };
 }
@@ -438,13 +442,68 @@ function peagesFranceVoyage(v) {
   return { eur: Math.round(total * 100) / 100, classe, detail, col };
 }
 /** Coût complet d'un voyage, en MAD. */
+/* ---------- lignes de coût d'un voyage (schéma 7) ---------- */
+/** [type, libellé, rubrique du total]. Rubrique nulle = coût de structure, réparti par le calcul de marge et non compté dans les coûts directs. */
+const TYPES_COUT = [
+  ["carburant", "Carburant", "carburant"], ["peage_ma", "Péages Maroc", "peagesMaroc"], ["peage_eu", "Péages Europe", "peagesEurope"], ["peage_fr", "Péages France", "peagesFrance"],
+  ["traversee", "Traversée", "traversees"], ["per_diem_chauffeur", "Per diem chauffeur", "fraisRoute"], ["parking_securise", "Parking sécurisé", "fraisRoute"], ["parking_port", "Parking au port", "fraisRoute"],
+  ["hebergement", "Hébergement (repos hebdomadaire)", "fraisRoute"], ["douane_frais", "Douane / transitaire", "douane"], ["inspection_sanitaire", "Inspection sanitaire", "douane"],
+  ["frais_douane_destination", "Douane à destination", "douane"], ["froid_energie", "Énergie du groupe froid", "froid"], ["amendes", "Amendes", "amendes"], ["maintien", "Dépannage, pneus en route", "maintien"],
+  ["autre", "Autre", "autres"], ["amortissement_camion", "Amortissement camion", null], ["amortissement_remorque", "Amortissement remorque", null], ["charges_fixes", "Charges fixes", null], ["charges_generales", "Charges générales", null],
+];
+const SOURCES_COUT = [["saisie", "Saisie"], ["gps", "Mesuré par GPS"], ["fuel_card_csv", "Carte carburant"], ["facture_armateur", "Facture de l'armateur"], ["calcule", "Calculé"]];
+const typeCout = (t) => TYPES_COUT.find((x) => x[0] === t);
+const libTypeCout = (t) => typeCout(t)?.[1] || t;
+const libSourceCout = (s) => SOURCES_COUT.find((x) => x[0] === s)?.[1] || s;
+const ligneCoutMad = (l) => (l.devise === "EUR" ? num(l.montant) * S.params.tauxEUR : num(l.montant));
+
+/** Erreurs d'une ligne de coût (liste vide = valide). */
+function ligneCoutErreurs(l) {
+  const e = [];
+  if (!l || typeof l !== "object") return ["Ligne illisible"];
+  if (!typeCout(l.type)) e.push("Type de coût inconnu");
+  if (!Number.isFinite(Number(l.montant)) || Number(l.montant) < 0) e.push("Montant invalide");
+  if (!["MAD", "EUR"].includes(l.devise)) e.push("Devise inconnue");
+  if (!SOURCES_COUT.some((x) => x[0] === l.source)) e.push("Source inconnue");
+  if (l.date && !/^\d{4}-\d{2}-\d{2}/.test(l.date)) e.push("Date invalide");
+  return e;
+}
+/** Ajoute une ligne de coût à un voyage (camion et chauffeur du voyage par défaut). Lève une erreur si elle est invalide. */
+function ajouterLigneCout(v, d) {
+  const l = { id: uid(), type: d.type, montant: num(d.montant), devise: d.devise || "MAD", source: d.source || "saisie", date: d.date || today(), camionId: d.camionId || v.camionId || undefined, chauffeurId: d.chauffeurId || v.chauffeurId || undefined };
+  for (const k of ["ref", "pieceId", "sens", "libelle", "cle"]) if (d[k]) l[k] = d[k];
+  const err = ligneCoutErreurs(l); if (err.length) throw new Error(err.join(" · "));
+  (v.lignesCout ||= []).push(l);
+  return l;
+}
+function retirerLigneCout(v, id) { const n = (v.lignesCout || []).length; v.lignesCout = (v.lignesCout || []).filter((l) => l.id !== id); return v.lignesCout.length < n; }
+
+/** Coûts tirés des anciens champs du voyage (saisie globale, grilles, estimation), en MAD, sous forme de lignes. */
+function coutsHerites(v) {
+  const taux = S.params.tauxEUR, r = [];
+  const p = (type, mad, source, plus = {}) => { if (mad > 0) r.push({ type, montant: mad, devise: "MAD", source, projete: true, ...plus }); };
+  p("peage_ma", peagesMarocVoyage(v), num(v.peagesReelMad) > 0 ? "gps" : num(v.peagesMad) > 0 ? "saisie" : "calcule");
+  p("peage_fr", peagesFranceVoyage(v).eur * taux, "calcule");
+  const eu = num(v.peagesEurReel) > 0 ? [num(v.peagesEurReel), "saisie"] : v.kmPays && peagesEuropeVoyage(v).eur > 0 ? [peagesEuropeVoyage(v).eur, "calcule"] : [num(v.peagesEur), "saisie"];
+  p("peage_eu", eu[0] * taux, eu[1]);
+  for (const t of v.traversees || []) p("traversee", coutTraversee(t) * taux, "calcule", { sens: t.sens });
+  p("carburant", num(v.carburantMad), "saisie"); p("per_diem_chauffeur", num(v.fraisRouteMad), "saisie", { libelle: "Per diem, hôtel, parkings" });
+  p("douane_frais", num(v.douaneMad), "saisie"); p("autre", num(v.autresMad), "saisie");
+  return r;
+}
+/**
+ * Toutes les lignes de coût direct d'un voyage, en MAD : les lignes réelles, puis les anciens champs pour les types sans ligne réelle.
+ * Une ligne réelle remplace l'estimation de son type (jamais de double compte) ; une facture de traversée avec un sens ne remplace que cette traversée.
+ */
+function lignesVoyage(v) {
+  const reelles = (v.lignesCout || []).filter((l) => typeCout(l.type)?.[2]);
+  const remplace = (h) => reelles.some((l) => l.type === h.type && (h.type !== "traversee" || !l.sens || !h.sens || l.sens === h.sens));
+  return [...reelles.map((l) => ({ ...l, mad: ligneCoutMad(l) })), ...coutsHerites(v).filter((h) => !remplace(h)).map((h) => ({ ...h, mad: h.montant }))];
+}
 function coutVoyage(v) {
   const taux = S.params.tauxEUR;
-  const trav = (v.traversees || []).reduce((s, t) => s + coutTraversee(t), 0) * taux;
-  const parts = {
-    peagesMaroc: peagesMarocVoyage(v), peagesFrance: peagesFranceVoyage(v).eur * taux, peagesEurope: (num(v.peagesEurReel) > 0 ? num(v.peagesEurReel) : v.kmPays && peagesEuropeVoyage(v).eur > 0 ? peagesEuropeVoyage(v).eur : num(v.peagesEur)) * taux, traversees: trav, carburant: num(v.carburantMad),
-    fraisRoute: num(v.fraisRouteMad), douane: num(v.douaneMad), autres: num(v.autresMad),
-  };
+  const parts = { peagesMaroc: 0, peagesFrance: 0, peagesEurope: 0, traversees: 0, carburant: 0, fraisRoute: 0, douane: 0, autres: 0, froid: 0, amendes: 0, maintien: 0 };
+  for (const l of lignesVoyage(v)) parts[typeCout(l.type)[2]] += l.mad;
   const total = Object.values(parts).reduce((a, b) => a + b, 0);
   const prix = v.devise === "EUR" ? num(v.prix) * taux : num(v.prix);
   const km = num(v.kmAller) + num(v.kmRetourCharge) + num(v.kmRetourVide);

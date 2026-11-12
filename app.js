@@ -147,6 +147,7 @@ const ONGLETS = [
   ["tableau", "Accueil", "home", ""],
   ["commandes", "Commandes", "box", "Exploitation"],
   ["operations", "Opérations", "flag", "Exploitation"],
+  ["planning", "Planning", "calendar", "Exploitation"],
   ["direct", "Carte", "radar", "Exploitation"],
   ["voyages", "Voyages", "ship", "Exploitation"],
   ["gps", "Traces GPS", "pin", "Exploitation"],
@@ -204,7 +205,7 @@ function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
 function etiqueterTableaux() {
   document.querySelectorAll("#app table").forEach((t) => {
     const ths = [...t.querySelectorAll("thead th")].map((th) => th.textContent.trim());
-    if (!ths.length) return;
+    if (!ths.length || t.classList.contains("sans-cartes")) return; // grilles (planning) : restent des grilles, défilement horizontal
     t.classList.add("cards");
     t.querySelectorAll("tbody tr").forEach((tr) => [...tr.children].forEach((td, i) => {
       td.dataset.label = ths[i] || "";

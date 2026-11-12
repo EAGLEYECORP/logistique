@@ -739,3 +739,28 @@ body.ecran-compte-ouvert { overflow: hidden; }
 @media (max-width: 860px) { #indic-multi { bottom: 76px; } }
 tr.inactif td { opacity: .55; }
 .ops-carte.mien { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent); }
+
+/* planning des chauffeurs et des camions */
+.planning-barre { justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.planning-wrap { overflow-x: auto; }
+table.planning { border-collapse: separate; border-spacing: 2px; width: 100%; min-width: 560px; table-layout: fixed; }
+table.planning th, table.planning td { padding: 0; text-align: center; font-size: .78rem; border: 0; }
+table.planning .res-col { width: 150px; text-align: left; padding: 6px 8px 6px 0; vertical-align: middle; position: sticky; left: 0; background: var(--surface); z-index: 1; }
+table.planning .res-col .sub { display: block; font-weight: 400; } table.planning .res-col .btn { margin-top: 4px; }
+table.planning thead .jour-col { padding: 4px 0; color: var(--muted); font-weight: 500; } table.planning thead .jour-col span { display: block; font-size: .7rem; } table.planning thead .jour-col strong { color: var(--text); font-size: .9rem; }
+table.planning thead .jour-col.auj strong { color: #fff; background: var(--primary); border-radius: 999px; padding: 1px 7px; } table.planning thead .jour-col.we { opacity: .7; }
+td.cel { height: 34px; border-radius: 6px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 4px; }
+td.cel span { font-weight: 600; font-size: .72rem; }
+.cel-libre { background: color-mix(in srgb, var(--ok) 9%, transparent); } td.cel-libre:hover { background: color-mix(in srgb, var(--ok) 22%, transparent); }
+.cel-occupe { background: color-mix(in srgb, var(--primary) 70%, transparent); color: #fff; } .cel-fait { background: color-mix(in srgb, var(--primary) 30%, transparent); }
+.cel-absent { background: color-mix(in srgb, var(--warn) 45%, transparent); } .cel-bloque { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--danger) 35%, transparent) 0 6px, transparent 6px 12px); }
+td.cel.auj { box-shadow: inset 0 0 0 2px var(--primary); }
+table.planning tfoot td.libres-jour { font-weight: 600; color: var(--ok); padding-top: 4px; } table.planning tfoot td.zero { color: var(--danger); }
+.planning-legende i { width: 14px; height: 10px; }
+@media print { .toast, #toasts, .toasts { display: none !important; } .planning-barre .segmented, .planning-barre .btn, #bloc-libres, .no-print { display: none !important; } table.planning { min-width: 0; } td.cel { height: 24px; } }
+
+table.planning th.res-col { width: 170px; text-transform: none; letter-spacing: 0; white-space: normal; overflow: hidden; color: var(--text); font-size: .88rem; border: 0; }
+table.planning th.res-col .sub { font-size: .74rem; line-height: 1.3; }
+table.planning thead th.res-col { color: var(--muted); font-size: .74rem; text-transform: uppercase; }
+table.planning thead th { border: 0; text-transform: none; letter-spacing: 0; }
+@media (max-width: 700px) { table.planning { min-width: 520px; } table.planning th.res-col { width: 118px; } table.planning th.res-col .btn { padding: 3px 8px; font-size: .74rem; } }

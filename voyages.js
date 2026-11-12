@@ -62,7 +62,7 @@ function blocTraversee(voy, sens) {
 }
 
 /* ---------- Voyages ---------- */
-const champsVoyage = (v = {}) => [
+let champsVoyage = (v = {}) => [ // « let » : calendrier.js ajoute la disponibilité des chauffeurs et des camions
   { name: "ref", label: "Référence", required: true, value: v.ref ?? `V-${new Date().getFullYear()}-${String(S.voyages.length + 1).padStart(4, "0")}` },
   { name: "statut", label: "Statut", type: "select", options: STATUTS_VOYAGE, value: v.statut || "prevu" },
   { name: "clientId", label: "Client", type: "select", options: optsClients("— Aucun —"), value: v.clientId },
@@ -190,6 +190,7 @@ function carteVoyage(v) {
       <div class="row">
         ${v.statut === "termine" ? "" : btn("terminer", "Terminer le voyage", { id: v.id, icone: "check", cls: "btn ghost sm" })}
         ${v.statut === "annule" ? "" : btn("preuve", v.pod ? "Refaire la preuve de livraison" : "Preuve de livraison", { id: v.id, icone: "check", cls: "btn ghost sm" })}
+        ${btn("dupliquer", "Dupliquer", { id: v.id, icone: "plus", cls: "btn ghost sm", titre: "Nouveau voyage identique (trajet, client, prix, équipe), à une autre date" })}
         ${v.statut === "annule" ? "" : btn("cmr", "CMR (impression)", { id: v.id, icone: "print", cls: "btn ghost sm" })}
         ${btn("releve-eu", "Relevé péages Europe", { id: v.id, icone: "upload", cls: "btn ghost sm", titre: "Importer le relevé CSV de votre fournisseur de télépéage (DKV, UTA, Eurowag, Telepass…)" })}
         ${btn("dossier", "Dossier complet", { id: v.id, icone: "file", cls: "btn ghost sm", titre: "Tout le voyage en un document : papiers, étapes, traversées, preuve de livraison, trace, photos" })}

@@ -23,6 +23,7 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Autorisations & visas** | Autorisations bilatérales « E » / « MA », comptes-rendus de voyage, **compteur Schengen 90/180** par chauffeur |
 | **Suivi en direct** | **Carte interactive de la flotte** (Leaflet + OpenStreetMap, gratuite), **camion cliquable avec fiche complète** (position, voyage, chauffeur, camion, température), état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques, heure d'arrivée estimée ; nécessite le relais ou Traccar (`serveur/`) |
 | **Direction** | Résultat de l'entreprise en direct (MAD et EUR), tableau croisé client × corridor × camion × chauffeur × mois jusqu'au voyage, tendance 12 mois, **trésorerie à 90 jours** (zone rouge, détail du jour), **simulateur d'achat de camion**, **anomalies par camion** |
+| **Planning** | **Calendrier des disponibilités** des chauffeurs et des camions jour par jour (voyages, congés, maladie, formation, entretien, panne, papiers expirés), libres par jour, jours Schengen restants ; une case libre crée un voyage ou une absence ; « qui est libre du … au … » ; programme du chauffeur par WhatsApp ; impression de la semaine. Chevauchements signalés, disponibilité affichée dans le formulaire de voyage, bouton **Dupliquer** un voyage |
 | **Opérations** | Une carte par camion (état, voyage, prochaine étape, arrivée estimée, alertes, marge), **conseils du moment** (prix plancher du retour, camion à l'arrêt, traversée à réserver, chauffeur hors règles, repos hebdomadaire) |
 | **Marge du voyage** | Pastille verte ou rouge et sa courbe, **dépenses par ligne** (20 types, source, reçu en photo), marge nette ; **carte carburant** importée et rattachée seule, per diem et froid calculés, rappels de facture aux étapes, amendes ; historique de chaque changement |
 | **Notifications par étape** | Qui est prévenu à chaque étape (équipe, client avec son accord, chauffeur), messages en français, anglais, espagnol, arabe, bouton « Notifier », **rappels programmés envoyés par le relais même application fermée** |
@@ -151,6 +152,7 @@ Automatique et sans action de votre part.
 | `couts.js`, `rentabilite.js`, `capture.js` | Charges fixes, amortissement, répartition, échéances ; marge du voyage en direct ; carte carburant, per diem, froid, amendes, rappels de facture (logique pure, testée) |
 | `tresorerie.js`, `investissement.js`, `anomalies.js` | Résultat de l'entreprise et tableau croisé, trésorerie à 90 jours ; simulateur d'achat ; anomalies par camion (testés) |
 | `optimisation.js`, `journal.js`, `prevision.js` | Conseils et tableau des opérations ; historique des voyages ; attentes aux ports et arrivée estimée (testés) |
+| `planning.js`, `calendrier.js` | Disponibilités, conflits d'affectation, ressources libres, duplication, programme du chauffeur (testé) ; page Planning |
 | `jalons_notifications.js`, `comptes.js` | Routage et rédaction des notifications par étape ; rôles et droits partagés avec le relais (testés) |
 | `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Journal) |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |
@@ -177,7 +179,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 192 tests (165 application, 27 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 198 tests (171 application, 27 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

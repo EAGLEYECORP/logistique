@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2063,6 +2063,72 @@ test("droits : une écriture ne peut ni effacer les prix qu'on ne voit pas, ni t
   // journal : différences
   assert.deepStrictEqual(JSON.parse(JSON.stringify(N.diffEnregistrement({ a: 1, b: 2, _v: 1 }, { a: 1, b: 3, c: 4, _v: 2 }))), { b: [2, 3], c: [null, 4] });
   assert.strictEqual(N.motDePasseValide("court"), false); assert.strictEqual(N.motDePasseValide("douze-caract"), true); assert.strictEqual(N.emailCompteValide("a@b.example"), true); assert.strictEqual(N.emailCompteValide("a@b"), false);
+});
+
+/* ---------- planning des chauffeurs et des camions ---------- */
+const etatPlanning = () => {
+  N.S.entreprise = { nom: "Atlas Fret" };
+  N.S.chauffeurs = [{ id: "h1", nom: "Youssef", sejours: [], absences: [{ id: "a1", type: "conge", debut: "2026-11-23", fin: "2026-11-27", note: "Mariage" }] }, { id: "h2", nom: "Karim", sejours: [], permis: "2026-11-20" }, { id: "h3", nom: "Said", sejours: [{ entree: "2026-07-28", sortie: "2026-10-25" }] }, { id: "h4", nom: "Anas", conge: true, sejours: [] }];
+  N.S.camions = [{ id: "c1", immat: "111-A-1", immobilisations: [{ id: "i1", type: "panne", debut: "2026-11-25", fin: "2026-11-26" }] }, { id: "c2", immat: "222-B-2", visite: "2026-11-30" }];
+  N.S.voyages = [
+    { id: "v1", ref: "V-1", chauffeurId: "h1", camionId: "c1", statut: "en_cours", origine: "Agadir", destination: "Perpignan", dateDepart: "2026-11-16", dateRetourPrevue: "2026-11-21", traversees: [{ sens: "aller", date: "2026-11-17", heure: "14:00", ref: "DFDS-9" }] },
+    { id: "v2", ref: "V-2", chauffeurId: "h2", camionId: "c2", statut: "prevu", origine: "Casablanca", destination: "Lyon", dateDepart: "2026-11-18", dateRetourPrevue: "2026-11-24" },
+    { id: "v3", ref: "V-3", chauffeurId: "h1", camionId: "c2", statut: "annule", dateDepart: "2026-11-18", dateRetourPrevue: "2026-11-20" },
+  ];
+};
+
+test("planning : occupation jour par jour — voyage, absence, immobilisation, papiers expirés, libre", () => {
+  etatPlanning(); const ch = (id) => N.parId(N.S.chauffeurs, id), cam = (id) => N.parId(N.S.camions, id);
+  assert.strictEqual(N.occupation("chauffeur", ch("h1"), "2026-11-16").statut, "voyage"); assert.strictEqual(N.occupation("chauffeur", ch("h1"), "2026-11-21").libelle, "V-1", "jour du retour compris");
+  assert.strictEqual(N.occupation("chauffeur", ch("h1"), "2026-11-22").statut, "libre"); const a = N.occupation("chauffeur", ch("h1"), "2026-11-25"); assert.strictEqual(a.statut, "absent"); assert.strictEqual(a.libelle, "Congé"); assert.strictEqual(a.note, "Mariage");
+  assert.strictEqual(N.occupation("chauffeur", ch("h2"), "2026-11-19").statut, "voyage", "le voyage passe avant les papiers"); assert.strictEqual(N.occupation("chauffeur", ch("h2"), "2026-11-25").libelle, "Permis expiré");
+  assert.strictEqual(N.occupation("camion", cam("c1"), "2026-11-25").libelle, "Panne"); assert.strictEqual(N.occupation("camion", cam("c2"), "2026-12-01").statut, "papiers"); assert.strictEqual(N.occupation("camion", cam("c2"), "2026-11-30").statut, "libre", "valable jusqu'au jour inclus");
+  assert.strictEqual(N.occupation("chauffeur", ch("h4"), N.today()).statut, "absent", "ancienne case « en congé »"); assert.strictEqual(N.occupation("chauffeur", ch("h4"), "2020-01-01").statut, "libre");
+  // un voyage terminé plus tôt libère les jours restants
+  N.S.voyages[0].jalons = [{ type: "retour", date: "2026-11-19T18:00:00Z" }]; assert.strictEqual(N.occupation("chauffeur", ch("h1"), "2026-11-20").statut, "libre");
+});
+
+test("planning : grille sur 14 jours, libres par jour, jours Schengen restants", () => {
+  etatPlanning(); const g = N.grillePlanning("chauffeur", "2026-11-16", 14);
+  assert.strictEqual(g.jours.length, 14); assert.strictEqual(g.jours[13], "2026-11-29"); assert.deepStrictEqual([...g.lignes.map((l) => l.nom)], ["Youssef", "Karim", "Said", "Anas"]);
+  assert.strictEqual(g.lignes[0].libres, 14 - 6 - 5); assert.strictEqual(g.libresParJour[0], g.lignes.filter((l) => l.cellules[0].statut === "libre").length); assert.strictEqual(g.libresParJour[0], 2, "16/11 : Karim (part le 18) et Said ; Youssef part ce jour-là, Anas est en congé");
+  assert.strictEqual(g.lignes[2].schengen, N.schengenEtat(N.S.chauffeurs[2].sejours, "2026-11-16").restant); assert.ok(g.lignes[2].schengen < g.lignes[0].schengen);
+  assert.strictEqual(N.grillePlanning("camion", "2026-11-16", 7).lignes[0].cellules.filter((c) => c.statut === "voyage").length, 6);
+});
+
+test("planning : conflits d'affectation (double voyage, absence, immobilisation), sans compter le voyage lui-même ni les annulés", () => {
+  etatPlanning();
+  N.S.voyages.push({ id: "v4", ref: "V-4", chauffeurId: "h1", camionId: "c1", statut: "prevu", origine: "Tanger", destination: "Madrid", dateDepart: "2026-11-20", dateRetourPrevue: "2026-11-26" });
+  const c = N.conflitsAffectation(N.S.voyages[3]).map((x) => x.texte);
+  assert.ok(c.some((t) => /Youssef est déjà sur le voyage V-1 du 16\/11\/2026 au 21\/11\/2026/.test(t))); assert.ok(c.some((t) => /Youssef : congé du 23\/11\/2026 au 27\/11\/2026/.test(t)));
+  assert.ok(c.some((t) => /111-A-1 est déjà sur le voyage V-1/.test(t))); assert.ok(c.some((t) => /111-A-1 : panne du 25\/11\/2026/.test(t))); assert.ok(!c.some((t) => /V-3/.test(t)), "voyage annulé ignoré");
+  assert.ok(N.controlesVoyage(N.S.voyages[3]).some((x) => x.niveau === "danger" && /déjà sur le voyage V-1/.test(x.texte)), "dans les contrôles avant départ (et donc les alertes)");
+  N.S.voyages[3].dateDepart = "2026-11-28"; N.S.voyages[3].dateRetourPrevue = "2026-12-02"; assert.strictEqual(N.conflitsAffectation(N.S.voyages[3]).length, 0, "plus de chevauchement");
+  N.S.voyages[3].statut = "termine"; assert.strictEqual(N.conflitsAffectation(N.S.voyages[3]).length, 0);
+});
+
+test("planning : qui est libre sur une période — libres d'abord, raisons, Schengen", () => {
+  etatPlanning(); N.S.chauffeurs[3].conge = false;
+  const l = N.ressourcesLibres("chauffeur", "2026-11-19", "2026-11-22");
+  assert.deepStrictEqual([...l.filter((x) => x.libre).map((x) => x.nom)], ["Anas"], "Said a trop de jours Schengen, Karim et Youssef sont en voyage");
+  assert.ok(l.find((x) => x.nom === "Said").raisons.some((r) => /jours Schengen sur 180/.test(r))); assert.ok(l.find((x) => x.nom === "Karim").raisons.some((r) => /permis expiré le 20\/11\/2026, pendant la période/.test(r)));
+  assert.strictEqual(l[0].nom, "Anas"); assert.ok(N.ressourcesLibres("chauffeur", "2026-11-19", "2026-11-22", { sauf: "v1" }).find((x) => x.nom === "Youssef").libre, "en modifiant V-1, son propre voyage ne compte pas");
+  assert.deepStrictEqual([...N.ressourcesLibres("camion", "2026-11-24", "2026-11-25").filter((x) => x.libre).map((x) => x.nom)], [], "c1 en panne le 25, c2 encore en voyage le 24");
+});
+
+test("dupliquer un voyage : même trajet, équipe et prix ; dates décalées ; étapes, dépenses et réservations remises à zéro", () => {
+  etatPlanning(); const v = { ...N.S.voyages[0], prix: 4000, devise: "EUR", kmAller: 2000, tempMin: 2, tempMax: 6, livraisonPrevue: "2026-11-18T08:00:00.000Z", lignesCout: [{ id: "l", type: "carburant", montant: 1 }], jalons: [{ type: "depart" }], pod: { signataire: "X" }, auditLog: [{}], partage: { id: "p" } };
+  const d = N.dupliquerVoyage(v, "2026-12-01", "V-2026-0099");
+  assert.strictEqual(d.ref, "V-2026-0099"); assert.notStrictEqual(d.id, v.id); assert.strictEqual(d.statut, "prevu"); assert.strictEqual(d.dateRetourPrevue, "2026-12-06", "même durée (5 jours)"); assert.strictEqual(d.livraisonPrevue, "2026-12-03T08:00:00.000Z");
+  for (const k of ["origine", "destination", "chauffeurId", "camionId", "prix", "devise", "kmAller", "tempMin"]) assert.strictEqual(d[k], v[k], k);
+  assert.strictEqual(d.lignesCout.length, 0); assert.strictEqual(d.jalons.length, 0); assert.ok(!d.pod && !d.auditLog && !d.partage);
+  assert.strictEqual(d.traversees[0].statut, "a_reserver"); assert.strictEqual(d.traversees[0].ref, ""); assert.strictEqual(v.traversees[0].ref, "DFDS-9", "l'original n'est pas touché");
+});
+
+test("programme du chauffeur : voyages et absences des 7 prochains jours, prêt à envoyer", () => {
+  etatPlanning(); const t = N.programmeChauffeur(N.S.chauffeurs[0], "2026-11-20", 7);
+  assert.ok(t.startsWith("Bonjour Youssef, votre programme du 20/11/2026 au 26/11/2026 :")); assert.ok(/• V-1 : Agadir → Perpignan, départ le 16\/11\/2026, retour prévu le 21\/11\/2026, camion 111-A-1, traversée le 17\/11\/2026 à 14:00 \(réservation DFDS-9\)/.test(t), t);
+  assert.ok(/• Congé du 23\/11\/2026 au 27\/11\/2026/.test(t)); assert.ok(t.endsWith("— Atlas Fret")); assert.ok(/Aucun voyage prévu/.test(N.programmeChauffeur(N.S.chauffeurs[2], "2026-11-20")));
 });
 
 (async () => {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.1.0 — Planning des chauffeurs et des camions
+
+- **Page Planning** : disponibilités jour par jour (14 jours, 7 sur téléphone) — en voyage, congé, maladie, formation, repos, entretien, panne, visite technique, papiers expirés (permis, carte conducteur, visite médicale ; assurance et visite technique du camion), libre. Nombre de libres par jour, jours Schengen restants de chaque chauffeur, semaine suivante ou précédente, impression.
+- **Une case libre** crée un voyage qui part ce jour (chauffeur et son camion préremplis) ou déclare une absence ; une case occupée ouvre le voyage ou l'absence.
+- **Qui est libre du … au …** : les libres d'abord (les plus de jours Schengen en tête), et pourquoi les autres ne le sont pas.
+- **Conflits signalés** dans les contrôles et les alertes : chauffeur ou camion sur deux voyages en même temps, voyage pendant une absence ou une immobilisation.
+- **Formulaire de voyage** : chaque chauffeur et chaque camion affiche sa disponibilité pour les dates du voyage, les libres en premier.
+- **Dupliquer un voyage** : même trajet, client, prix et équipe, même durée, à une nouvelle date ; étapes, dépenses et réservations remises à zéro.
+- **Programme du chauffeur** sur WhatsApp en un geste (voyages, traversée et réservation, absences des 7 prochains jours).
+- 6 nouveaux tests (171 application, 27 relais).
+
 ## 4.0.0 — 12/11/2026 — la vérité de l'argent, la direction, les deux bureaux
 
 Treize livrables, dans l'ordre de la valeur (décisions : `docs/11-decisions-v4.md`). **192 tests** (165 application, 27 relais ; 116 au départ), moins de 20 s. Documentation : `docs/05` à `docs/10`.

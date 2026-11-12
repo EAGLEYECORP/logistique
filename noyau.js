@@ -566,6 +566,7 @@ function controlesVoyage(v) {
     if (!t) ajouter("warn", `Traversée ${sens} non renseignée`);
     else if (t.statut === "a_reserver") ajouter("warn", `Traversée ${sens} (${LIGNES_TRAVERSEE[t.ligne]?.lib || "?"}) à réserver`);
   }
+  if (typeof conflitsAffectation === "function") for (const c of conflitsAffectation(v)) ajouter("danger", c.texte); // planning.js
   return r;
 }
 

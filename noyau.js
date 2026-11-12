@@ -60,7 +60,7 @@ const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "P
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [],
+    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [], depensesAttente: [],
     params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }
@@ -97,7 +97,7 @@ function migrer(brut) {
   if (depuis < 5) { e.traces = Array.isArray(e.traces) ? e.traces : []; e.zones = Array.isArray(e.zones) ? e.zones : []; }
   if (depuis < 6) { e.gares = Array.isArray(e.gares) ? e.gares : []; e.releves = Array.isArray(e.releves) ? e.releves : []; }
   if (depuis < 7) { // les anciens champs de coût restent en place : ils sont projetés en lignes à la lecture (lignesVoyage)
-    e.chargesGenerales = Array.isArray(e.chargesGenerales) ? e.chargesGenerales : []; e.echeances = Array.isArray(e.echeances) ? e.echeances : [];
+    e.chargesGenerales = Array.isArray(e.chargesGenerales) ? e.chargesGenerales : []; e.echeances = Array.isArray(e.echeances) ? e.echeances : []; e.depensesAttente = Array.isArray(e.depensesAttente) ? e.depensesAttente : [];
     e.voyages.forEach((v) => { v.lignesCout = Array.isArray(v.lignesCout) ? v.lignesCout : []; });
   }
   e.meta.version = VERSION_SCHEMA;

@@ -14,6 +14,14 @@
 - **Marge nette** : part des charges fixes du camion (au temps passé) et des charges générales (selon la clé de chaque charge, entre les voyages du mois), prix de revient par kilomètre chargé.
 - Le dossier de voyage et l'export reprennent les nouveaux postes (froid, amendes, dépannage).
 
+### D3 — Les dépenses entrent seules
+- **Relevé de carte carburant (CSV)** : chaque plein est rattaché au voyage du camion à cette date (immatriculation ou numéro de carte, même masqué) ; le reste attend dans « Dépenses à rattacher » avec sa raison et se rattache seul dès que le voyage existe. Un relevé importé deux fois ne compte qu'une fois.
+- **Per diem** du chauffeur (tarif par jour × jours du voyage) et **énergie du groupe froid** (part mensuelle du camion) comptés seuls, recalculés si les dates changent, figés une fois le voyage terminé.
+- **Péage mesuré par GPS** : devient une dépense de source « GPS ».
+- **Rappels au bon moment** : frais du transitaire dès l'étape de douane, facture de la traversée dès l'embarquement (montant et réservation proposés).
+- **Amendes** : comptées dans le voyage que le chauffeur faisait à la date de l'infraction.
+- Non fait : import des factures d'armateur en CSV (aucun format connu à ce jour — la facture se saisit en un geste depuis le rappel).
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

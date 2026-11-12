@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1343,6 +1343,126 @@ test("évolution de la marge : un point de départ puis un point par jour de dé
   assert.strictEqual(pts.length, 4); assert.strictEqual(pts[0][0], 0); assert.strictEqual(pts[3][0], 60); assert.ok(pts.every(([x, y]) => y >= 0 && y <= 20));
   assert.ok(pts[0][1] < c.zero && pts[3][1] > c.zero, "au-dessus puis au-dessous de la ligne d'équilibre"); assert.strictEqual(pts[2][1], c.zero);
   assert.strictEqual(N.courbeMini([]).points, ""); assert.strictEqual(N.courbeMini([5]).points.split(" ").length, 2);
+});
+
+/* ---------- D3 : capture automatique des dépenses ---------- */
+const etatCapture = () => {
+  N.S.params.tauxEUR = 10;
+  N.S.camions = [{ id: "c1", immat: "12345-A-6", carteCarburant: "7077 1234 5678 9012" }, { id: "c2", immat: "WX-99-ZZ", froid: { consomMensuelle: 3043.75 } }];
+  N.S.chauffeurs = [{ id: "h1", nom: "Youssef", perDiemJournalier: 35, perDiemDevise: "EUR" }, { id: "h2", nom: "Karim" }];
+  N.S.voyages = [
+    { id: "v1", ref: "V1", camionId: "c1", chauffeurId: "h1", statut: "termine", dateDepart: "2026-10-01", dateRetourPrevue: "2026-10-10", prix: 50000, devise: "MAD", carburantMad: 14000, lignesCout: [] },
+    { id: "v2", ref: "V2", camionId: "c1", chauffeurId: "h1", statut: "en_cours", dateDepart: "2026-10-20", dateRetourPrevue: "2026-10-28", prix: 50000, devise: "MAD", lignesCout: [] },
+    { id: "v3", ref: "V3", camionId: "c2", chauffeurId: "h2", statut: "en_cours", dateDepart: "2026-10-20", dateRetourPrevue: "2026-10-29", prix: 50000, devise: "MAD", lignesCout: [] },
+    { id: "v4", ref: "V4", camionId: "c1", chauffeurId: "h1", statut: "annule", dateDepart: "2026-10-12", dateRetourPrevue: "2026-10-18", lignesCout: [] },
+  ];
+  N.S.depensesAttente = [];
+};
+const RELEVE_CARB = `Date;Heure;Kennzeichen;Kartennummer;Produkt;Menge;Betrag;Währung;Land;Tankstelle;Beleg
+03/10/2026 14:22;;12345 A 6;;Diesel;420,5;588,70;EUR;ES;Algeciras Puerto;T-001
+2026-10-09;;;XXXX XXXX 5678 9012;Diesel;300;4 200,00;MAD;MA;Afriquia Tanger;T-002
+19.10.2026;;12345-a-6;;AdBlue;40;32,00;EUR;FR;Le Boulou;T-003
+14/10/2026 08:00;;12345-A-6;;Diesel;200;280,00;EUR;ES;Murcia;T-004
+22/10/2026 10:00;;ZZ-000-ZZ;;Diesel;100;140,00;EUR;ES;Lorca;T-005
+23/10/2026 10:00;;WX 99 ZZ;;Diesel;100;95,00;CHF;CH;Basel;T-006
+pas une date;;12345-A-6;;Diesel;1;1;EUR;;;
+24/10/2026 09:00;;WX-99-ZZ;;Diesel;0;0;EUR;;;`;
+
+test("relevé de carte carburant : colonnes reconnues (allemand, français), dates seules, montants à virgule", () => {
+  const r = N.carteCarburantParse(RELEVE_CARB);
+  assert.strictEqual(r.ok, true); assert.strictEqual(r.lignes.length, 6); assert.strictEqual(r.rejetes, 2);
+  const l = r.lignes[0];
+  assert.strictEqual(l.date, "2026-10-03"); assert.strictEqual(l.montant, 588.7); assert.strictEqual(l.devise, "EUR"); assert.strictEqual(l.litres, 420.5); assert.strictEqual(l.plaque, "12345 A 6"); assert.strictEqual(l.pays, "ES"); assert.strictEqual(l.station, "Algeciras Puerto"); assert.strictEqual(l.ref, "T-001"); assert.strictEqual(l.produit, "Diesel");
+  assert.strictEqual(r.lignes[1].date, "2026-10-09"); assert.strictEqual(r.lignes[1].montant, 4200); assert.strictEqual(r.lignes[1].carte, "XXXX XXXX 5678 9012"); assert.strictEqual(r.lignes[2].date, "2026-10-19");
+  assert.strictEqual(N.carteCarburantParse("a;b\n1;2").ok, false); assert.strictEqual(N.carteCarburantParse("").ok, false);
+  const fr = N.carteCarburantParse("Date de transaction,Immatriculation,Quantité,Montant TTC,Devise\n2026-10-05 12:00,12345-A-6,100,\"1 150,50\",MAD");
+  assert.strictEqual(fr.lignes[0].montant, 1150.5); assert.strictEqual(fr.lignes[0].litres, 100); assert.strictEqual(fr.lignes[0].plaque, "12345-A-6");
+});
+
+test("carte carburant : chaque ligne va au voyage du camion à cette date ; le reste attend avec sa raison ; pas de double import", () => {
+  etatCapture();
+  const lignes = N.carteCarburantParse(RELEVE_CARB).lignes, b = N.rattacherCarburant(lignes);
+  assert.strictEqual(b.rattachees, 3); assert.strictEqual(b.attente, 3); assert.strictEqual(b.doublons, 0); assert.deepStrictEqual([...b.voyages].sort(), ["v1", "v2"]);
+  const [v1, v2] = N.S.voyages;
+  assert.deepStrictEqual(v1.lignesCout.map((l) => l.ref), ["T-001", "T-002"], "immatriculation écrite autrement, puis carte masquée reconnue par ses derniers chiffres");
+  assert.ok(v1.lignesCout.every((l) => l.type === "carburant" && l.source === "fuel_card_csv" && l.camionId === "c1"));
+  assert.strictEqual(v1.lignesCout[0].libelle, "Diesel · 421 L · Algeciras Puerto · ES".replace("421", N.fmt(420.5, 0)));
+  assert.deepStrictEqual(v2.lignesCout.map((l) => l.ref), ["T-003"], "plein de la veille du départ : pour ce voyage");
+  assert.strictEqual(N.coutVoyage(v1).parts.carburant, 5887 + 4200, "les lignes de la carte remplacent le carburant saisi");
+  const raisons = N.S.depensesAttente.map((a) => [a.ref, a.raison]);
+  assert.strictEqual(JSON.stringify(raisons), JSON.stringify([["T-004", "aucun voyage à cette date"], ["T-005", "camion inconnu"], ["T-006", "devise CHF : à convertir"]]), "le voyage annulé ne reçoit rien");
+  const b2 = N.rattacherCarburant(lignes); assert.strictEqual(b2.doublons, 6); assert.strictEqual(b2.rattachees + b2.attente, 0); assert.strictEqual(v1.lignesCout.length, 2); assert.strictEqual(N.S.depensesAttente.length, 3);
+});
+
+test("dépenses en attente : affectation à la main (avec conversion) et nouvel essai automatique", () => {
+  etatCapture(); N.rattacherCarburant(N.carteCarburantParse(RELEVE_CARB).lignes);
+  const chf = N.S.depensesAttente.find((a) => a.ref === "T-006");
+  const l = N.affecterAttente(chf.id, "v3", { montant: 101.5, devise: "EUR" });
+  assert.strictEqual(l.montant, 101.5); assert.strictEqual(l.devise, "EUR"); assert.strictEqual(l.source, "fuel_card_csv"); assert.strictEqual(N.S.voyages[2].lignesCout.length, 1); assert.strictEqual(N.S.depensesAttente.length, 2);
+  assert.strictEqual(N.affecterAttente("inconnu", "v3"), null); assert.strictEqual(N.affecterAttente(N.S.depensesAttente[0].id, "inconnu"), null);
+  assert.strictEqual(N.retenterAttente().length, 0);
+  N.S.voyages.push({ id: "v5", camionId: "c1", statut: "termine", dateDepart: "2026-10-13", dateRetourPrevue: "2026-10-16", lignesCout: [] }); // le voyage manquant est créé après coup
+  N.S.camions.push({ id: "c3", immat: "ZZ 000 ZZ" }); N.S.voyages.push({ id: "v6", camionId: "c3", statut: "en_cours", dateDepart: "2026-10-21", dateRetourPrevue: "2026-10-30", lignesCout: [] });
+  assert.deepStrictEqual([...N.retenterAttente()].sort(), ["v5", "v6"]); assert.strictEqual(N.S.depensesAttente.length, 0);
+  assert.strictEqual(N.S.voyages[4].lignesCout[0].ref, "T-004"); assert.strictEqual(N.S.voyages[5].lignesCout[0].ref, "T-005");
+});
+
+test("per diem : tarif du chauffeur × jours, recalculé quand les dates changent, figé une fois le voyage terminé", () => {
+  etatCapture(); const v = N.S.voyages[1];
+  assert.strictEqual(N.majCoutsCalcules(v), true);
+  let l = v.lignesCout.find((x) => x.cle === "auto:perdiem");
+  assert.strictEqual(l.type, "per_diem_chauffeur"); assert.strictEqual(l.montant, 35 * 9); assert.strictEqual(l.devise, "EUR"); assert.strictEqual(l.source, "calcule"); assert.strictEqual(l.date, "2026-10-20");
+  assert.strictEqual(N.coutVoyage(v).parts.fraisRoute, 3150); assert.strictEqual(N.majCoutsCalcules(v), false, "rien à refaire");
+  v.dateRetourPrevue = "2026-10-31"; assert.strictEqual(N.majCoutsCalcules(v), true); assert.strictEqual(v.lignesCout.filter((x) => x.cle === "auto:perdiem").length, 1); assert.strictEqual(v.lignesCout[0].montant, 35 * 12);
+  v.jalons = [{ type: "retour", date: "2026-10-27T18:00:00.000Z" }]; N.majCoutsCalcules(v); assert.strictEqual(v.lignesCout[0].montant, 35 * 8, "la date réelle de retour l'emporte");
+  v.statut = "termine"; N.S.chauffeurs[0].perDiemJournalier = 50; assert.strictEqual(N.majCoutsCalcules(v), false); assert.strictEqual(v.lignesCout[0].montant, 280, "un tarif changé après coup ne réécrit pas un voyage terminé");
+  const t = N.S.voyages[0]; assert.strictEqual(N.majCoutsCalcules(t), false); assert.strictEqual(t.lignesCout.length, 0, "voyage déjà terminé : rien n'est ajouté rétroactivement");
+  const w = N.S.voyages[2]; N.majCoutsCalcules(w); assert.ok(!w.lignesCout.some((x) => x.cle === "auto:perdiem"), "chauffeur sans tarif : pas de ligne");
+  v.statut = "en_cours"; v.chauffeurId = "h2"; assert.strictEqual(N.majCoutsCalcules(v), true); assert.strictEqual(v.lignesCout.length, 0, "chauffeur changé pour un chauffeur sans tarif : la ligne disparaît");
+});
+
+test("énergie du groupe froid : part mensuelle du camion au prorata des jours ; péage mesuré par GPS : ligne de source GPS", () => {
+  etatCapture(); const v = N.S.voyages[2];
+  N.majCoutsCalcules(v); const f = v.lignesCout.find((x) => x.cle === "auto:froid");
+  assert.strictEqual(f.type, "froid_energie"); assert.strictEqual(f.montant, 1000); assert.strictEqual(N.coutVoyage(v).parts.froid, 1000); // 10 jours sur 30,4375
+  v.peagesMad = 600; v.peagesReelMad = 471; assert.strictEqual(N.majCoutsCalcules(v), true);
+  const g = v.lignesCout.find((x) => x.cle === "auto:peage-gps"); assert.strictEqual(g.source, "gps"); assert.strictEqual(g.type, "peage_ma"); assert.strictEqual(g.montant, 471);
+  assert.strictEqual(N.coutVoyage(v).parts.peagesMaroc, 471, "compté une seule fois");
+  v.peagesReelMad = 498; N.majCoutsCalcules(v); assert.strictEqual(v.lignesCout.find((x) => x.cle === "auto:peage-gps").montant, 498);
+  v.statut = "termine"; delete v.peagesReelMad; assert.strictEqual(N.majCoutsCalcules(v), true); assert.ok(!v.lignesCout.some((x) => x.cle === "auto:peage-gps"), "retour au trajet type, même sur un voyage terminé");
+  assert.strictEqual(N.coutVoyage(v).parts.peagesMaroc, 600); assert.ok(v.lignesCout.some((x) => x.cle === "auto:froid"), "le froid d'un voyage terminé reste");
+  N.S.voyages[1].peagesReelMad = 100; assert.deepStrictEqual([...N.majCoutsCalculesTous()].sort(), ["v2"]);
+});
+
+test("amende : rattachée au voyage en cours du chauffeur à sa date, sinon mise en attente", () => {
+  etatCapture();
+  const r = N.enregistrerAmende({ chauffeurId: "h1", date: "2026-10-22", montant: 1500, devise: "EUR", ref: "PV-77", motif: "Repos journalier insuffisant" });
+  assert.strictEqual(r.voyage.id, "v2"); assert.strictEqual(r.ligne.type, "amendes"); assert.strictEqual(r.ligne.libelle, "Repos journalier insuffisant"); assert.strictEqual(N.coutVoyage(r.voyage).parts.amendes, 15000);
+  assert.strictEqual(N.margeVoyage("v2").marge_directe, 50000 - 15000);
+  const a = N.enregistrerAmende({ chauffeurId: "h2", date: "2026-11-15", montant: 300 }); assert.strictEqual(a.attente.raison, "aucun voyage à cette date"); assert.strictEqual(N.S.depensesAttente.length, 1);
+  assert.strictEqual(N.enregistrerAmende({ camionId: "c2", date: "2026-10-25", montant: 90 }).voyage.id, "v3", "par le camion si le chauffeur n'est pas connu");
+  assert.throws(() => N.enregistrerAmende({ chauffeurId: "h1", date: "2026-10-22", montant: 0 }), /obligatoires/);
+  N.S.voyages.push({ id: "v7", chauffeurId: "h2", camionId: "c2", statut: "prevu", dateDepart: "2026-11-10", dateRetourPrevue: "2026-11-20", lignesCout: [] });
+  assert.deepStrictEqual([...N.retenterAttente()], ["v7"]); assert.strictEqual(N.S.voyages[4].lignesCout[0].type, "amendes");
+});
+
+test("rappels de dépense : transitaire après la douane, facture de traversée après l'embarquement — au bon moment, une seule fois", () => {
+  etatCapture(); N.S.params.fraisTransitaire = 800;
+  const v = N.S.voyages[1]; v.traversees = [{ sens: "aller", ligne: "tmed-alg", fret: 300, ml: 16.5, baf: 2, ref: "DFDS-123" }, { sens: "retour", ligne: "alg-tmed", fret: 280 }]; v.jalons = [{ type: "depart", date: "2026-10-20T06:00:00Z" }];
+  const cles = () => N.invitesCout(v).map((i) => i.cle);
+  assert.deepStrictEqual([...cles()], [], "avant la douane : aucun rappel");
+  v.jalons.push({ type: "douane_export", date: "2026-10-20T15:00:00Z" });
+  let i = N.invitesCout(v); assert.strictEqual(i.length, 1); assert.strictEqual(i[0].type, "douane_frais"); assert.strictEqual(i[0].defaut, 800); assert.strictEqual(i[0].devise, "MAD");
+  v.jalons.push({ type: "port_tmed", date: "x" }, { type: "embarque_aller", date: "x" });
+  i = N.invitesCout(v); assert.deepStrictEqual([...i.map((x) => x.cle)], ["jalon:douane_export", "jalon:embarque_aller"]);
+  assert.strictEqual(i[1].sens, "aller"); assert.strictEqual(i[1].defaut, 333); assert.strictEqual(i[1].ref, "DFDS-123"); assert.strictEqual(i[1].source, "facture_armateur"); assert.strictEqual(i[1].devise, "EUR");
+  N.ajouterLigneCout(v, { type: "douane_frais", montant: 850, cle: "jalon:douane_export" }); N.ajouterLigneCout(v, { type: "traversee", montant: 341, devise: "EUR", source: "facture_armateur", sens: "aller" });
+  assert.deepStrictEqual([...cles()], []);
+  v.jalons.push({ type: "embarque_retour", date: "x" }, { type: "douane_import", date: "x" });
+  assert.deepStrictEqual([...cles()], ["jalon:douane_import", "jalon:embarque_retour"]);
+  v.invitesIgnorees = ["jalon:douane_import"]; assert.deepStrictEqual([...cles()], ["jalon:embarque_retour"]);
+  const w = N.S.voyages[2]; w.jalons = [{ type: "douane_export", date: "x" }]; w.douaneMad = 900; assert.strictEqual(N.invitesCout(w).length, 0, "frais de douane déjà saisis globalement : pas de rappel");
+  assert.strictEqual(N.invitesCout({ statut: "annule", jalons: [{ type: "douane_export" }] }).length, 0);
 });
 
 (async () => {

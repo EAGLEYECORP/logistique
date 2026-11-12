@@ -348,6 +348,7 @@ const champsCamion = (c = {}) => [
   { name: "autorisation", label: "Autorisation de transport international", type: "date", value: c.autorisation },
   { name: "fixeMensuel", label: "Charges fixes par mois (MAD) : crédit ou amortissement, assurance, taxes, salaire", type: "number", min: 0, value: c.fixeMensuel, full: true },
   { name: "balise", label: "Identifiant de la balise GPS (IMEI ou nom dans la plateforme)", value: c.balise, full: true, placeholder: "ex. 865432100123456" },
+  { name: "carteCarburant", label: "Numéro de la carte carburant (pour rattacher les relevés)", value: c.carteCarburant, full: true, placeholder: "les derniers chiffres suffisent" },
   { name: "essieux", label: "Essieux (tracteur + semi-remorque)", type: "number", step: 1, min: 2, value: c.essieux, placeholder: "5" },
   { name: "hauteurBasse", label: "Hauteur de l'essieu avant ≤ 1,30 m (rare : véhicule léger)", type: "checkbox", value: c.hauteurBasse, full: true },
 ];
@@ -357,7 +358,7 @@ function lireCamion(v) {
     kmVidange: num(v.kmVidange, num(v.km)), intervalleVidange: num(v.intervalleVidange, S.params.intervalleVidange),
     kmPneus: num(v.kmPneus, num(v.km)), intervallePneus: num(v.intervallePneus, S.params.intervallePneus),
     ...Object.fromEntries(DOCS_CAMION.map(([k]) => [k, v[k]])),
-    essieux: num(v.essieux) || undefined, hauteurBasse: !!v.hauteurBasse, balise: (v.balise || "").trim() || undefined, fixeMensuel: v.fixeMensuel === "" ? undefined : num(v.fixeMensuel),
+    essieux: num(v.essieux) || undefined, hauteurBasse: !!v.hauteurBasse, balise: (v.balise || "").trim() || undefined, carteCarburant: (v.carteCarburant || "").trim() || undefined, fixeMensuel: v.fixeMensuel === "" ? undefined : num(v.fixeMensuel),
   };
 }
 
@@ -542,6 +543,8 @@ const champsChauffeur = (ch = {}) => [
   { name: "visa", label: "Fin du visa Schengen", type: "date", value: ch.visa },
   { name: "carteConducteur", label: "Carte conducteur (tachygraphe)", type: "date", value: ch.carteConducteur },
   { name: "camionId", label: "Camion sous sa responsabilité", type: "select", options: optsCamions(), value: ch.camionId, full: true },
+  { name: "perDiemJournalier", label: "Per diem par jour de voyage", type: "number", min: 0, value: ch.perDiemJournalier, placeholder: "compté seul dans chaque voyage" },
+  { name: "perDiemDevise", label: "Devise du per diem", type: "select", options: [["MAD", "MAD"], ["EUR", "EUR"]], value: ch.perDiemDevise || "MAD" },
   { name: "conge", label: "En congé", type: "checkbox", value: ch.conge, full: true },
 ];
 
@@ -582,7 +585,7 @@ VUES.chauffeurs = {
           autre.camionId = "";
         }
       }
-      const data = { nom: v.nom, tel: v.tel, camionId: v.camionId, conge: v.conge, ...Object.fromEntries(DOCS_CHAUFFEUR.map(([k]) => [k, v[k]])) };
+      const data = { nom: v.nom, tel: v.tel, camionId: v.camionId, conge: v.conge, perDiemJournalier: v.perDiemJournalier === "" ? undefined : num(v.perDiemJournalier), perDiemDevise: v.perDiemJournalier === "" ? undefined : v.perDiemDevise, ...Object.fromEntries(DOCS_CHAUFFEUR.map(([k]) => [k, v[k]])) };
       if (existant) Object.assign(existant, data); else S.chauffeurs.push({ id: uid(), ...data });
       return true;
     };

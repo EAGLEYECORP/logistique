@@ -56,6 +56,7 @@ const champsFixesCamion = (c) => { const f = c.coutsFixes || {}, a = c.amortisse
   { name: "assurance_mensuel", label: "Assurance par mois (MAD)", type: "number", min: 0, value: f.assurance_mensuel },
   { name: "taxe_routiere_annuelle", label: "Taxe à l'essieu par an (MAD)", type: "number", min: 0, value: f.taxe_routiere_annuelle },
   { name: "entretien_mensuel_budget", label: "Budget d'entretien par mois (MAD)", type: "number", min: 0, value: f.entretien_mensuel_budget },
+  { name: "froid_mensuel", label: "Énergie du groupe froid par mois (MAD)", type: "number", min: 0, value: c.froid?.consomMensuelle },
   { name: "prix_acquisition", label: "Prix d'achat (MAD)", type: "number", min: 0, value: a.prix_acquisition },
   { name: "date_acquisition", label: "Date d'achat", type: "date", value: a.date_acquisition },
   { name: "duree_ans", label: "Durée d'amortissement (années)", type: "number", min: 0, value: a.duree_ans, placeholder: "5" },
@@ -89,6 +90,7 @@ async function agirStructure(act, id) {
     if (v.date_acquisition) a.date_acquisition = v.date_acquisition; if (Object.keys(a).length) a.methode = v.methode;
     if (Object.keys(f).length) c.coutsFixes = f; else delete c.coutsFixes;
     if (Object.keys(a).length) c.amortissement = a; else delete c.amortissement;
+    if (v.froid_mensuel !== "" && num(v.froid_mensuel) > 0) c.froid = { ...(c.froid || {}), consomMensuelle: num(v.froid_mensuel) }; else if (c.froid) { delete c.froid.consomMensuelle; if (!Object.keys(c.froid).length) delete c.froid; }
     if (v.officeResponsable) c.officeResponsable = v.officeResponsable; else delete c.officeResponsable;
     if (v.fixeMensuel === "") delete c.fixeMensuel; else c.fixeMensuel = num(v.fixeMensuel);
     sauver(); toast("Charges fixes enregistrées"); rafraichir(); return true;

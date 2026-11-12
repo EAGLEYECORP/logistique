@@ -4,6 +4,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { creer, normaliser } = require("../serveur/relais.js");
+const { creerCoffre, chargerCoffre, estChiffre } = require("../serveur/coffre.js");
+const { planPurge } = require("../serveur/purge-photos.js");
 
 const tests = [];
 const test = (n, f) => tests.push([n, f]);
@@ -229,6 +231,103 @@ test("notifications immédiates : envoi, doublon d'un autre appareil écarté, W
   } finally { await s.arreter(); }
 });
 
+test("chiffrement au repos : aller-retour, mauvaise clé, fichier en clair relu, lignes, phrase créée une fois (mode 600)", () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "coffre-"));
+  try {
+    const a = chargerCoffre(d, { CHIFFRER_DONNEES: "true" }); assert.strictEqual(a.nouvelle, true); assert.strictEqual(a.coffre.actif, true);
+    assert.strictEqual(fs.statSync(path.join(d, "cle.env")).mode & 0o777, 0o600); assert.ok(/^CLE=.{20,}$/m.test(fs.readFileSync(path.join(d, "cle.env"), "utf8")));
+    const b = chargerCoffre(d, { CHIFFRER_DONNEES: "true" }); assert.strictEqual(b.nouvelle, false, "la même phrase est relue");
+    const f = path.join(d, "x.json"); a.coffre.ecrire(f, JSON.stringify({ secret: "Primeurs du Sud" }));
+    const brut = fs.readFileSync(f); assert.ok(estChiffre(brut)); assert.ok(!brut.toString("latin1").includes("Primeurs")); assert.strictEqual(JSON.parse(b.coffre.lireTexte(f)).secret, "Primeurs du Sud");
+    const autre = chargerCoffre(d, { CHIFFRER_DONNEES: "true", CLE_DONNEES: "une-tout-autre-phrase" }); assert.throws(() => autre.coffre.lireTexte(f), /mauvaise clé/);
+    assert.throws(() => creerCoffre(null).lireTexte(f), /CHIFFRER_DONNEES/);
+    fs.writeFileSync(path.join(d, "clair.json"), '{"ancien":true}'); assert.strictEqual(JSON.parse(a.coffre.lireTexte(path.join(d, "clair.json"))).ancien, true, "un fichier d'avant le chiffrement se lit encore");
+    const l = a.coffre.ligne('{"id":"BAL-1"}'); assert.ok(l.startsWith("~") && !l.includes("BAL-1")); assert.strictEqual(a.coffre.delire(l), '{"id":"BAL-1"}'); assert.strictEqual(a.coffre.delire('{"clair":1}'), '{"clair":1}');
+    const sans = chargerCoffre(d, {}); assert.strictEqual(sans.coffre.actif, false); assert.strictEqual(sans.coffre.ligne("x"), "x");
+    assert.throws(() => chargerCoffre(d, { CHIFFRER_DONNEES: "true", CLE_DONNEES: "court" }), /12 caractères/);
+    assert.ok(!fs.readdirSync(d).some((x) => x.endsWith(".tmp")), "écritures atomiques : aucun fichier temporaire laissé");
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test("relais chiffré : rien de lisible sur le disque, tout revient au redémarrage, mauvaise clé sans plantage, migration depuis le clair", async () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "relais-chiffre-")), t = maintenant();
+  const env = { CHIFFRER_DONNEES: "true", CLE_DONNEES: "phrase-secrete-de-test-123" };
+  try {
+    // 1) démarrage en clair (installation existante), puis activation du chiffrement
+    let s = await demarrer(d); await s.appel("/api/positions", { methode: "POST", jeton: "ecrit", corps: [{ id: "BAL-ANCIEN", t: t - 600, lat: 33.5, lon: -7.6, v: 10 }] }); await s.arreter();
+    s = await demarrer(d, { coffre: chargerCoffre(d, env).coffre });
+    assert.strictEqual((await s.appel("/api/derniere", { jeton: "lit" })).json.positions?.length ?? (await s.appel("/api/derniere", { jeton: "lit" })).json.length, 1, "les positions d'avant restent lisibles");
+    await s.appel("/api/positions", { methode: "POST", jeton: "ecrit", corps: [{ id: "BAL-SECRET", t: t - 60, lat: 35.7, lon: -5.8, v: 70 }] });
+    const c = await s.appel("/api/partages", { methode: "POST", jeton: "lit", corps: { balise: "BAL-SECRET", reference: "CMD-CONFIDENTIEL", origine: "Agadir", destination: "Perpignan", jours: 3 } });
+    await s.appel("/api/sync", { methode: "PUT", jeton: "lit", corps: { base: 0, blob: "BLOB-OPAQUE-XYZ", appareil: "Bureau Casablanca" } });
+    await fetch(s.base + "/api/sync/photos/photo-123456", { method: "PUT", headers: { authorization: "Bearer lit" }, body: Buffer.from("PHOTO-OCTETS-LISIBLES") });
+    await s.appel("/api/notifications/plan", { methode: "PUT", jeton: "lit", corps: { messages: [{ id: "n1", quand: Date.now() + 3600000, canal: "ntfy", destination: "https://ntfy.sh/sujet-tres-secret", texte: "Message confidentiel" }] } });
+    await s.appel("/api/alertes", { methode: "POST", jeton: "lit", corps: { texte: "Alerte confidentielle 111-A-1", niveau: "warn", cle: "a1" } });
+    await s.arreter();
+    // aucun fichier de données ne contient du texte lisible
+    const tout = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? tout(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+    for (const f of tout(d).filter((x) => !/cle\.env|sel\.bin|positions-.*BAL-ANCIEN/.test(x))) {
+      const brut = fs.readFileSync(f).toString("latin1");
+      for (const mot of ["BAL-SECRET", "CMD-CONFIDENTIEL", "BLOB-OPAQUE", "Bureau Casablanca", "PHOTO-OCTETS", "sujet-tres-secret", "Message confidentiel", "Alerte confidentielle"]) assert.ok(!brut.includes(mot), `${path.basename(f)} contient « ${mot} » en clair`);
+    }
+    // redémarrage avec la bonne clé : tout revient
+    s = await demarrer(d, { coffre: chargerCoffre(d, env).coffre });
+    assert.strictEqual((await s.appel("/api/sync", { jeton: "lit" })).json.blob, "BLOB-OPAQUE-XYZ");
+    assert.strictEqual((await (await fetch(s.base + `/suivi/${c.json.id}/donnees`)).json()).reference, "CMD-CONFIDENTIEL");
+    assert.strictEqual(Buffer.from(await (await fetch(s.base + "/api/sync/photos/photo-123456", { headers: { authorization: "Bearer lit" } })).arrayBuffer()).toString(), "PHOTO-OCTETS-LISIBLES");
+    assert.strictEqual((await s.appel("/api/notifications/scheduler", { jeton: "lit" })).json.messages[0].texte, "Message confidentiel");
+    assert.strictEqual((await s.appel("/api/alertes/historique", { jeton: "lit" })).json.alertes[0].texte, "Alerte confidentielle 111-A-1");
+    const pos = (await s.appel("/api/trace?id=BAL-SECRET&depuis=" + (t - 3600), { jeton: "lit" })).json; assert.ok(JSON.stringify(pos).includes("35.7"), "positions relues : " + JSON.stringify(pos).slice(0, 120));
+    await s.arreter();
+    // mauvaise clé : le relais démarre, ne montre rien, ne plante pas
+    s = await demarrer(d, { coffre: chargerCoffre(d, { CHIFFRER_DONNEES: "true", CLE_DONNEES: "mauvaise-phrase-secrete" }).coffre });
+    assert.strictEqual((await s.appel("/sante")).code, 200); assert.strictEqual((await s.appel("/api/sync", { jeton: "lit" })).json.blob, ""); assert.strictEqual((await fetch(s.base + `/suivi/${c.json.id}/donnees`)).status, 404);
+    await s.arreter();
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test("historique des alertes : 7 jours, fenêtre, conservé au redémarrage ; journal d'accès sans jeton, adresse tronquée", async () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "relais-histo-"));
+  try {
+    const vieille = JSON.stringify({ t: Date.now() - 8 * 86400000, texte: "trop ancienne", niveau: "warn", cle: "v" }); fs.writeFileSync(path.join(d, "alertes.jsonl"), vieille + "\n");
+    let s = await demarrer(d, { journalAcces: true });
+    for (const [i, texte] of ["111-A-1 — aucun signal depuis 45 min", "222-B-2 — arrêt long"].entries()) await s.appel("/api/alertes", { methode: "POST", jeton: "lit", corps: { texte, niveau: i ? "warn" : "danger", cle: "k" + i } });
+    await s.appel("/api/alertes", { methode: "POST", jeton: "lit", corps: { texte: "111-A-1 — aucun signal depuis 45 min", cle: "k0" } }); // doublon de moins de 6 h : pas deux fois
+    let h = (await s.appel("/api/alertes/historique", { jeton: "lit" })).json.alertes; assert.deepStrictEqual(h.map((a) => a.cle), ["k0", "k1"]); assert.strictEqual(h[0].niveau, "danger");
+    assert.strictEqual((await s.appel("/api/alertes/historique", { jeton: "ecrit" })).code, 401);
+    assert.strictEqual((await s.appel(`/api/alertes/historique?debut=${Date.now() + 1000}`, { jeton: "lit" })).json.alertes.length, 0);
+    await s.arreter(); s = await demarrer(d, { journalAcces: true });
+    h = (await s.appel(`/api/alertes/historique?debut=${Math.floor(Date.now() / 1000) - 3600}`, { jeton: "lit" })).json.alertes; assert.strictEqual(h.length, 2, "conservé ; la plus ancienne (8 jours) écartée et retirée du fichier");
+    assert.ok(!fs.readFileSync(path.join(d, "alertes.jsonl"), "utf8").includes("trop ancienne"));
+    await s.appel("/api/derniere", { jeton: "lit" }); await s.appel("/api/derniere?token=mauvais"); await s.arreter();
+    const f = fs.readdirSync(d).find((x) => /^acces-/.test(x)), lignes = fs.readFileSync(path.join(d, f), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.ok(lignes.some((l) => l.p === "/api/derniere" && l.jeton === "lecture" && l.code === 200)); assert.ok(lignes.some((l) => l.jeton === "aucun" && l.code === 401));
+    assert.ok(lignes.every((l) => /\.0$|::$/.test(l.ip)), "adresse tronquée : " + lignes[0].ip); assert.ok(!fs.readFileSync(path.join(d, f), "utf8").includes("mauvais") && !fs.readFileSync(path.join(d, f), "utf8").includes("lit\""), "aucun jeton dans le journal");
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test("purge des photos : marquées après N mois, supprimées après le délai de grâce, gardées si renvoyées, journal", async () => {
+  const J = 86400000, now = Date.parse("2028-06-01T00:00:00Z"), s2 = (ms) => Math.floor(ms / 1000);
+  const plan = planPurge(new Map([["vieille", { t: s2(now - 600 * J), taille: 1 }], ["recente", { t: s2(now - 30 * J), taille: 1 }], ["marquee", { t: s2(now - 600 * J), taille: 1, aPurger: now - 31 * J }], ["grace", { t: s2(now - 600 * J), taille: 1, aPurger: now - 5 * J }], ["renvoyee", { t: s2(now - 2 * J), taille: 1, aPurger: now - 40 * J }], ["morte", { t: 1, taille: 0, supprime: true }]]), now, { mois: 18, graceJours: 30 });
+  assert.deepStrictEqual(plan.map((x) => [x.id, x.action]), [["vieille", "marquer"], ["marquee", "supprimer"], ["renvoyee", "demarquer"]]); assert.strictEqual(plan[0].ageJours, 600);
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "relais-purge-"));
+  try {
+    const s = await demarrer(d, { purgePhotosMois: 18 });
+    await fetch(s.base + "/api/sync/photos/photo-ancienne", { method: "PUT", headers: { authorization: "Bearer lit" }, body: Buffer.from("x") });
+    await fetch(s.base + "/api/sync/photos/photo-recente", { method: "PUT", headers: { authorization: "Bearer lit" }, body: Buffer.from("y") });
+    s.photos.get("photo-ancienne").t = s2(Date.now() - 20 * 30.4375 * J);
+    let b = s.purgerPhotos(Date.now()); assert.deepStrictEqual(b, { marquees: 1, supprimees: 0, demarquees: 0 });
+    assert.strictEqual((await fetch(s.base + "/api/sync/photos/photo-ancienne", { headers: { authorization: "Bearer lit" } })).status, 200, "pendant le délai de grâce, la photo est encore là");
+    assert.deepStrictEqual(s.purgerPhotos(Date.now() + 10 * J), { marquees: 0, supprimees: 0, demarquees: 0 });
+    b = s.purgerPhotos(Date.now() + 31 * J); assert.strictEqual(b.supprimees, 1);
+    assert.strictEqual((await fetch(s.base + "/api/sync/photos/photo-ancienne", { headers: { authorization: "Bearer lit" } })).status, 404); assert.ok(!fs.existsSync(path.join(d, "photos", "photo-ancienne.bin")));
+    const l = (await s.appel("/api/sync/photos", { jeton: "lit" })).json.photos; assert.ok(l.find((x) => x.id === "photo-ancienne").supprime, "trace laissée : les appareils suppriment aussi leur copie"); assert.ok(!l.find((x) => x.id === "photo-recente").supprime);
+    const journal = fs.readFileSync(path.join(d, "purge.log"), "utf8").trim().split("\n").map((x) => JSON.parse(x)); assert.deepStrictEqual(journal.map((x) => [x.id, x.action]), [["photo-ancienne", "marquer"], ["photo-ancienne", "supprimer"]]);
+    await s.arreter();
+    assert.strictEqual(creer({ jetonEcriture: "a", jetonLecture: "b" }).purgerPhotos(), null, "sans PURGE_PHOTOS_MOIS : rien");
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
 test("lien client : traversée en cours et position inconnue", async () => {
   const s = await demarrer(); const t = maintenant();
   try {
@@ -334,4 +433,5 @@ test("photos : envoi, liste, lecture à l'identique, suppression avec trace, jet
   let ok = 0;
   for (const [n, f] of tests) { try { await f(); ok++; console.log("✓", n); } catch (e) { console.error("✗", n, "\n ", e.message); process.exitCode = 1; } }
   console.log(`\n${ok}/${tests.length} test(s) du relais réussi(s)`);
+  setTimeout(() => process.exit(process.exitCode || 0), 200).unref(); // un test en échec peut laisser un serveur ouvert : on ne reste jamais bloqué
 })();

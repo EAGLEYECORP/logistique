@@ -211,3 +211,20 @@ document.addEventListener("change", (e) => {
   if (cle === "auto") r.auto = c.checked; else if (c.checked) r.audiences[cle] = [AUDIENCES_NOTIF.find((x) => x[0] === cle)[2]]; else delete r.audiences[cle];
   enregistrerRoutage(r); sauver(); toast(`${LIB_JALONS_LANGUES[jalon].fr} : routage enregistré`);
 });
+
+/* ---------- alertes manquées : un appareil revenu en ligne récupère l'historique du relais (7 jours) ---------- */
+const CLE_ALERTES_VUES = "logistique-alertes-vues";
+async function recupererAlertesManquees() {
+  if (typeof partageRelais !== "function" || !partageRelais()) return 0;
+  let depuis = 0; try { depuis = Number(localStorage.getItem(CLE_ALERTES_VUES)) || 0; } catch { /* ignoré */ }
+  const debut = Math.max(depuis, Date.now() - 7 * 86400000);
+  let r; try { r = await partageAppel("GET", `/api/alertes/historique?debut=${debut + 1}`); } catch { return 0; }
+  let n = 0, dernier = depuis;
+  for (const a of r.alertes || []) { if (ajouterFil(`${a.niveau === "danger" ? "Urgent · " : ""}${a.texte}`, { id: `alerte:${a.cle}:${a.t}` })) n++; dernier = Math.max(dernier, a.t); }
+  try { localStorage.setItem(CLE_ALERTES_VUES, String(dernier || Date.now())); } catch { /* ignoré */ }
+  if (n) { sauverSansNotif(); if (depuis) toast(`${n} alerte(s) reçue(s) pendant votre absence`, "warn"); if (typeof rafraichir === "function") rafraichir(); }
+  return n;
+}
+setTimeout(() => { recupererAlertesManquees().catch(() => {}); }, 2500);
+setInterval(() => { recupererAlertesManquees().catch(() => {}); }, 5 * 60000);
+window.addEventListener?.("online", () => { recupererAlertesManquees().catch(() => {}); });

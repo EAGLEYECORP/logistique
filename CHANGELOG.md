@@ -68,6 +68,14 @@
 - **Relais 1.6.0** : plan exécuté chaque minute et conservé après redémarrage, envoi d'e-mails par SMTP sans dépendance, serveurs ntfy autorisés, doublons entre bureaux écartés. Sans relais : ntfy part de l'application, WhatsApp, e-mail et SMS s'ouvrent prêts à envoyer.
 - Schéma 8 (migration sans perte). Non fait : pièces jointes PDF (le message contient le lien de suivi) ; réglage SMTP depuis l'application (le relais ne lit pas les données synchronisées : il se règle par ses variables).
 
+### D9 — Deux bureaux, relais durci, RGPD
+- **Relais 1.7.0 — chiffrement au repos** (`CHIFFRER_DONNEES=true`) : positions, partages, alertes, notifications, journal d'accès et photos chiffrés sur le disque (AES-256-GCM, clé tirée d'une phrase secrète par scrypt), écritures atomiques, passage au chiffrement sans perte, démarrage sans plantage avec une mauvaise clé.
+- **Historique des alertes** (7 jours) : un appareil qui revient en ligne affiche les alertes manquées.
+- **Journal d'accès** (option) et **purge des photos** après 18 mois avec délai de grâce de 30 jours et journal ; script `serveur/purge-photos.js`.
+- **Arabe** étendu aux écrans de direction, d'opérations, de rentabilité, de dépenses et de notifications (testé : chaque libellé fixe a sa traduction) ; un libellé suivi d'un compte se traduit aussi.
+- `docs/07-rgpd-deploiement.md` : durées de conservation, trois couches de chiffrement, LUKS, textes applicables (RGPD, BetrVG, loi 09-08, clauses contractuelles types), notice chauffeur en français, arabe et allemand.
+- Correction : sans dates précisées, la liste des notifications programmées du relais était vide.
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

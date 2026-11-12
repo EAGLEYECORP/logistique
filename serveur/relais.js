@@ -11,9 +11,11 @@ const path = require("path");
 const crypto = require("crypto");
 const { charger } = require("./moteur.js");
 const { envoyerCourriel, adresseValide, motEntete } = require("./courriel.js");
+const { creerCoffre, chargerCoffre } = require("./coffre.js");
+const { planPurge, appliquerPurge } = require("./purge-photos.js");
 const { page } = require("./page-client.js");
 
-const VERSION = "1.6.0";
+const VERSION = "1.7.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -35,7 +37,7 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null, ...(temp !== null ? { temp } : {}) };
 }
 
-function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel } = {}) {
+function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel, coffre = creerCoffre(null), journalAcces = false, purgePhotosMois = 0 } = {}) {
   if (!jetonEcriture || !jetonLecture) throw new Error("JETON_ECRITURE et JETON_LECTURE sont obligatoires.");
   const historique = new Map(); // id -> [positions triées]
   const noms = new Map();
@@ -46,18 +48,25 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
   const partages = new Map();
   let synchro = { version: 0, blob: "", appareil: "", t: 0 };
   const fichierSynchro = () => path.join(dossier, "synchro.json");
-  if (dossier) { try { synchro = JSON.parse(fs.readFileSync(path.join(dossier, "synchro.json"), "utf8")); } catch { /* aucune synchro */ } }
+  if (dossier) { try { synchro = JSON.parse(coffre.lireTexte(path.join(dossier, "synchro.json"))); } catch { /* aucune synchro */ } }
   /* Photos synchronisées : un fichier chiffré par photo (le serveur ne peut pas les lire). Une suppression laisse une trace 90 jours pour les autres appareils. */
   const photos = new Map(), photosMem = new Map(); // id -> { t, taille, supprime } ; contenu en mémoire si aucun dossier
   const dossierPhotos = dossier ? path.join(dossier, "photos") : null, ID_PHOTO = /^[A-Za-z0-9_-]{6,40}$/, PHOTO_MAX = 6 * 1024 * 1024;
-  const sauverPhotos = () => { if (dossier) { try { fs.writeFileSync(path.join(dossier, "photos.json"), JSON.stringify([...photos.entries()]), { mode: 0o600 }); } catch { /* ignoré */ } } };
-  if (dossier) { fs.mkdirSync(dossierPhotos, { recursive: true }); try { for (const [k, v] of JSON.parse(fs.readFileSync(path.join(dossier, "photos.json"), "utf8"))) photos.set(k, v); } catch { /* aucune photo */ }
+  const sauverPhotos = () => { if (dossier) { try { coffre.ecrire(path.join(dossier, "photos.json"), JSON.stringify([...photos.entries()])); } catch { /* ignoré */ } } };
+  if (dossier) { fs.mkdirSync(dossierPhotos, { recursive: true }); try { for (const [k, v] of JSON.parse(coffre.lireTexte(path.join(dossier, "photos.json")))) photos.set(k, v); } catch { /* aucune photo */ }
     const limiteTombe = Date.now() / 1000 - 90 * 86400; for (const [k, v] of photos) if (v.supprime && v.t < limiteTombe) photos.delete(k); }
+  /** Purge des photos plus vieilles que purgePhotosMois (marque, puis suppression 30 jours plus tard ; journal purge.log). */
+  function purgerPhotos(maintenant = Date.now(), graceJours = 30) {
+    if (!(purgePhotosMois > 0)) return null;
+    const { bilan, journal } = appliquerPurge(photos, planPurge(photos, maintenant, { mois: purgePhotosMois, graceJours }), (id) => { if (dossierPhotos) fs.unlinkSync(path.join(dossierPhotos, `${id}.bin`)); else photosMem.delete(id); }, maintenant);
+    if (journal.length) { sauverPhotos(); if (dossier) for (const l of journal) { try { fs.appendFileSync(path.join(dossier, "purge.log"), coffre.ligne(JSON.stringify(l)) + "\n", { mode: 0o600 }); } catch { /* ignoré */ } } }
+    return bilan;
+  }
   const photosTotal = () => { let n = 0; for (const v of photos.values()) if (!v.supprime) n += v.taille; return n; };
   // Au-delà de la limite, on cesse de garder les octets mais on laisse l'envoi se terminer pour pouvoir répondre proprement (413) ; coupure nette au-delà de 4 fois la limite.
   const corpsOctets = (req, max) => new Promise((ok, ko) => { let n = 0, trop = false; const b = []; req.on("data", (c) => { n += c.length; if (n > max) { trop = true; b.length = 0; if (n > max * 4) req.destroy(); } else if (!trop) b.push(c); }); req.on("end", () => (trop ? ko(new Error("trop gros")) : ok(Buffer.concat(b)))); req.on("error", ko); req.on("close", () => { if (trop) ko(new Error("trop gros")); }); });
   const fichierPartages = () => path.join(dossier, "partages.json");
-  const sauverPartages = () => { if (dossier) { try { fs.writeFileSync(fichierPartages(), JSON.stringify([...partages.values()]), { mode: 0o600 }); } catch { /* ignoré */ } } };
+  const sauverPartages = () => { if (dossier) { try { coffre.ecrire(fichierPartages(), JSON.stringify([...partages.values()])); } catch { /* ignoré */ } } };
 
   const fichierDuJour = (t) => path.join(dossier, `positions-${new Date(t * 1000).toISOString().slice(0, 10)}.jsonl`);
   function ajouter(p, nom) {
@@ -76,13 +85,13 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
     for (const f of fs.readdirSync(dossier).filter((x) => /^positions-\d{4}-\d{2}-\d{2}\.jsonl$/.test(x)).sort()) {
       const date = Date.parse(f.slice(10, 20)) / 1000;
       if (date < limite - 86400) { try { fs.unlinkSync(path.join(dossier, f)); } catch { /* ignoré */ } continue; }
-      for (const l of fs.readFileSync(path.join(dossier, f), "utf8").split("\n")) { if (!l) continue; try { const p = JSON.parse(l); if (p.id && Number.isFinite(p.t)) ajouter(p); } catch { /* ligne abîmée */ } }
+      for (const l of fs.readFileSync(path.join(dossier, f), "utf8").split("\n")) { if (!l) continue; try { const p = JSON.parse(coffre.delire(l)); if (p.id && Number.isFinite(p.t)) ajouter(p); } catch { /* ligne abîmée */ } }
     }
   }
-  if (dossier) { try { for (const p of JSON.parse(fs.readFileSync(fichierPartages(), "utf8"))) partages.set(p.id, p); } catch { /* aucun partage */ } }
+  if (dossier) { try { for (const p of JSON.parse(coffre.lireTexte(fichierPartages()))) partages.set(p.id, p); } catch { /* aucun partage */ } }
   const enregistrer = (positions, noms_ = []) => {
     let n = 0;
-    positions.forEach((p, i) => { if (ajouter(p, noms_[i])) { n++; if (dossier) { try { fs.appendFileSync(fichierDuJour(p.t), JSON.stringify(p) + "\n"); } catch { /* disque plein : on garde en mémoire */ } } } });
+    positions.forEach((p, i) => { if (ajouter(p, noms_[i])) { n++; if (dossier) { try { fs.appendFileSync(fichierDuJour(p.t), coffre.ligne(JSON.stringify(p)) + "\n", { mode: 0o600 }); } catch { /* disque plein : on garde en mémoire */ } } } });
     return n;
   };
 
@@ -111,10 +120,10 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
   const hotesNtfy = new Set([...ntfyHotes, ...(canaux.ntfy?.url ? [(() => { try { return new URL(canaux.ntfy.url).hostname; } catch { return ""; } })()] : [])].filter(Boolean));
   let planif = { messages: [], etats: {} };
   const fichierPlanif = () => path.join(dossier, "scheduler.json");
-  if (dossier) { try { const p = JSON.parse(fs.readFileSync(fichierPlanif(), "utf8")); planif = { messages: Array.isArray(p.messages) ? p.messages : [], etats: p.etats || {} }; } catch { /* aucun plan */ } }
+  if (dossier) { try { const p = JSON.parse(coffre.lireTexte(fichierPlanif())); planif = { messages: Array.isArray(p.messages) ? p.messages : [], etats: p.etats || {} }; } catch { /* aucun plan */ } }
   const sauverPlanif = () => {
     const limite = Date.now() - 30 * 86400000; for (const [k, e] of Object.entries(planif.etats)) if (e.t < limite) delete planif.etats[k]; // états gardés 30 jours
-    if (dossier) { try { fs.writeFileSync(fichierPlanif(), JSON.stringify(planif), { mode: 0o600 }); } catch { /* garde en mémoire */ } }
+    if (dossier) { try { coffre.ecrire(fichierPlanif(), JSON.stringify(planif)); } catch { /* garde en mémoire */ } }
   };
   const canauxNotif = () => [...(Object.keys(canaux).length ? ["equipe"] : []), "ntfy", ...(canaux.whatsapp ? ["whatsapp"] : []), ...(smtp ? ["email"] : [])];
   /** Message accepté depuis l'application (tout le reste est refusé) : renvoie le message nettoyé ou une raison. */
@@ -166,6 +175,18 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
     } finally { tickEnCours = false; }
     return faits;
   }
+  /* ---------- historique des alertes (7 jours) : un appareil revenu en ligne récupère ce qu'il a manqué ---------- */
+  const histoAlertes = [], fichierAlertes = () => path.join(dossier, "alertes.jsonl");
+  if (dossier) { try { const limite = Date.now() - 7 * 86400000; for (const l of fs.readFileSync(fichierAlertes(), "utf8").split("\n")) { if (!l) continue; try { const a = JSON.parse(coffre.delire(l)); if (a.t >= limite) histoAlertes.push(a); } catch { /* ligne abîmée */ } } coffre.ecrire(fichierAlertes(), histoAlertes.map((a) => coffre.ligne(JSON.stringify(a))).join("\n") + (histoAlertes.length ? "\n" : "")); } catch { /* aucun historique */ } }
+  function noterAlerte(a) {
+    histoAlertes.push(a); const limite = Date.now() - 7 * 86400000; while (histoAlertes.length && (histoAlertes[0].t < limite || histoAlertes.length > 5000)) histoAlertes.shift();
+    if (dossier) { try { fs.appendFileSync(fichierAlertes(), coffre.ligne(JSON.stringify(a)) + "\n", { mode: 0o600 }); } catch { /* garde en mémoire */ } }
+  }
+  /* ---------- journal d'accès (option JOURNAL_ACCES) : qui a lu quoi, adresse tronquée, 30 jours ---------- */
+  const fichierAcces = (t) => path.join(dossier, `acces-${new Date(t).toISOString().slice(0, 10)}.jsonl`);
+  const ipTronquee = (ip) => (ip.includes(":") && !/^::ffff:/.test(ip) ? ip.split(":").slice(0, 3).join(":") + "::" : ip.replace(/^::ffff:/, "").replace(/\.\d+$/, ".0"));
+  if (dossier && journalAcces) { const limite = Date.now() - 30 * 86400000; for (const f of fs.readdirSync(dossier).filter((x) => /^acces-\d{4}-\d{2}-\d{2}\.jsonl$/.test(x))) if (Date.parse(f.slice(6, 16)) < limite) { try { fs.unlinkSync(path.join(dossier, f)); } catch { /* ignoré */ } } }
+  const noterAcces = (req, res, p, ip, autorise) => { if (!dossier || !journalAcces) return; const t = Date.now(); try { fs.appendFileSync(fichierAcces(t), coffre.ligne(JSON.stringify({ t, m: req.method, p: p.replace(/\/suivi\/[^/]+/, "/suivi/…").slice(0, 120), code: res.statusCode, ip: ipTronquee(ip), jeton: autorise })) + "\n", { mode: 0o600 }); } catch { /* ignoré */ } };
   const nombre = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
   const textes = (v, max = 120) => String(v ?? "").slice(0, max).trim();
   /** Champs d'un partage acceptés depuis l'application (tout le reste est ignoré). */
@@ -229,6 +250,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
 
       const jeton = jetonDe(req, url);
       const peutEcrire = egal(jeton, jetonEcriture), peutLire = peutEcrire ? false : egal(jeton, jetonLecture);
+      if (journalAcces && p.startsWith("/api/")) res.on("finish", () => noterAcces(req, res, p, ip, peutLire ? "lecture" : peutEcrire ? "ecriture" : "aucun"));
 
       // --- réception ---
       if ((p === "/api/positions" && req.method === "POST") || (p === "/traccar" && req.method === "POST") || (p === "/osmand" && (req.method === "GET" || req.method === "POST"))) {
@@ -286,12 +308,12 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
             let o; try { o = await corpsOctets(req, PHOTO_MAX); } catch { return json(res, 413, { erreur: "Photo trop volumineuse (6 Mo au plus)." }); }
             if (!o.length) return json(res, 400, { erreur: "Photo vide." });
             if (photosTotal() - (e && !e.supprime ? e.taille : 0) + o.length > photosMaxMo * 1024 * 1024) return json(res, 507, { erreur: `Espace photos plein sur le serveur (${photosMaxMo} Mo).` });
-            if (fichier) { try { fs.writeFileSync(fichier, o, { mode: 0o600 }); } catch { return json(res, 500, { erreur: "Écriture impossible sur le serveur." }); } } else photosMem.set(id, o);
+            if (fichier) { try { coffre.ecrire(fichier, o); } catch { return json(res, 500, { erreur: "Écriture impossible sur le serveur." }); } } else photosMem.set(id, o);
             photos.set(id, { t: Math.floor(Date.now() / 1000), taille: o.length }); sauverPhotos(); return json(res, 200, { ok: true });
           }
           if (req.method === "GET") {
             if (!e || e.supprime) return json(res, 404, { erreur: "Photo introuvable." });
-            let o; try { o = fichier ? fs.readFileSync(fichier) : photosMem.get(id); } catch { o = null; }
+            let o; try { o = fichier ? coffre.lireOctets(fichier) : photosMem.get(id); } catch { o = null; }
             if (!o) return json(res, 404, { erreur: "Photo introuvable." });
             res.writeHead(200, entetes({ "Content-Type": "application/octet-stream", "Content-Length": o.length })); return res.end(o);
           }
@@ -308,9 +330,15 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
             if (typeof b.blob !== "string" || !b.blob || b.blob.length > 40 * 1024 * 1024) return json(res, 400, { erreur: "blob obligatoire (40 Mo au plus)." });
             if (Number(b.base) !== synchro.version) return json(res, 409, { erreur: "Le serveur a une version plus récente.", version: synchro.version });
             synchro = { version: synchro.version + 1, blob: b.blob, appareil: textes(b.appareil, 60), t: Math.floor(Date.now() / 1000) };
-            if (dossier) { try { fs.writeFileSync(fichierSynchro(), JSON.stringify(synchro), { mode: 0o600 }); } catch { /* garde en mémoire */ } }
+            if (dossier) { try { coffre.ecrire(fichierSynchro(), JSON.stringify(synchro)); } catch { /* garde en mémoire */ } }
             return json(res, 200, { ok: true, version: synchro.version });
           }
+        }
+        if (p === "/api/alertes/historique" && req.method === "GET") {
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          const borne = (x, d) => { if (x === null || x === "") return d; const n = Number(x); return Number.isFinite(n) ? (n < 1e11 ? n * 1000 : n) : Number.isFinite(Date.parse(x)) ? Date.parse(x) : d; }; // secondes ou millisecondes ou date ISO
+          const debut = borne(url.searchParams.get("debut"), Date.now() - 7 * 86400000), fin = borne(url.searchParams.get("fin"), Date.now() + 60000);
+          return json(res, 200, { alertes: histoAlertes.filter((a) => a.t >= debut && a.t <= fin).map(({ t, texte, niveau, cle }) => ({ t, texte, niveau, cle })) });
         }
         if (p === "/api/alertes/test" && req.method === "POST") { // essai de chaque canal, résultat détaillé (pour vérifier un compte WhatsApp, un bot Telegram…)
           if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
@@ -322,12 +350,13 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           let b; try { b = JSON.parse(await corps(req)); } catch { return json(res, 400, { erreur: "JSON invalide." }); }
           const texte = textes(b.texte, 500), cle = textes(b.cle, 120) || texte, niveau = b.niveau === "danger" ? "danger" : "warn", maintenant = Date.now();
           if (!texte) return json(res, 400, { erreur: "texte obligatoire." });
-          if (!Object.keys(canaux).length) return json(res, 200, { ok: true, envoyes: [], erreurs: [], note: "Aucun canal configuré sur le serveur." });
+          if (!Object.keys(canaux).length) { if (!(alertesVues.get(cle) > maintenant - 6 * 3600000)) { alertesVues.set(cle, maintenant); noterAlerte({ t: maintenant, texte, niveau, cle, envoyes: [] }); } return json(res, 200, { ok: true, envoyes: [], erreurs: [], note: "Aucun canal configuré sur le serveur." }); }
           const h = Math.floor(maintenant / 3600000); if (alertesHeure.h !== h) alertesHeure = { h, n: 0 };
           if (alertesHeure.n >= 60) return json(res, 429, { erreur: "60 alertes par heure au plus." });
           if (alertesVues.get(cle) > maintenant - 6 * 3600000) return json(res, 200, { ok: true, envoyes: [], erreurs: [], note: "Déjà transmise il y a moins de 6 h." });
           alertesVues.set(cle, maintenant); alertesHeure.n++; if (alertesVues.size > 500) for (const [k, t] of alertesVues) if (t < maintenant - 6 * 3600000) alertesVues.delete(k);
-          return json(res, 200, { ok: true, ...(await diffuserAlerte({ texte, niveau, cle })) });
+          const r = await diffuserAlerte({ texte, niveau, cle }); noterAlerte({ t: maintenant, texte, niveau, cle, envoyes: r.envoyes });
+          return json(res, 200, { ok: true, ...r });
         }
         const mpn = p.match(/^\/api\/notifications\/(plan|scheduler|manuelle|test)(?:\/(.+))?$/);
         if (mpn) {
@@ -342,7 +371,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
             return json(res, 200, { ok: true, programmes: garder.filter((m) => !planif.etats[m.id]).length, refus });
           }
           if (quoi === "scheduler" && req.method === "GET") {
-            const borne = (x, d) => { const n = Number(x); return Number.isFinite(n) ? n : Number.isFinite(Date.parse(x || "")) ? Date.parse(x) : d; };
+            const borne = (x, d) => { if (x === null || x === "") return d; const n = Number(x); return Number.isFinite(n) ? (n < 1e11 ? n * 1000 : n) : Number.isFinite(Date.parse(x)) ? Date.parse(x) : d; }; // secondes ou millisecondes ou date ISO
             const debut = borne(url.searchParams.get("debut"), maintenant - 86400000), fin = borne(url.searchParams.get("fin"), maintenant + 7 * 86400000);
             return json(res, 200, { canaux: canauxNotif(), messages: planif.messages.filter((m) => m.quand >= debut && m.quand <= fin).map((m) => ({ id: m.id, quand: m.quand, canal: m.canal, destination: m.destination, sujet: m.sujet, texte: m.texte, voyageId: m.voyageId, ...(planif.etats[m.id] ? { statut: planif.etats[m.id].statut, envoyes: planif.etats[m.id].envoyes, erreurs: planif.etats[m.id].erreurs } : { statut: "a_venir" }) })) });
           }
@@ -375,10 +404,10 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
       return json(res, 404, { erreur: "Introuvable." });
     } catch (e) { return json(res, 500, { erreur: "Erreur du serveur." }); }
   });
-  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif };
+  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif, purgerPhotos, photos };
 }
 
-module.exports = { creer, normaliser, VERSION };
+module.exports = { creer, normaliser, VERSION, creerCoffre, chargerCoffre };
 
 if (require.main === module) {
   const e = process.env;
@@ -397,16 +426,21 @@ if (require.main === module) {
   if (e.TELEGRAM_TOKEN && e.TELEGRAM_CHAT) canaux.telegram = { token: e.TELEGRAM_TOKEN, chat: e.TELEGRAM_CHAT, api: e.TELEGRAM_API || undefined };
   if (e.WHATSAPP_TOKEN && e.WHATSAPP_PHONE_ID) canaux.whatsapp = { token: e.WHATSAPP_TOKEN, phoneId: e.WHATSAPP_PHONE_ID, destinataires: String(e.WHATSAPP_DEST || "").split(",").map((x) => x.trim()).filter(Boolean), modele: e.WHATSAPP_MODELE || "", langue: e.WHATSAPP_LANGUE || "fr", api: e.WHATSAPP_API || undefined };
   if (e.WEBHOOK_URL) canaux.webhook = { url: e.WEBHOOK_URL };
+  const { coffre, nouvelle, fichierCle } = chargerCoffre(dossier, e);
+  if (nouvelle) console.log(`  ⚠ Chiffrement des données activé : phrase secrète créée dans ${fichierCle}. SAUVEGARDEZ-LA AILLEURS : sans elle, les données sont perdues.`);
   const smtp = e.SMTP_HOTE && e.SMTP_DE ? { hote: e.SMTP_HOTE, port: Number(e.SMTP_PORT || 0) || undefined, securite: e.SMTP_SECURITE || undefined, utilisateur: e.SMTP_UTILISATEUR || "", motDePasse: e.SMTP_MOT_DE_PASSE || "", de: e.SMTP_DE } : null;
   const ntfyHotes = String(e.NTFY_HOTES || "ntfy.sh").split(",").map((x) => x.trim()).filter(Boolean);
-  const { serveur, tick } = creer({ ...jetons, dossier, retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
+  const purgePhotosMois = Number(e.PURGE_PHOTOS_MOIS || 0);
+  const { serveur, tick, purgerPhotos } = creer({ ...jetons, dossier, coffre, purgePhotosMois, journalAcces: String(e.JOURNAL_ACCES || "").toLowerCase() === "true", retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
   setInterval(() => { tick().catch(() => { /* réessayé à la minute suivante */ }); }, 60000); // notifications programmées
+  if (purgePhotosMois > 0) { const purge = () => { const b = purgerPhotos(); if (b && (b.marquees || b.supprimees)) console.log(`Purge des photos : ${b.marquees} marquée(s), ${b.supprimees} supprimée(s)`); }; setTimeout(purge, 60000); setInterval(purge, 86400000); }
   const port = Number(e.PORT || 8787);
   serveur.listen(port, e.HOTE || "0.0.0.0", () => {
     console.log(`Relais de positions ${VERSION} sur le port ${port}`);
     console.log(`  Jeton d'écriture (balises, Traccar) : ${jetons.jetonEcriture}`);
     console.log(`  Jeton de lecture (application)      : ${jetons.jetonLecture}`);
     if (Object.keys(canaux).length) console.log(`  Alertes transmises à : ${Object.keys(canaux).join(", ")}`);
+    console.log(`  Données au repos : ${coffre.actif ? "chiffrées (AES-256-GCM)" : "en clair (CHIFFRER_DONNEES=true pour chiffrer)"}${String(e.JOURNAL_ACCES || "").toLowerCase() === "true" ? " · journal d'accès actif (30 jours)" : ""}`);
     console.log(`  Notifications programmées : ntfy (${ntfyHotes.join(", ")})${smtp ? `, e-mail (${smtp.hote})` : ""}${canaux.whatsapp ? ", WhatsApp" : ""}`);
     console.log(`  Réception : POST /api/positions · GET /osmand · POST /traccar    Lecture : /api/derniere · /api/trace`);
   });

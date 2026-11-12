@@ -1992,6 +1992,24 @@ test("schéma 8 : migration sans perte, routage vide = routage par défaut", () 
   const k = N.migrer({ meta: { version: 7 }, notifsEtat: { annulees: { a: "x" } } }); assert.strictEqual(k.etat.notifsEtat.annulees.a, "x");
 });
 
+/* ---------- D9 : arabe sur les nouveaux écrans ---------- */
+test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de rentabilité, de dépenses et de notifications est traduit", () => {
+  const src = fs.readFileSync(path.join(racine, "langue.js"), "utf8");
+  const code = src.slice(src.indexOf("const AR = {"), src.indexOf("const LANGUES")) + src.slice(src.indexOf("const traduireTexte"), src.indexOf("function traduire("));
+  const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
+  const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
+  const manquants = new Set(), vus = new Set();
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js"]) {
+    const s = fs.readFileSync(path.join(racine, f), "utf8");
+    for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
+  }
+  assert.ok(vus.size >= 80, `${vus.size} libellés trouvés`); assert.deepStrictEqual([...manquants], []);
+  assert.ok(Object.values(c.AR).every((x) => typeof x === "string" && /[؀-ۿ]/.test(x) || /^[+\d\sA-Za-z()./:…-]*$/.test(x)), "chaque traduction contient de l'arabe");
+  assert.strictEqual(c.traduireTexte("Anomalies"), "حالات شاذة"); assert.strictEqual(c.traduireTexte("  Marge nette "), "  الهامش الصافي ");
+  assert.strictEqual(c.traduireTexte("Anomalies · 3"), "حالات شاذة · 3", "libellé suivi d'un compte"); assert.strictEqual(c.traduireTexte("Programmées · 24 h · 2"), "المبرمجة · 24 h · 2");
+  assert.strictEqual(c.traduireTexte("Texte inconnu · 3"), "Texte inconnu · 3");
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

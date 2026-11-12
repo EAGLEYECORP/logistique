@@ -2,7 +2,7 @@
 /* ============================================================
    Langue de l'interface : français (par défaut) ou arabe (العربية, de droite à gauche).
    Traduction par dictionnaire des textes exacts de l'interface — couverture PARTIELLE :
-   navigation, boutons, titres et écrans de voyage. Le reste reste en français.
+   navigation, boutons, titres, écrans de voyage, de direction, d'opérations, de rentabilité et de notifications (testé : tests/noyau.test.js). Le reste reste en français.
    Choix propre à l'appareil (non inclus dans les sauvegardes).
    ============================================================ */
 const AR = {
@@ -40,6 +40,8 @@ const AR = {
   "À traiter": "للمعالجة", "Aujourd'hui": "اليوم", "Demain": "غدا", "En retard": "متأخر", "Général": "عام", "Données": "البيانات", "Rappels": "التنبيهات", "Appareil": "الجهاز",
   "Statut": "الحالة", "Client": "الزبون", "Chauffeur": "السائق", "Camion": "الشاحنة", "Référence": "المرجع", "Notes": "ملاحظات", "Numéro": "الرقم", "Marchandise": "البضاعة",
   "Départ prévu": "الانطلاق المبرمج", "Retour au dépôt prévu": "العودة المبرمجة إلى المستودع", "Date de traversée": "تاريخ العبور", "Armateur": "الناقل البحري",
+  // pilotage (rentabilité, direction, trésorerie, simulateur), opérations, notifications, dépenses
+  "Trésorerie à 90 jours": "الخزينة على مدى 90 يومًا", "Prochains mouvements": "الحركات القادمة", "Où se fait la marge": "من أين يأتي الهامش", "Où part l'argent": "أين تذهب الأموال", "Tendance sur 12 mois": "المنحى على مدى 12 شهرًا", "Résultat mensuel selon le taux de charge": "النتيجة الشهرية حسب نسبة الشحن", "Anomalies": "حالات شاذة", "L'entreprise ce mois-ci": "المقاولة هذا الشهر", "Direction": "الإدارة", "Résultat de la simulation": "نتيجة المحاكاة", "Résultat de l'entreprise en direct, trésorerie à 90 jours": "نتيجة المقاولة مباشرة، الخزينة على مدى 90 يومًا", "Solde aujourd'hui": "الرصيد اليوم", "Point le plus bas": "أدنى نقطة", "Dans 90 jours": "بعد 90 يومًا", "Chiffre d'affaires": "رقم المعاملات", "Marge directe": "الهامش المباشر", "Charges de structure": "التكاليف الهيكلية", "Marge nette": "الهامش الصافي", "Charge fixe ajoutée": "التكلفة الثابتة الإضافية", "Marge attendue": "الهامش المتوقع", "Résultat mensuel": "النتيجة الشهرية", "Trésorerie à 36 mois": "الخزينة بعد 36 شهرًا", "Charges du mois": "تكاليف الشهر", "Trésorerie": "الخزينة", "Point bas à 90 jours": "أدنى نقطة خلال 90 يومًا", "Ouvrir": "فتح", "Simuler un achat de camion": "محاكاة شراء شاحنة", "Tout voir": "عرض الكل", "Activités": "الأنشطة", "Scénario": "السيناريو", "Historique": "السجل", "Attentes aux ports": "الانتظار في الموانئ", "Conseils du moment": "نصائح اللحظة", "Opérations": "العمليات", "Chaque camion : où il est, ce qu'il fait, ce qui vient ensuite": "كل شاحنة: أين هي، ماذا تفعل، وما التالي", "Voyage": "الرحلة", "Planifier": "برمجة", "Carte": "الخريطة", "Sorti du port": "خرج من الميناء", "Destinataires": "المستلمون", "Qui est prévenu à chaque étape": "من يُخبَر في كل مرحلة", "Notifications": "الإشعارات", "Notifications par étape": "الإشعارات حسب المرحلة", "À envoyer vous-même": "للإرسال بأنفسكم", "Reporter d'une heure": "تأجيل ساعة", "Essai des canaux": "تجربة القنوات", "+1 h": "+1 س", "Tout marquer comme lu": "تعليم الكل كمقروء", "Essayer les canaux": "تجربة القنوات", "Message": "الرسالة", "Programmées": "المبرمجة", "Dernières": "الأخيرة", "Qui": "من", "Sujet ntfy (https://ntfy.sh/…)": "موضوع ntfy (https://ntfy.sh/…)", "E-mail": "البريد الإلكتروني", "WhatsApp": "واتساب", "Langue": "اللغة", "Étape": "المرحلة", "Auto": "تلقائي", "Charges fixes par camion": "التكاليف الثابتة لكل شاحنة", "Charges générales": "التكاليف العامة", "Échéances": "الآجال", "Par mois": "حسب الشهر", "Retours à combler": "رحلات عودة يجب ملؤها", "À prévoir": "ما يجب توقعه", "Rentabilité": "المردودية", "Coût complet au kilomètre : par camion, par corridor, par client": "التكلفة الكاملة للكيلومتر: حسب الشاحنة والممر والزبون", "Coût complet": "التكلفة الكاملة", "Coût complet au km": "التكلفة الكاملة للكيلومتر", "Détailler": "تفصيل", "Ajouter une charge": "إضافة تكلفة", "Ajouter une échéance": "إضافة أجل", "Exporter (CSV)": "تصدير (CSV)", "Copier l'annonce": "نسخ الإعلان", "Fret trouvé": "تم إيجاد الحمولة", "Voir": "عرض", "Km": "كلم", "Par km": "للكيلومتر", "Dépenses enregistrées": "المصاريف المسجلة", "Ajouter une dépense": "إضافة مصروف", "Dépenses à rattacher": "مصاريف يجب ربطها", "Rattacher": "ربط", "Saisir": "إدخال", "Plus tard": "لاحقًا", "Carte carburant": "بطاقة الوقود", "Enregistrer une amende": "تسجيل مخالفة", "Un passage au scanner est une attente exceptionnelle : il n'entre pas dans la médiane": "المرور عبر الماسح انتظار استثنائي: لا يدخل في الوسيط", "Importer le relevé CSV de votre carte carburant : chaque plein est rattaché au voyage du camion à cette date": "استيراد كشف CSV لبطاقة الوقود: تُربط كل تعبئة برحلة الشاحنة في ذلك التاريخ", "Ce mois": "هذا الشهر", "Mois dernier": "الشهر الماضي", "90 jours": "90 يومًا", "12 mois": "12 شهرًا", "Cette année": "هذه السنة", "Tout": "الكل", "30 jours": "30 يومًا", "Corridor": "الممر", "Mois": "الشهر", "Aucun voyage prévu": "لا رحلة مبرمجة", "Sans chauffeur": "بدون سائق", "Arrivée estimée": "الوصول المتوقع", "Notifier": "إخبار", "Passage au scanner": "المرور عبر الماسح", "Compter normalement": "احتسابه عاديًا", "Imposer (heures)": "فرض (بالساعات)", "Urgent": "عاجل", "À surveiller": "للمراقبة", "Appeler": "اتصال", "Ouvrir le voyage": "فتح الرحلة", "Proposer le retour": "اقتراح العودة", "Réserver": "حجز", "Ajouter la dépense": "إضافة المصروف", "Planifier un voyage": "برمجة رحلة", "Modifier les hypothèses": "تعديل الافتراضات", "Calculer": "حساب", "Envoyer": "إرسال", "Prochaine étape": "المرحلة التالية", "Rien à signaler": "لا شيء يُذكر", "Dépense ajoutée": "تمت إضافة المصروف", "Dépense supprimée": "تم حذف المصروف",
   "Mètres linéaires réservés": "الأمتار الطولية المحجوزة", "N° de réservation": "رقم الحجز", "Fret de base (€)": "الأجرة الأساسية (€)", "Passage chauffeur (€)": "تذكرة السائق (€)",
 };
 const LANGUES = [["fr", "Français"], ["ar", "العربية"]];
@@ -50,7 +52,11 @@ function appliquerLangue(l = langueActive()) {
   document.documentElement.dir = l === "ar" ? "rtl" : "ltr";
   if (l === "ar") traduire(document.body);
 }
-const traduireTexte = (t) => { const m = t.match(/^(\s*)([\s\S]*?)(\s*)$/); const a = AR[m[2]]; return a ? m[1] + a + m[3] : t; };
+const traduireTexte = (t) => {
+  const m = t.match(/^(\s*)([\s\S]*?)(\s*)$/); let a = AR[m[2]];
+  if (!a && m[2].includes(" · ")) { const p = m[2].split(" · "); if (AR[p[0]]) a = [AR[p[0]], ...p.slice(1).map((x) => AR[x] || x)].join(" · "); } // « Anomalies · 3 », « Programmées · 24 h · 2 »
+  return a ? m[1] + a + m[3] : t;
+};
 function traduire(racine) {
   if (langueActive() !== "ar") return;
   const w = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT);
@@ -71,7 +77,7 @@ enregistrerCarteReglages({
     const l = langueActive();
     return `<div class="card"><div class="card-head"><h2>Langue · اللغة</h2></div>
       <div class="segmented" role="tablist">${LANGUES.map(([k, lib]) => `<button role="tab" data-act="langue" data-id="${k}" aria-selected="${k === l}">${lib}</button>`).join("")}</div>
-      <p class="hint">L'arabe (de droite à gauche) couvre la navigation, les boutons et les écrans de voyage ; le reste de l'application reste en français pour l'instant. · العربية تغطي القوائم والأزرار وشاشات الرحلات، ويبقى باقي التطبيق بالفرنسية حاليا.</p></div>`;
+      <p class="hint">L'arabe (de droite à gauche) couvre la navigation, les boutons, les écrans de voyage, de direction, d'opérations, de rentabilité et de notifications ; les phrases calculées (alertes, conseils) restent en français. · العربية تغطي القوائم والأزرار وشاشات الرحلات، ويبقى باقي التطبيق بالفرنسية حاليا.</p></div>`;
   },
   agir(act, id) {
     if (act !== "langue") return false;

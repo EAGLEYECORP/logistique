@@ -155,6 +155,17 @@ Le client ne voit **ni le chauffeur, ni la plaque, ni l'identifiant de la balise
 
 Le jeton d'**écriture** (balises, Traccar) ne peut pas créer de lien. Un lien expire après 14 jours par défaut (1 à 120). **Toute personne qui possède l'adresse voit le suivi** : ne la transmettez qu'aux destinataires concernés, et révoquez-la après la livraison. La page n'est pas indexée par les moteurs de recherche et n'envoie pas de référent.
 
+## Chiffrement au repos, historique des alertes, journal d'accès, purge des photos
+
+| Variable | Rôle |
+|---|---|
+| `CHIFFRER_DONNEES=true` | Chiffre tous les fichiers du relais (AES-256-GCM). Un relais déjà en service y passe sans perte : les anciens fichiers restent lisibles et sont réécrits chiffrés. |
+| `CLE_DONNEES` | Phrase secrète (12 caractères au moins). Sans elle, le relais crée `donnees/cle.env` au premier démarrage. **Sauvegardez-la ailleurs : sans elle, les données sont perdues.** `FICHIER_CLE` place ce fichier sur un autre disque. |
+| `JOURNAL_ACCES=true` | Journal des appels à l'API (route, code, adresse tronquée, type de jeton — jamais le jeton), 30 jours. |
+| `PURGE_PHOTOS_MOIS=18` | Une fois par jour : photos de plus de 18 mois marquées, supprimées 30 jours plus tard ; journal `purge.log`. Aussi à la main, relais arrêté : `node serveur/purge-photos.js --mois 18 --simulation`. |
+
+`GET /api/alertes/historique?debut=&fin=` (jeton de lecture) rend les alertes des 7 derniers jours : un appareil qui revient en ligne affiche celles qu'il a manquées. Voir aussi [docs/07-rgpd-deploiement.md](../docs/07-rgpd-deploiement.md).
+
 ## Mise en ligne (https)
 
 - **PC, Raspberry Pi ou serveur** : placez un proxy https devant le relais, par exemple [Caddy](https://caddyserver.com) : `suivi.mon-entreprise.ma { reverse_proxy localhost:8787 }` (certificat automatique).

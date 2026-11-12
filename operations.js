@@ -11,7 +11,7 @@ const heureFr = (ts) => new Date(ts * 1000).toLocaleString("fr-FR", { weekday: "
 
 function carteOperation(c) {
   const eta = c.eta && (c.eta.arrivee || c.eta.t) ? heureFr(c.eta.arrivee || c.eta.t) : "", attente = typeof attenteEnCours === "function" && c.voyage ? attenteEnCours(parId(S.voyages, c.voyage.id)) : null;
-  return `<article class="ops-carte ${c.bureau ? "bureau-" + c.bureau : ""} ${c.nbAlertes ? "alerte" : ""}" data-camion="${c.camionId}">
+  return `<article class="ops-carte ${c.bureau ? "bureau-" + c.bureau : ""} ${c.bureau && typeof bureauUtilisateur === "function" && bureauUtilisateur() === c.bureau ? "mien" : ""} ${c.nbAlertes ? "alerte" : ""}" data-camion="${c.camionId}">
     <header><strong>${esc(c.immat)}</strong>${c.nbAlertes ? badge(`${c.nbAlertes} alerte(s)`, "danger") : ""}${badge(c.etat.libelle, c.etat.niveau)}</header>
     ${c.etat.zone ? `<div class="sub">${ic("pin")} ${esc(c.etat.zone)}</div>` : ""}
     ${c.voyage ? `<div class="ops-voyage"><strong>${esc(c.voyage.ref)}</strong> · ${esc(c.voyage.trajet)}</div>

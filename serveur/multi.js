@@ -152,6 +152,7 @@ function creerMulti({ dossier = null, coffre = creerCoffre(null), racine = path.
     const f = path.join(racine, chemin); if (!f.startsWith(racine + path.sep)) return false;
     let o; try { o = fs.readFileSync(f); } catch { return false; }
     const ext = chemin.split(".").pop();
+    if (chemin === "/index.html") o = Buffer.from(o.toString("utf8").replace(/<head>/i, '<head><meta name="lf-multi" content="1">')); // l'application sait qu'elle est servie par un relais multi-utilisateur
     if (chemin === "/sw.js") o = Buffer.from(o.toString("utf8").replace("__VERSION__", `relais-${version}-${crypto.createHash("sha1").update(o).digest("hex").slice(0, 8)}`));
     res.writeHead(200, { "Content-Type": TYPES[ext] || "application/octet-stream", "Cache-Control": ["html", "js", "css", "webmanifest"].includes(ext) ? "no-cache" : "public, max-age=86400", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY" });
     res.end(req.method === "HEAD" ? undefined : o); return true;

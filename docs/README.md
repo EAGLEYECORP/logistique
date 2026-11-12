@@ -9,6 +9,7 @@
 | [03 — Annexes](03-annexes.md) | Glossaire, check-lists imprimables, péages de référence, catalogue d'alertes, questions au transporteur, sources et confiance. |
 | [04 — Mise en service](04-mise-en-service.md) | Checklist de ce qui dépend de vous (relais, comptes, fichiers réels, déclarations) et comment chaque point se vérifie. |
 | [07 — Déploiement RGPD et loi 09-08](07-rgpd-deploiement.md) | Données et durées, chiffrement (application, relais, disque), réglages du relais, textes applicables, notice chauffeur (français, arabe, allemand), liste de contrôle. |
+| [10 — Multi-utilisateur](10-multi-utilisateur.md) | Comptes et rôles, matrice des droits appliqués par le serveur, connexion et double authentification, versions et conflits, temps réel, journal, API, sécurité. |
 | [11 — Décisions pour la version 4](11-decisions-v4.md) | Arbitrages (dépendances, chiffrement et comptes, coût zéro) et ordre de construction, d'après l'audit de valeur. |
 | [data/adm-grille-2026-11.csv](data/adm-grille-2026-11.csv) | Grille tarifaire officielle d'ADM (584 sections, 3 classes), relevée le 10/11/2026. |
 

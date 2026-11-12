@@ -2,8 +2,8 @@
 /* ============================================================
    Profil de l'appareil : chaque poste ne montre que ce qui sert à son rôle
    (direction, exploitation, commercial, comptabilité ; le mode chauffeur existe à part).
-   ATTENTION : c'est un tri de l'affichage, protégé par un code, pas un contrôle d'accès : les données de l'appareil
-   (et celles reçues par la synchronisation) restent complètes. Pour un vrai cloisonnement, ne synchronisez pas l'appareil.
+   Sans relais multi-utilisateur, c'est un tri de l'affichage protégé par un code. Avec un relais MULTI_UTILISATEUR=true (comptes_ui.js),
+   le profil suit le rôle du compte et les droits sont appliqués par le serveur : ce qu'un rôle ne doit pas voir n'arrive pas sur l'appareil.
    ============================================================ */
 
 const CLE_ROLE = "logistique-role";
@@ -13,12 +13,16 @@ const ROLES = {
     onglets: ["tableau", "operations", "commandes", "direct", "voyages", "gps", "itineraires", "douane", "international", "peages", "camions", "chauffeurs", "tachy", "carburant", "nomenclature"] },
   commercial: { lib: "Commercial", detail: "Commandes, clients, factures, voyages et suivi", finances: true, onglets: ["tableau", "commandes", "clients", "factures", "direct", "voyages", "nomenclature"] },
   comptabilite: { lib: "Comptabilité", detail: "Factures, clients, rentabilité, gasoil, péages", finances: true, onglets: ["tableau", "factures", "clients", "direction", "rentabilite", "commandes", "voyages", "carburant", "peages"] },
+  // profils des comptes du mode multi-utilisateur (non proposés comme profil d'appareil)
+  exploitant: { lib: "Exploitant", detail: "Toute l'exploitation, prix et marges compris", finances: true, compte: true, onglets: ["tableau", "operations", "commandes", "direct", "voyages", "gps", "itineraires", "douane", "international", "peages", "camions", "chauffeurs", "tachy", "carburant", "clients", "factures", "direction", "rentabilite", "nomenclature"] },
+  chauffeur: { lib: "Chauffeur", detail: "Ses voyages", finances: false, compte: true, onglets: ["chauffeur"] },
+  transitaire: { lib: "Transitaire", detail: "Ses dossiers de douane et voyages", finances: false, compte: true, onglets: ["douane", "voyages", "nomenclature"] },
 };
 const ONGLETS_TOUS = ONGLETS.map((o) => o.slice());
-const roleLire = () => { try { const r = JSON.parse(localStorage.getItem(CLE_ROLE) || "{}"); return { role: ROLES[r.role] ? r.role : "direction", verrou: r.verrou || null }; } catch { return { role: "direction", verrou: null }; } };
+const roleLire = () => { if (typeof roleMulti === "function" && roleMulti()) return { role: PROFIL_DU_ROLE[roleMulti()] || "exploitation", verrou: null, compte: true }; try { const r = JSON.parse(localStorage.getItem(CLE_ROLE) || "{}"); return { role: ROLES[r.role] ? r.role : "direction", verrou: r.verrou || null }; } catch { return { role: "direction", verrou: null }; } };
 const roleEcrire = (r) => { try { localStorage.setItem(CLE_ROLE, JSON.stringify(r)); } catch { /* ignoré */ } };
 const roleCourant = () => ROLES[roleLire().role];
-const ongletPermis = (id) => { const r = roleCourant(); return !r.onglets || r.onglets.includes(id) || id === "parametres" || id === "chauffeur"; };
+const ongletPermis = (id) => { if (typeof comptesOngletPermis === "function") { const x = comptesOngletPermis(id); if (x !== undefined) return x; } const r = roleCourant(); return !r.onglets || r.onglets.includes(id) || id === "parametres" || id === "chauffeur"; };
 
 function roleAppliquer() {
   ONGLETS.length = 0; ONGLETS.push(...ONGLETS_TOUS.filter((o) => ongletPermis(o[0])));
@@ -40,10 +44,11 @@ async function demanderCodeProfil() {
   toast("Code incorrect.", "danger"); return false;
 }
 function carteProfil() {
+  if (typeof multiActif === "function" && multiActif()) return ""; // remplacé par « Mon compte » (droits appliqués par le serveur)
   const r = roleLire();
   return `<div class="card" id="carte-profil"><div class="card-head"><h2>Profil de cet appareil</h2>${badge(ROLES[r.role].lib, r.role === "direction" ? "ok" : "neutral")}</div>
     <p class="hint" style="margin-top:0">Chaque poste ne montre que ce qui sert à son rôle. ${r.role === "direction" ? "Choisissez un profil pour ce poste ; un code sera demandé pour revenir au profil Direction." : `Ce poste est en profil <strong>${ROLES[r.role].lib}</strong> : ${ROLES[r.role].detail.toLowerCase()}.`}</p>
-    <div class="liste-options">${Object.entries(ROLES).map(([k, x]) => `<label class="check"><input type="radio" name="role-choix" value="${k}" ${k === r.role ? "checked" : ""}><span><strong>${x.lib}</strong><span class="sub">${x.detail}</span></span></label>`).join("")}</div>
+    <div class="liste-options">${Object.entries(ROLES).filter(([, x]) => !x.compte).map(([k, x]) => `<label class="check"><input type="radio" name="role-choix" value="${k}" ${k === r.role ? "checked" : ""}><span><strong>${x.lib}</strong><span class="sub">${x.detail}</span></span></label>`).join("")}</div>
     <div class="row" style="margin-top:10px">${btn("profil-appliquer", "Appliquer ce profil", { icone: "shield" })}</div>
     <p class="hint">C'est un <strong>tri de l'affichage</strong> protégé par un code, pas un contrôle d'accès : les données de l'appareil restent complètes (sauvegarde, synchronisation). Le téléphone d'un chauffeur se règle à part : Réglages → Appareil → Mode chauffeur.</p></div>`;
 }
@@ -70,5 +75,5 @@ enregistrerCarteReglages({
 });
 // En profil restreint, les Réglages ne montrent que le changement de profil.
 const rendreReglagesBase = VUES.parametres.rendu;
-VUES.parametres.rendu = function () { return roleLire().role === "direction" ? rendreReglagesBase.call(this) : carteProfil(); };
+VUES.parametres.rendu = function () { if (roleLire().role === "direction") return rendreReglagesBase.call(this); return typeof multiActif === "function" && multiActif() ? (typeof carteCompte === "function" ? carteCompte() : "") : carteProfil(); };
 roleAppliquer();

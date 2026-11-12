@@ -217,7 +217,7 @@ VUES.voyages = {
     return `<div class="kpis">
       <div class="kpi"><div class="l">${ic("ship")} Voyages en cours / prévus</div><div class="v">${actifs.length}</div><div class="s">${finis.length} terminé(s)</div></div>
       <div class="kpi"><div class="l">${ic("ship")} Traversées à réserver</div><div class="v">${aReserver}</div><div class="s ${aReserver ? "warn" : ""}">${aReserver ? "à confirmer auprès des armateurs" : "tout est réservé"}</div></div>
-      <div class="kpi"><div class="l">${ic("receipt")} Marge cumulée</div><div class="v">${fmt(marge)} <small>MAD</small></div><div class="s ${marge < 0 ? "danger" : ""}">${avecPrix.length} voyage(s) avec prix</div></div>
+      <div class="kpi fin"><div class="l">${ic("receipt")} Marge cumulée</div><div class="v">${fmt(marge)} <small>MAD</small></div><div class="s ${marge < 0 ? "danger" : ""}">${avecPrix.length} voyage(s) avec prix</div></div>
       <div class="kpi"><div class="l">${ic("truck")} Retour à vide</div><div class="v">${fmt(rv.pct, 0)} <small>%</small></div><div class="s ${rv.pct > 30 ? "warn" : ""}">${fmt(rv.kmVide)} km · ≈ ${fmt(rv.coutVide)} MAD</div></div>
     </div>
     ${actifs.sort(tri).map(carteVoyage).join("")}

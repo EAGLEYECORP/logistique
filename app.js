@@ -162,6 +162,8 @@ const ONGLETS = [
   ["factures", "Factures", "receipt", "Gestion"],
   ["direction", "Direction", "gauge", "Gestion"],
   ["rentabilite", "Rentabilité", "gauge", "Gestion"],
+  ["utilisateurs", "Utilisateurs", "users", "Gestion"],
+  ["journal", "Journal", "file", "Gestion"],
   ["nomenclature", "Codes SH", "search", "Outils"],
   ["parametres", "Réglages", "settings", "Outils"],
 ];

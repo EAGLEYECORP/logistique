@@ -166,6 +166,10 @@ Le jeton d'**écriture** (balises, Traccar) ne peut pas créer de lien. Un lien 
 
 `GET /api/alertes/historique?debut=&fin=` (jeton de lecture) rend les alertes des 7 derniers jours : un appareil qui revient en ligne affiche celles qu'il a manquées. Voir aussi [docs/07-rgpd-deploiement.md](../docs/07-rgpd-deploiement.md).
 
+## Multi-utilisateur : l'application servie par le relais
+
+`MULTI_UTILISATEUR=true` : le relais sert l'application à son adresse, avec des comptes (chef d'entreprise, exploitant, répartiteur, commercial, comptable, chauffeur, transitaire), des droits appliqués par le serveur, la double authentification, les modifications concurrentes (versions, fusion), le temps réel et un journal. Premier démarrage : ouvrez l'adresse du relais ; le jeton de lecture est demandé pour créer le premier compte. Variables utiles : `URL_PUBLIQUE` (liens de réinitialisation), `RETENTION_AUDIT_JOURS` (730), `COOKIE_NON_SECURISE` (essais en http seulement). Tout est décrit dans [docs/10-multi-utilisateur.md](../docs/10-multi-utilisateur.md).
+
 ## Mise en ligne (https)
 
 - **PC, Raspberry Pi ou serveur** : placez un proxy https devant le relais, par exemple [Caddy](https://caddyserver.com) : `suivi.mon-entreprise.ma { reverse_proxy localhost:8787 }` (certificat automatique).

@@ -149,7 +149,7 @@ async function synchroniserPhotos({ lot = 20 } = {}) {
 }
 
 function synchroPlanifier() { // envoi différé 15 s après une modification
-  if (syncEnCours.applique || !synchroCfg().auto || !synchroActive()) return;
+  if (syncEnCours.applique || !synchroCfg().auto || !synchroActive() || (typeof multiActif === "function" && multiActif())) return;
   clearTimeout(syncEnCours.minuteur); syncEnCours.minuteur = setTimeout(() => synchroniser(), 15000);
 }
 if (typeof sauver === "function") { const sauverSansSynchro = sauver; sauver = function () { const r = sauverSansSynchro.apply(this, arguments); synchroPlanifier(); return r; }; }

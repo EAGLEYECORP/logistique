@@ -722,3 +722,20 @@ details.historique > summary { cursor: pointer; list-style: none; } details.hist
 .grille-notif td, .grille-notif th { text-align: center; padding: 4px 6px; } .grille-notif td:first-child, .grille-notif th:first-child { text-align: left; white-space: nowrap; }
 #carte-notif-jalons input:not([type=checkbox]), #carte-notif-jalons select { width: 100%; min-width: 120px; }
 .apercu { margin: -4px 0 10px; font-style: italic; }
+
+/* mode multi-utilisateur */
+html.verif-compte #app, html.verif-compte #actions { visibility: hidden; }
+body.ecran-compte-ouvert { overflow: hidden; }
+#ecran-compte { position: fixed; inset: 0; z-index: 1000; background: var(--bg, #f5f5f7); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 48px 16px; }
+.compte-boite { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 24px; box-shadow: 0 8px 30px rgba(0, 0, 0, .08); }
+.compte-boite h1 { font-size: 1.4rem; margin: 8px 0 14px; } .compte-boite form { display: flex; flex-direction: column; gap: 10px; } .compte-boite .btn[type=submit] { margin-top: 6px; justify-content: center; }
+.compte-logo { display: flex; align-items: center; gap: 8px; color: var(--primary); } .compte-logo .i { width: 26px; height: 26px; }
+.compte-msg { color: var(--danger); min-height: 1.2em; margin: 0; } .compte-liens { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 14px; }
+.lien { background: none; border: 0; color: var(--primary); padding: 0; cursor: pointer; font: inherit; text-decoration: underline; }
+.cle-recuperation { font-family: ui-monospace, monospace; font-size: 1.15rem; letter-spacing: .06em; background: var(--primary-soft); padding: 12px; border-radius: 10px; text-align: center; word-break: break-all; }
+.compte-import { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; } .compte-import legend { font-size: .85rem; color: var(--muted); padding: 0 4px; }
+#indic-multi { position: fixed; right: 12px; bottom: 12px; z-index: 50; font-size: .78rem; padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+#indic-multi.ok::before { content: "● "; color: var(--ok); } #indic-multi.warn::before { content: "● "; color: var(--warn); }
+@media (max-width: 860px) { #indic-multi { bottom: 76px; } }
+tr.inactif td { opacity: .55; }
+.ops-carte.mien { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent); }

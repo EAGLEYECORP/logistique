@@ -9,11 +9,11 @@ const ETAPES_CLIENT = { depart: "Parti", port_tmed: "Arrivé au port de Tanger M
 const PRECISIONS = [["approx", "Approximative (≈ 10 km) — recommandé"], ["masquee", "Masquée (état et heure d'arrivée seulement)"], ["exacte", "Exacte"]];
 const LANGUES_CLIENT = [["fr", "Français"], ["en", "English"], ["es", "Español"], ["ar", "العربية"]];
 
-const partageRelais = () => { const c = directCfg(); return c.mode === "relais" && baseUrl(c.url) && c.jeton ? { base: baseUrl(c.url), jeton: c.jeton } : null; };
+const partageRelais = () => { if (typeof multiActif === "function" && multiActif()) return { base: location.origin, jeton: "" }; const c = directCfg(); return c.mode === "relais" && baseUrl(c.url) && c.jeton ? { base: baseUrl(c.url), jeton: c.jeton } : null; }; // mode multi-utilisateur : la session (cookie) remplace le jeton
 async function partageAppel(methode, chemin, corps) {
   const r = partageRelais(); if (!r) throw new Error("Le lien client demande le relais : réglez la source « Relais » dans Suivi en direct.");
   let rep;
-  try { rep = await fetch(r.base + chemin, { method: methode, headers: { Authorization: `Bearer ${r.jeton}`, "Content-Type": "application/json" }, body: corps ? JSON.stringify(corps) : undefined }); }
+  try { rep = await fetch(r.base + chemin, { method: methode, headers: { ...(r.jeton ? { Authorization: `Bearer ${r.jeton}` } : {}), "Content-Type": "application/json", "X-LF": "1" }, credentials: "same-origin", body: corps ? JSON.stringify(corps) : undefined }); }
   catch { throw new Error("Serveur injoignable (adresse, réseau ou HTTPS)."); }
   if (rep.status === 401) throw new Error("Jeton refusé par le serveur.");
   const json = await rep.json().catch(() => ({}));

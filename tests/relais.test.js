@@ -545,7 +545,7 @@ test("multi-utilisateur : cookie de session (HttpOnly, SameSite) et protection i
     const v = (await s.appel("/api/records/voyages/v1", { entetes: { cookie } })).json.enregistrement;
     assert.strictEqual((await s.appel("/api/records/voyages/v1", { methode: "PUT", corps: v, entetes: { cookie, "if-match": String(v._v) } })).code, 403, "écriture avec cookie sans en-tête X-LF : refusée (requête intersite)");
     assert.strictEqual((await s.appel("/api/records/voyages/v1", { methode: "PUT", corps: { ...v, notes: "ok" }, entetes: { cookie, "if-match": String(v._v), "x-lf": "1" } })).code, 200);
-    const page = await s.appel("/"); assert.strictEqual(page.code, 200); assert.ok(page.texte.includes("<html")); assert.ok(/text\/html/.test(page.entetes.get("content-type")));
+    const page = await s.appel("/"); assert.strictEqual(page.code, 200); assert.ok(page.texte.includes("<html")); assert.ok(page.texte.includes('<meta name="lf-multi" content="1">'), "page marquée : l'application sait qu'elle doit demander une connexion"); assert.ok(/text\/html/.test(page.entetes.get("content-type")));
     assert.strictEqual((await s.appel("/app.js")).code, 200); assert.strictEqual((await s.appel("/vendor/leaflet/leaflet.js")).code, 200);
     const sw = await s.appel("/sw.js"); assert.ok(!sw.texte.includes("__VERSION__") && /relais-test-[0-9a-f]{8}/.test(sw.texte), "version du cache renseignée");
     for (const interdit of ["/serveur/relais.js", "/package.json", "/tests/relais.test.js", "/../etc/passwd", "/.git/config", "/serveur/donnees/comptes.json"]) assert.ok([401, 404].includes((await s.appel(interdit)).code), interdit);

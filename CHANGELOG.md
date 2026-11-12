@@ -76,6 +76,16 @@
 - `docs/07-rgpd-deploiement.md` : durées de conservation, trois couches de chiffrement, LUKS, textes applicables (RGPD, BetrVG, loi 09-08, clauses contractuelles types), notice chauffeur en français, arabe et allemand.
 - Correction : sans dates précisées, la liste des notifications programmées du relais était vide.
 
+### D13 — Multi-utilisateur : un navigateur suffit, des droits réels
+- **Relais 2.0.0** (`MULTI_UTILISATEUR=true`) : l'application est servie par le relais ; chacun se connecte avec son compte, sans installation ni mot de passe de synchronisation. Premier démarrage protégé par le jeton du relais, import des données de l'appareil ou d'une sauvegarde, clé de récupération.
+- **Sept rôles** (chef d'entreprise, exploitant, répartiteur sans prix ni marges, commercial, comptable, chauffeur, transitaire) ; **droits appliqués par le serveur à chaque appel** (`comptes.js`, même fichier pour l'application et le relais) : un rôle ne reçoit jamais ce qu'il ne doit pas voir et ne peut ni modifier ni effacer les prix qu'il ne voit pas.
+- **Connexion** : mots de passe scrypt, sessions opaques 12 h renouvelées 30 jours avec rotation et détection de vol, cookies HttpOnly/SameSite, **double authentification TOTP** (obligatoire pour le chef), blocage après 5 échecs, alerte sur réseau inhabituel, mot de passe oublié par e-mail.
+- **Modifications concurrentes** : versions et 409 avec l'état actuel ; fusionner, garder sa version ou prendre la sienne. Verrous de 30 s sur la livraison, l'encaissement, la suppression (« X modifie »). Suppression douce.
+- **Temps réel** (SSE, moins d'une seconde) et rattrapage après une coupure ; tableau des opérations avec les camions de son bureau mis en avant.
+- **Journal** de chaque écriture (avant/après), des connexions, refus et conflits, 24 mois, page de consultation et export CSV ; page **Utilisateurs** (création, rôle, bureau, clôture, réouverture, réinitialisation).
+- Corrections trouvées en route : l'assistant de démarrage ne s'ouvre plus par-dessus l'écran de connexion ; les journaux chiffrés ligne à ligne restaient lisibles après un redémarrage mais pas deux (corrigé, testé).
+- Écarts assumés : pas de SQLite ni d'Argon2id (zéro dépendance) ; jetons opaques au lieu de JWT ; réseau inhabituel au lieu du pays ; clé de récupération dédiée au lieu du mot de passe de synchronisation (voir docs/10).
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

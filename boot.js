@@ -63,7 +63,7 @@ function majIndicateurs() {
   const chip = $("#indic-sauvegarde");
   const chauffeur = typeof modeChauffeurActif === "function" && modeChauffeurActif();
   if (chip) {
-    if (!contientDonnees(S) || chauffeur) chip.hidden = true;
+    if (!contientDonnees(S) || chauffeur || (typeof multiActif === "function" && multiActif())) chip.hidden = true; // multi-utilisateur : les données sont sur le serveur
     else {
       const ds = S.meta.derniereSauvegarde;
       const j = ds ? -joursAvant(ds.slice(0, 10)) : null;
@@ -140,7 +140,7 @@ async function demarrer() {
   demarrage.notes.forEach((n) => toast(n, "ok"));
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") miroirVider(); });
   window.addEventListener("pagehide", miroirVider);
-  if (!S.meta.onboarde && !contientDonnees(S) && typeof demarrerAssistant === "function") demarrerAssistant();
+  if (!S.meta.onboarde && !contientDonnees(S) && typeof demarrerAssistant === "function" && !(typeof servieParRelaisMulti === "function" && servieParRelaisMulti())) demarrerAssistant(); // multi-utilisateur : la connexion vient d'abord, les données viennent du serveur
   demarrageModules();
 }
 

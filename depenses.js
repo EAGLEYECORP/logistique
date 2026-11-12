@@ -117,4 +117,4 @@ if (VUES.tachy) {
 }
 
 /* ---------- à chaque changement de page : les dépenses calculées sont à jour avant l'affichage ---------- */
-if (typeof afficher === "function") { const afficherSansDepenses = afficher; afficher = function () { try { majDepenses(); } catch (e) { console.warn("Dépenses calculées :", e); } return afficherSansDepenses.apply(this, arguments); }; }
+if (typeof afficher === "function") { const afficherSansDepenses = afficher; afficher = function () { try { majDepenses(); if (typeof majReferences === "function" && S.camions.length && majReferences()) setTimeout(sauver, 0); } catch (e) { console.warn("Dépenses calculées :", e); } return afficherSansDepenses.apply(this, arguments); }; }

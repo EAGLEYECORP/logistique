@@ -156,3 +156,28 @@ async function ouvrirSimulateur() {
     <p class="hint">En milliers de MAD par mois. La marge au kilomètre est une marge directe (avant charges fixes), retours à vide compris. Simulation indicative : elle ne remplace pas l'avis de votre banque ou de votre comptable.</p></div>` });
   if (encore) return ouvrirSimulateur();
 }
+
+/* ---------- anomalies par camion ---------- */
+const listeAnomalies = (l) => `<ul class="ctl">${l.map((x) => `<li class="${x.niveau === "danger" ? "danger" : "warn"}">${ic("alert")}<span><strong>${esc(x.immat)} — ${esc(x.lib)} +${fmt(x.ecart, 0)} %</strong><span class="sub">${fmt(x.recent, x.unite === "MAD/km" ? 2 : 1)} ${esc(x.unite)} sur 7 jours, référence ${fmt(x.reference, x.unite === "MAD/km" ? 2 : 1)} — ${esc(x.cause)}</span></span></li>`).join("")}</ul>`;
+function blocAnomalies() {
+  const a = anomalies(); if (!a.length) return "";
+  return `<div class="section-title">Anomalies · ${a.length}</div><div class="card" id="bloc-anomalies">${listeAnomalies(a)}
+    <p class="hint">Chaque camion est comparé à sa propre moyenne des 90 jours précédents, recalculée chaque semaine. Seuil réglable : Réglages → calculs.</p></div>`;
+}
+
+/* ---------- accueil du chef d'entreprise (profil Direction) ---------- */
+const renduAccueilAvantDirection = VUES.tableau.rendu;
+VUES.tableau.rendu = function () {
+  const html = renduAccueilAvantDirection.call(this);
+  if ((typeof roleLire === "function" && roleLire().role !== "direction") || !(S.voyages.length || S.factures.length)) return html;
+  const m0 = today().slice(0, 7) + "-01", p = pnlPeriode(m0, ajouterJours(ajouterMois(m0, 1), -1)), t = previsionsTresorerie(90);
+  return `<div class="card fin" id="accueil-direction"><div class="card-head"><h2>L'entreprise ce mois-ci</h2>${btn("aller", "Tout voir", { id: "direction", cls: "btn ghost sm" })}</div>
+    <div class="kpis compact">
+      <div class="kpi"><div class="l">Chiffre d'affaires</div>${deuxDevises(p.revenue)}</div>
+      <div class="kpi"><div class="l">Marge directe</div>${deuxDevises(p.marge_brute, p.marge_brute < 0 ? "neg" : "")}</div>
+      <div class="kpi"><div class="l">Charges du mois</div>${deuxDevises(p.structure)}</div>
+      <div class="kpi"><div class="l">Marge nette</div>${deuxDevises(p.marge_nette, p.marge_nette < 0 ? "neg" : "pos")}</div>
+      <div class="kpi"><div class="l">Trésorerie</div>${deuxDevises(t.solde_initial)}</div>
+      <div class="kpi"><div class="l">Point bas à 90 jours</div>${deuxDevises(t.min.solde, t.min.solde < 0 ? "neg" : "")}<div class="s ${t.negatif ? "danger" : ""}">${t.negatif ? "sous zéro le " + dateFr(t.negatif) : "le " + dateFr(t.min.date)}</div></div>
+    </div>${(() => { const a = anomalies(); return a.length ? `<div class="section-title">Anomalies · ${a.length}</div>${listeAnomalies(a.slice(0, 3))}` : ""; })()}</div>` + html;
+};

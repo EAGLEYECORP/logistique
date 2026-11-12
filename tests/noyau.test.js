@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1608,6 +1608,77 @@ test("simulateur : s'appuie sur la marge au kilomètre réellement observée par
   const s = N.simulerInvestissement({ prix: 800000, mode: "leasing", loyer: 15000, km_mois: 9000, taux_charge: 85, corridors: o.corridors.slice(0, 2).map((c, i) => ({ nom: c.nom, pct: i ? 30 : 70, margeKm: c.margeKm })) });
   proche(s.marge_km, o.corridors[0].margeKm * 0.7 + o.corridors[1].margeKm * 0.3); assert.ok(s.seuil_charge > 0);
   N.S.voyages = []; N.S.commandes = []; assert.strictEqual(N.corridorsObserves(365, "2026-11-30").corridors.length, 0);
+});
+
+/* ---------- D7 : anomalies par camion ---------- */
+const AU = "2026-11-12";
+const jr = (n) => N.dateISO(Date.parse(AU + "T00:00:00Z") + n * 86400000);
+// pleins « plein à plein » : chaque plein couvre 1 000 km ; litres = consommation × 10
+const pleinsDe = (camionId, serie) => { let km = 100000; const r = [{ id: camionId + "p0", camionId, date: jr(serie[0][0] - 5), km, litres: 300, prix: 11, plein: true }]; serie.forEach(([j, conso, prix = 11], i) => { km += 1000; r.push({ id: `${camionId}p${i + 1}`, camionId, date: jr(j), km, litres: conso * 10, prix, plein: true }); }); return r; };
+const voyageDe = (id, camionId, jFin, total, km, plus = {}) => ({ id, camionId, statut: "termine", origine: "Agadir", destination: "Perpignan", dateDepart: jr(jFin - 8), dateRetourPrevue: jr(jFin), prix: 40000, devise: "MAD", kmAller: km, autresMad: total, lignesCout: [], ...plus });
+
+test("anomalies : référence sur 90 jours, moyenne pondérée, pente, semaine ISO", () => {
+  N.S.camions = [{ id: "c1", immat: "A" }];
+  N.S.pleins = pleinsDe("c1", [[-80, 30], [-60, 32], [-40, 31], [-20, 31], [-3, 40], [-120, 99]].sort((a, b) => a[0] - b[0]));
+  const r = N.referencesCamion("c1", AU);
+  assert.strictEqual(r.conso.n, 4, "ni la dernière semaine ni ce qui a plus de 97 jours"); proche(r.conso.valeur, 31); proche(r.conso.pente, ((31 - 30) / 30) * 100);
+  assert.strictEqual(r.coutKm, undefined, "aucune observation : pas de référence");
+  N.S.pleins = [];
+  N.S.voyages = [voyageDe("v1", "c1", -60, 10000, 1000), voyageDe("v2", "c1", -30, 36000, 3000)];
+  proche(N.referencesCamion("c1", AU).coutKm.valeur, 46000 / 4000, "pondérée par les kilomètres"); assert.strictEqual(N.referencesCamion("c1", AU).vide.valeur, 0);
+  assert.strictEqual(N.semaineISO("2026-11-12"), "2026-W46"); assert.strictEqual(N.semaineISO("2026-01-01"), "2026-W01"); assert.strictEqual(N.semaineISO("2027-01-01"), "2026-W53"); assert.strictEqual(N.semaineISO("2024-12-30"), "2025-W01");
+});
+
+test("anomalies : seuil de 15 % (réglable), au moins 3 observations, seulement à la hausse", () => {
+  N.S.camions = [{ id: "c1", immat: "A" }, { id: "c2", immat: "B" }, { id: "c3", immat: "C" }];
+  N.S.pleins = [...pleinsDe("c1", [[-70, 30], [-50, 30], [-30, 30], [-2, 34]]), ...pleinsDe("c2", [[-70, 30], [-50, 30], [-30, 30], [-2, 35]]), ...pleinsDe("c3", [[-50, 30], [-30, 30], [-2, 45]])];
+  let a = N.anomalies(AU);
+  assert.strictEqual(a.length, 1, "+13 % : rien ; +17 % : alerte ; 2 observations de référence : rien"); assert.strictEqual(a[0].camionId, "c2"); assert.strictEqual(a[0].mesure, "conso"); proche(a[0].ecart, (5 / 30) * 100); assert.strictEqual(a[0].niveau, "warn");
+  assert.ok(/B — consommation 35,0 L\/100 km sur 7 jours, soit \+17 % par rapport à sa référence \(30,0\)/.test(a[0].texte), a[0].texte);
+  N.S.params.seuilAnomalie = 10; assert.deepStrictEqual([...N.anomalies(AU).map((x) => x.camionId)].sort(), ["c1", "c2"]);
+  N.S.params.seuilAnomalie = 5; assert.strictEqual(N.anomalies(AU).find((x) => x.camionId === "c2").niveau, "danger", "au-delà du double du seuil");
+  N.S.params.seuilAnomalie = 15; N.S.pleins = pleinsDe("c1", [[-70, 30], [-50, 30], [-30, 30], [-2, 20]]); assert.strictEqual(N.anomalies(AU).length, 0, "une baisse n'est pas une anomalie");
+  N.S.pleins = pleinsDe("c1", [[-70, 30], [-50, 30], [-30, 30], [-10, 45]]); assert.strictEqual(N.anomalies(AU).length, 0, "rien dans les 7 derniers jours");
+});
+
+test("anomalies : cause probable — hausse brutale ou progressive, prix du gasoil, nouveau corridor, dépense exceptionnelle", () => {
+  N.S.camions = [{ id: "c1", immat: "A" }];
+  N.S.pleins = pleinsDe("c1", [[-70, 30], [-50, 30], [-30, 30], [-2, 40]]);
+  let a = N.anomalies(AU)[0]; assert.strictEqual(a.allure, "brutale"); assert.ok(/fuite, vol de gasoil/.test(a.cause));
+  N.S.pleins = pleinsDe("c1", [[-80, 28], [-65, 29], [-50, 31], [-35, 32], [-20, 33], [-10, 34], [-2, 40]]);
+  a = N.anomalies(AU)[0]; assert.strictEqual(a.allure, "progressive"); assert.ok(/pneus, filtres/.test(a.cause));
+  // coût au kilomètre : le gasoil a augmenté
+  N.S.pleins = pleinsDe("c1", [[-70, 30, 10], [-50, 30, 10], [-30, 30, 10], [-2, 30, 12]]);
+  N.S.voyages = [voyageDe("v1", "c1", -70, 10000, 2000), voyageDe("v2", "c1", -45, 10000, 2000), voyageDe("v3", "c1", -20, 10000, 2000), voyageDe("v4", "c1", -1, 12500, 2000)];
+  a = N.anomalies(AU).find((x) => x.mesure === "coutKm"); assert.ok(a.ecart > 15, "carburant des pleins compris"); assert.strictEqual(a.categorie, "prix_carburant"); assert.ok(/gasoil a augmenté de 17 %/.test(a.cause));
+  // même hausse, prix stable, mais corridor jamais fait
+  N.S.pleins = []; N.S.voyages[3].destination = "Hambourg";
+  a = N.anomalies(AU)[0]; assert.strictEqual(a.categorie, "itineraire"); assert.ok(/Agadir → Hambourg/.test(a.cause));
+  // même corridor, prix stable : dépense exceptionnelle
+  N.S.voyages[3].destination = "Perpignan"; a = N.anomalies(AU)[0]; assert.strictEqual(a.categorie, "coutKm"); assert.ok(/dépense exceptionnelle/.test(a.cause));
+  // retours à vide et temps à l'arrêt
+  N.S.voyages = [voyageDe("v1", "c1", -70, 10000, 2000, { kmRetourVide: 200 }), voyageDe("v2", "c1", -45, 10000, 2000, { kmRetourVide: 200 }), voyageDe("v3", "c1", -20, 10000, 2000, { kmRetourVide: 200 }), voyageDe("v4", "c1", -1, 11000, 1200, { kmRetourVide: 1000 })];
+  a = N.anomalies(AU).find((x) => x.mesure === "vide"); assert.strictEqual(a.categorie, "retour_vide"); proche(a.reference, (200 / 2200) * 100); proche(a.recent, (1000 / 2200) * 100);
+  const t = (j, d, c) => ({ id: "t" + j, camionId: "c1", fin: Date.parse(jr(j) + "T12:00:00Z") / 1000, dureeH: d, conduiteH: c });
+  N.S.voyages = []; N.S.traces = [t(-60, 100, 60), t(-40, 100, 60), t(-20, 100, 60), t(-2, 100, 30)];
+  a = N.anomalies(AU)[0]; assert.strictEqual(a.mesure, "arret"); proche(a.reference, 40); proche(a.recent, 70); assert.ok(/attente inhabituelle/.test(a.cause));
+  N.S.traces[3].conduiteH = 57; assert.strictEqual(N.anomalies(AU).length, 0, "43 % contre 40 % : moins de 5 points d'écart");
+});
+
+test("anomalies : la référence est mémorisée et ne bouge qu'une fois par semaine ; elles remontent dans les alertes", () => {
+  N.S.camions = [{ id: "c1", immat: "A" }];
+  N.S.pleins = pleinsDe("c1", [[-70, 30], [-50, 30], [-30, 30], [-9, 30]]);
+  assert.strictEqual(N.majReferences(AU), true); assert.strictEqual(N.S.meta.references.semaine, "2026-W46"); assert.strictEqual(N.S.meta.references.date, AU); proche(N.S.meta.references.camions.c1.conso.valeur, 30);
+  assert.strictEqual(N.majReferences(jr(2)), false, "même semaine : inchangée");
+  N.S.pleins = pleinsDe("c1", [[-70, 30], [-50, 30], [-30, 30], [-9, 30], [0, 39]]);
+  assert.strictEqual(N.majReferences(jr(3)), false); proche(N.S.meta.references.camions.c1.conso.valeur, 30);
+  const a = N.anomalies(jr(3)); assert.strictEqual(a.length, 1); proche(a[0].reference, 30); proche(a[0].ecart, 30);
+  assert.strictEqual(N.majReferences(jr(5)), true, "lundi suivant : recalculée"); assert.strictEqual(N.S.meta.references.semaine, "2026-W47");
+  // alertes() s'appuie sur la date du jour : on y place l'anomalie
+  const auj = N.today(), d = (n) => N.dateISO(Date.parse(auj + "T00:00:00Z") + n * 86400000); delete N.S.meta.references;
+  N.S.pleins = [{ id: "p0", camionId: "c1", date: d(-80), km: 1000, litres: 1, prix: 11, plein: true }, ...[[-70, 30], [-50, 30], [-30, 30], [-1, 42]].map(([j, c], i) => ({ id: "p" + (i + 1), camionId: "c1", date: d(j), km: 2000 + i * 1000, litres: c * 10, prix: 11, plein: true }))];
+  const al = N.alertes().filter((x) => x.cat === "anomalie" || /conso/.test(x.cle));
+  assert.strictEqual(al.length, 1, "une seule alerte de consommation, pas deux"); assert.strictEqual(al[0].cle, "anomalie:c1:conso"); assert.strictEqual(al[0].onglet, "carburant"); assert.ok(/\+40 %/.test(al[0].texte));
 });
 
 (async () => {

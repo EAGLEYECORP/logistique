@@ -20,6 +20,7 @@ const PARAMS_DEFAUT = {
   conduiteAvantPause: 4.5, // heures avant une pause
   dureePause: 0.75,        // heures (45 min)
   seuilConso: 15,          // % au-dessus de la moyenne = anomalie
+  seuilAnomalie: 15,       // % d'écart sur 7 jours par rapport à la référence du camion (coût/km, consommation, arrêt, à vide)
   peagesEu: { DE: 0.35, AT: 0.48 }, // €/km par pays (poids lourds) — France, Espagne, Italie… à renseigner d'après les grilles officielles
   tauxEUR: 10.8,           // MAD pour 1 EUR — à mettre à jour
   tvaDefaut: 14,           // % — à vérifier avec votre comptable (export, transport international…)
@@ -251,6 +252,7 @@ const CATS_NOTIF = [
   ["repos", "Repos des chauffeurs", "Service bientôt trop long ou repos obligatoire"],
   ["factures", "Factures en retard", "Échéances dépassées"],
   ["commandes", "Commandes et douane", "Chargements sans équipe, livraisons à facturer, dossiers"],
+  ["anomalie", "Anomalies par camion", "Coût au kilomètre, consommation, temps à l'arrêt ou kilomètres à vide qui s'écartent de la référence"],
   ["sauvegarde", "Rappel de sauvegarde", "Quand la dernière sauvegarde date de plus d'une semaine"],
 ];
 
@@ -259,12 +261,15 @@ function alertes() {
   const liste = [];
   const ajouter = (niveau, onglet, texte, cat = "autre", cle = "") => liste.push({ niveau, onglet, texte, cat, cle });
 
+  // écarts par rapport à la référence de chaque camion (anomalies.js ; absent du moteur du relais)
+  const anos = typeof anomalies === "function" ? anomalies() : [];
+  for (const x of anos) ajouter("warn", x.mesure === "conso" ? "carburant" : "voyages", x.texte, "anomalie", `anomalie:${x.camionId}:${x.mesure}`);
   for (const c of S.camions) {
     for (const e of etatCamion(c)) if (e.niveau !== "ok") ajouter(e.niveau, "camions", `${c.immat} — ${e.type} ${e.texte}`, "docs", `docs:cam:${c.id}:${e.type}`);
     const moy = consoMoyenne(c.id);
     const conso = consommations(c.id);
     const dernier = S.pleins.filter((p) => p.camionId === c.id && conso[p.id]).sort((a, b) => b.km - a.km)[0];
-    if (moy && dernier && conso[dernier.id] > moy * (1 + P.seuilConso / 100)) {
+    if (moy && dernier && conso[dernier.id] > moy * (1 + P.seuilConso / 100) && !anos.some((x) => x.camionId === c.id && x.mesure === "conso")) {
       ajouter("warn", "carburant", `${c.immat} — dernière conso ${fmt(conso[dernier.id], 1)} L/100 (moyenne ${fmt(moy, 1)}) : vérifier fuite, pneus, conduite ou vol de gasoil`, "autre", `conso:${c.id}`);
     }
   }

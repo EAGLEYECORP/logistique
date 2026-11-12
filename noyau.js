@@ -20,6 +20,8 @@ const PARAMS_DEFAUT = {
   conduiteAvantPause: 4.5, // heures avant une pause
   dureePause: 0.75,        // heures (45 min)
   seuilConso: 15,          // % au-dessus de la moyenne = anomalie
+  seuilCalibrationAttente: 10, // mesures nécessaires avant d'utiliser vos attentes réelles aux ports
+  seuilDecalageETA: 30,    // minutes : au-delà, un changement d'arrivée estimée est signalé
   seuilAnomalie: 15,       // % d'écart sur 7 jours par rapport à la référence du camion (coût/km, consommation, arrêt, à vide)
   peagesEu: { DE: 0.35, AT: 0.48 }, // €/km par pays (poids lourds) — France, Espagne, Italie… à renseigner d'après les grilles officielles
   tauxEUR: 10.8,           // MAD pour 1 EUR — à mettre à jour
@@ -61,7 +63,7 @@ const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "P
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [], depensesAttente: [],
+    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [], depensesAttente: [], attentesPort: [],
     params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }

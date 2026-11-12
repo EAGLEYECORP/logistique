@@ -614,7 +614,7 @@ function conduiteJour(points, maintenant = null) {
  * Le détroit est franchi par les ports des zones (Tanger Med ⇄ Algeciras) quand la position et la destination ne sont pas du même côté (latitude 35,95).
  * options : facteurRoute (détour, 1,3), vitesse (km/h, sinon vitesse récente, sinon 75), attentePortH (3), traverseeH (1,5), debarquementH (1), jourMaxH (9), zones.
  */
-function etaVoyage(hist, maintenant, dest, { zones = [], facteurRoute = 1.3, vitesse = null, attentePortH = 3, traverseeH = 1.5, debarquementH = 1, jourMaxH = 9 } = {}) {
+function etaVoyage(hist, maintenant, dest, { zones = [], facteurRoute = 1.3, vitesse = null, attentePortH = 3, attenteAuPortH = null, traverseeH = 1.5, debarquementH = 1, jourMaxH = 9 } = {}) {
   if (!hist.length || !dest) return null;
   const last = hist[hist.length - 1], pos = [last[1], last[2]];
   const cote = (lat) => (lat < 35.95 ? "maroc" : "europe");
@@ -632,7 +632,7 @@ function etaVoyage(hist, maintenant, dest, { zones = [], facteurRoute = 1.3, vit
     if (enMer) { legs.push({ attente: Math.max(0, traverseeH - (maintenant - last[0]) / 3600) + debarquementH }); legs.push({ km: km([arrivee.lat, arrivee.lon], dest) }); }
     else {
       if (!dejaAuPort) legs.push({ km: km(pos, [depart.lat, depart.lon]) });
-      legs.push({ attente: (dejaAuPort ? Math.max(1, attentePortH - 1) : attentePortH) + traverseeH + debarquementH });
+      legs.push({ attente: (dejaAuPort ? (attenteAuPortH ?? Math.max(1, attentePortH - 1)) : attentePortH) + traverseeH + debarquementH }); // attenteAuPortH : attente restante mesurée (prevision.js)
       legs.push({ km: km([arrivee.lat, arrivee.lon], dest) });
     }
   } else legs.push({ km: km(pos, dest) });

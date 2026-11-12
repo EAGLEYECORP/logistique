@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1798,6 +1798,99 @@ test("historique du voyage : étapes, statut, dépenses ajoutées, modifiées, s
   N.S.voyages.push({ id: "v0", statut: "termine", jalons: [{ type: "depart" }] }); assert.strictEqual(N.journaliser(memoire, "x"), 0); N.S.voyages = []; N.journaliser(memoire, "x"); assert.strictEqual(memoire.size, 0);
   // plafond
   const w = { id: "w", statut: "prevu", auditLog: Array.from({ length: 300 }, (_, i) => ({ action: "x", date: String(i) })) }; N.S.voyages = [w]; const m2 = new Map(); N.journaliser(m2, ""); w.statut = "en_cours"; N.journaliser(m2, ""); assert.strictEqual(w.auditLog.length, 300); assert.strictEqual(w.auditLog[299].action, "statut");
+});
+
+/* ---------- D12 : attentes aux ports mesurées et arrivée estimée ---------- */
+const HH = 3600000, T0 = Date.parse("2026-11-09T08:00:00Z"); // lundi 9 novembre 2026, 9 h au Maroc
+const mesure = (portId, i, dureeH, plus = {}) => ({ id: `m${portId}${i}`, portId, voyageId: "x" + i, dureeMs: dureeH * HH, jourSemaine: 1, heureEntree: 9, saison: "haute", avecSPS: false, scanRouge: false, ...plus });
+
+test("attente au port : mesurée de l'étape d'entrée à l'étape de sortie (Tanger Med export, Algeciras, Tanger Med import)", () => {
+  const iso = (h) => new Date(T0 + h * HH).toISOString();
+  const v = { id: "v1", camionId: "c1", statut: "en_cours", tempMin: 2, tempMax: 6, jalons: [{ type: "depart", date: iso(-8) }, { type: "port_tmed", date: iso(0) }, { type: "embarque_aller", date: iso(2.5) }, { type: "debarque_alg", date: iso(5) }], sortiesPort: { alg_entry: iso(11) } };
+  let a = N.attentesVoyage(v);
+  assert.strictEqual(a.length, 2); assert.strictEqual(a[0].id, "v1:tmed_export"); assert.strictEqual(a[0].dureeMs, 2.5 * HH); assert.strictEqual(a[0].heureEntree, 9); assert.strictEqual(a[0].jourSemaine, 1); assert.strictEqual(a[0].saison, "haute"); assert.strictEqual(a[0].avecSPS, false);
+  assert.strictEqual(a[1].portId, "alg_entry"); assert.strictEqual(a[1].dureeMs, 6 * HH); assert.strictEqual(a[1].avecSPS, true, "marchandise sous température dirigée : contrôle sanitaire"); assert.strictEqual(a[1].heureEntree, 14);
+  v.jalons.push({ type: "livre", date: iso(40) }, { type: "debarque_tmed", date: iso(90) }, { type: "douane_import", date: iso(93.5) }); v.scanRouge = { tmed_import: true };
+  a = N.attentesVoyage(v); assert.strictEqual(a.length, 3); assert.strictEqual(a[2].dureeMs, 3.5 * HH); assert.strictEqual(a[2].scanRouge, true);
+  N.S.voyages = [v]; N.S.attentesPort = []; assert.strictEqual(N.majAttentesPort(), true); assert.strictEqual(N.S.attentesPort.length, 3); assert.strictEqual(N.majAttentesPort(), false, "rien de nouveau");
+  v.jalons = v.jalons.filter((j) => j.type !== "douane_import"); assert.strictEqual(N.majAttentesPort(), true); assert.strictEqual(N.S.attentesPort.length, 2, "étape annulée : la mesure disparaît");
+  N.S.voyages = []; N.majAttentesPort(); assert.strictEqual(N.S.attentesPort.length, 2, "voyage supprimé : ses mesures restent");
+  assert.strictEqual(N.attentesVoyage({ id: "v", jalons: [{ type: "port_tmed", date: iso(0) }, { type: "embarque_aller", date: iso(0.01) }] }).length, 0, "moins de 5 minutes : pas une mesure");
+  assert.strictEqual(N.attentesVoyage({ id: "v", jalons: [{ type: "port_tmed", date: iso(0) }, { type: "embarque_aller", date: iso(200) }] }).length, 0, "plus de 5 jours : écarté");
+  assert.strictEqual(N.saisonDe(Date.parse("2026-07-15")), "basse"); assert.strictEqual(N.saisonDe(Date.parse("2026-10-01")), "haute");
+  const s = N.sortiesPortDepuisVisites([{ type: "port_maroc", zone: "Port de Tanger Med", entree: 100, sortie: 200 }, { type: "port_europe", zone: "Port d'Algeciras", entree: 5000, sortie: 9000 }], 20000);
+  assert.strictEqual(s.alg_entry, new Date(9000 * 1000).toISOString()); assert.strictEqual(N.sortiesPortDepuisVisites([{ type: "port_europe", zone: "Port d'Algeciras", entree: 5000, sortie: 9000 }], 9100).alg_entry, undefined, "encore dans le port");
+});
+
+test("attente au port : médiane et centiles, repli progressif quand les mesures manquent, estimation générique", () => {
+  N.S.params.seuilCalibrationAttente = 10; N.S.attentesPort = [];
+  let a = N.attentePort("tmed_export", 9, 1, "haute"); assert.strictEqual(a.source, "estimation_generique"); assert.strictEqual(a.p50, 3 * HH); assert.strictEqual(a.n_samples, 0);
+  assert.strictEqual(N.attentePort("alg_entry", 9, 1, "haute").p50, 1 * HH); assert.strictEqual(N.attentePort("alg_entry", 9, 1, "haute", { avecSPS: true }).p50, 4 * HH);
+  // 10 mesures au même créneau : 1 à 10 h
+  N.S.attentesPort = Array.from({ length: 10 }, (_, i) => mesure("tmed_export", i, i + 1));
+  a = N.attentePort("tmed_export", 9, 1, "haute"); assert.strictEqual(a.source, "operateur_calibre"); assert.strictEqual(a.niveau, "heure_jour_saison"); assert.strictEqual(a.n_samples, 10); proche(a.p50, 5.5 * HH); proche(a.p75, 7.75 * HH); proche(a.p90, 9.1 * HH);
+  assert.strictEqual(N.attentePort("tmed_export", 11, 1, "haute").niveau, "heure_jour_saison", "à ± 2 h"); assert.strictEqual(N.attentePort("tmed_export", 22, 1, "haute").niveau, "port", "autre créneau : tout le port");
+  assert.strictEqual(N.attentePort("tmed_export", 9, 1, "basse").niveau, "heure_jour", "autre saison : on l'ignore"); assert.strictEqual(N.attentePort("tmed_export", 9, 3, "basse").niveau, "heure", "autre jour : on l'ignore aussi");
+  assert.strictEqual(N.attentePort("tmed_export", 14, 3, "basse").niveau, "heure_large", "à ± 6 h"); assert.strictEqual(N.attentePort("tmed_export", 23, 1, "haute").niveau, "heure_jour_saison" === "x" ? "" : "port");
+  assert.strictEqual(N.attentePort("tmed_import", 9, 1, "haute").source, "estimation_generique", "un autre port n'emprunte rien");
+  N.S.attentesPort.pop(); a = N.attentePort("tmed_export", 9, 1, "haute"); assert.strictEqual(a.source, "estimation_generique"); assert.strictEqual(a.n_samples, 9, "9 mesures : pas encore assez");
+  N.S.params.seuilCalibrationAttente = 5; assert.strictEqual(N.attentePort("tmed_export", 9, 1, "haute").source, "operateur_calibre"); N.S.params.seuilCalibrationAttente = 10;
+  // minuit : 23 h et 1 h sont à 2 heures l'une de l'autre
+  N.S.attentesPort = Array.from({ length: 10 }, (_, i) => mesure("tmed_export", i, 2, { heureEntree: 23 })); assert.strictEqual(N.attentePort("tmed_export", 1, 1, "haute").niveau, "heure_jour_saison");
+});
+
+test("attente au port : scanner écarté de la médiane, frais et sec jamais mélangés à Algeciras, valeur saisie prioritaire", () => {
+  N.S.params.seuilCalibrationAttente = 10; delete N.S.params.attentesForcees;
+  N.S.attentesPort = [...Array.from({ length: 10 }, (_, i) => mesure("tmed_export", i, 2)), mesure("tmed_export", 90, 30, { scanRouge: true }), mesure("tmed_export", 91, 30, { scanRouge: true })];
+  let a = N.attentePort("tmed_export", 9, 1, "haute"); assert.strictEqual(a.p50, 2 * HH); assert.strictEqual(a.p75, 2 * HH); assert.strictEqual(a.n_samples, 10); assert.ok(a.p90 > 2 * HH, "le P90 garde la queue des passages au scanner");
+  N.S.attentesPort = [...Array.from({ length: 10 }, (_, i) => mesure("alg_entry", i, 1)), ...Array.from({ length: 10 }, (_, i) => mesure("alg_entry", 100 + i, 9, { avecSPS: true }))];
+  assert.strictEqual(N.attentePort("alg_entry", 9, 1, "haute").p50, 1 * HH); assert.strictEqual(N.attentePort("alg_entry", 9, 1, "haute", { avecSPS: true }).p50, 9 * HH);
+  N.S.attentesPort = N.S.attentesPort.filter((x) => !x.avecSPS); assert.strictEqual(N.attentePort("alg_entry", 9, 1, "haute", { avecSPS: true }).source, "estimation_generique", "aucune mesure « frais » : on n'utilise pas celles du sec");
+  N.S.params.attentesForcees = { alg_entry: { p50_ms: 4 * HH } }; a = N.attentePort("alg_entry", 9, 1, "haute"); assert.strictEqual(a.source, "saisie_manuelle"); assert.strictEqual(a.p50, 4 * HH); delete N.S.params.attentesForcees;
+});
+
+test("arrivée estimée : attentes de l'opérateur, attente réelle au port franchi, fourchette qui se resserre", () => {
+  N.S.params.seuilCalibrationAttente = 10; delete N.S.params.attentesForcees;
+  N.S.attentesPort = [...Array.from({ length: 10 }, (_, i) => mesure("tmed_export", i, 4 + (i === 9 ? 6 : 0))), ...Array.from({ length: 10 }, (_, i) => mesure("alg_entry", i, 2 + (i === 9 ? 3 : 0)))];
+  const pe = N.attentePort("tmed_export", 9, 1, "haute"), pa = N.attentePort("alg_entry", 9, 1, "haute"); assert.strictEqual(pe.p50, 4 * HH); assert.strictEqual(pa.p50, 2 * HH);
+  const iso = (h) => new Date(T0 + h * HH).toISOString(), v = { id: "v1", statut: "en_cours", jalons: [{ type: "depart", date: iso(-6) }] };
+  let a = N.attentesPourEta(v, T0);
+  assert.strictEqual(a.portH, 4); assert.strictEqual(a.auPortH, null); assert.strictEqual(a.debarqH, 2); assert.strictEqual(a.source, "operateur_calibre"); assert.deepStrictEqual([...a.ports.map((p) => p.statut)], ["a_venir", "a_venir"]);
+  const f0 = a.fourchetteMin; proche(f0, Math.round((pe.p90 - pe.p50 + pa.p90 - pa.p50) / 60000));
+  v.jalons.push({ type: "port_tmed", date: iso(0) }); a = N.attentesPourEta(v, T0 + 1 * HH);
+  assert.strictEqual(a.portH, null); assert.strictEqual(a.auPortH, 3, "au port depuis 1 h : il reste la médiane moins le temps passé"); assert.strictEqual(a.ports[0].statut, "en_cours");
+  assert.strictEqual(N.attentesPourEta(v, T0 + 9 * HH).auPortH, 0.25, "médiane dépassée : au moins un quart d'heure");
+  const c = N.attenteEnCours(v, T0 + 1 * HH); assert.strictEqual(c.portId, "tmed_export"); assert.strictEqual(c.depuisMs, HH); assert.strictEqual(c.sortiePrevue, T0 + 4 * HH); assert.ok(/Tanger Med \(export\) depuis 1 h 00 — sortie attendue vers 13:00 \(médiane 4 h 00, 10 mesures\)/.test(c.texte), c.texte);
+  v.jalons.push({ type: "embarque_aller", date: iso(6) }); a = N.attentesPourEta(v, T0 + 6.5 * HH);
+  assert.strictEqual(a.ports[0].statut, "mesure"); assert.strictEqual(a.ports[0].ms, 6 * HH, "attente réelle : 6 h"); assert.strictEqual(a.portH, null); assert.strictEqual(a.auPortH, null); assert.strictEqual(a.debarqH, 2);
+  const f1 = a.fourchetteMin; assert.ok(f1 < f0, "un port franchi : la fourchette se resserre"); proche(f1, Math.round((pa.p90 - pa.p50) / 60000)); assert.strictEqual(N.attenteEnCours(v, T0 + 6.5 * HH), null);
+  v.jalons.push({ type: "debarque_alg", date: iso(8) }); v.sortiesPort = { alg_entry: iso(9.5) }; a = N.attentesPourEta(v, T0 + 10 * HH);
+  assert.strictEqual(a.fourchetteMin, 0); assert.strictEqual(a.source, "mesure"); assert.strictEqual(a.debarqH, null); assert.strictEqual(a.ports[1].ms, 1.5 * HH);
+  v.jalons.push({ type: "livre", date: iso(30) }); a = N.attentesPourEta(v, T0 + 31 * HH); assert.deepStrictEqual([...a.ports.map((p) => p.portId)], ["tmed_import"]); assert.strictEqual(a.source, "estimation_generique"); assert.strictEqual(a.debarqH, 3);
+  N.S.attentesPort = []; assert.strictEqual(N.attentesPourEta({ id: "w", statut: "en_cours", jalons: [] }, T0).source, "estimation_generique");
+});
+
+test("arrivée estimée : le calcul utilise ces attentes ; décalage signalé au-delà du seuil et créneau promis franchi", () => {
+  const now = Math.floor(T0 / 1000), zones = [...N.ZONES_DEFAUT], hist = [[now - 600, 33.60, -7.60, 80], [now, 33.65, -7.55, 80]], dest = [42.70, 2.89]; // Casablanca → Perpignan
+  const base = N.etaVoyage(hist, now, dest, { zones }), generique = N.etaPrevision(hist, now, dest, null, { zones });
+  assert.strictEqual(generique.arrivee, base.arrivee, "sans mesure : même arrivée que le calcul d'origine"); assert.ok(generique.fourchetteMin >= 20); assert.strictEqual(generique.source, "estimation_generique");
+  const long = N.etaPrevision(hist, now, dest, { portH: 7, auPortH: null, debarqH: 5, fourchetteMin: 240, ports: [], source: "operateur_calibre" }, { zones });
+  proche(long.attentesH, base.attentesH + 4 + 4); assert.ok(long.arrivee >= base.arrivee + 8 * 3600 - 1, "8 h d'attente de plus"); assert.strictEqual(long.source, "operateur_calibre");
+  assert.ok(long.fourchetteMin >= 240 + 20); assert.strictEqual(long.max - long.arrivee, long.fourchetteMin * 60); assert.strictEqual(long.arrivee - long.min, long.fourchetteMin * 60);
+  const court = N.etaPrevision(hist, now, dest, { portH: 7, debarqH: 5, fourchetteMin: 30, ports: [] }, { zones }); assert.ok(court.fourchetteMin < long.fourchetteMin);
+  // décalage
+  N.S.params.seuilDecalageETA = 30; const promis = new Date((now + 40 * 3600) * 1000).toISOString(), v = { livraisonPrevue: promis, eta: { arrivee: now + 39 * 3600 } };
+  let d = N.decalageEta(v, now + 39.4 * 3600); assert.strictEqual(d.decalageMin, 24); assert.strictEqual(d.notifier, false); assert.strictEqual(d.franchitCreneau, false); assert.strictEqual(d.retardMin, -36);
+  d = N.decalageEta(v, now + 41 * 3600); assert.strictEqual(d.decalageMin, 120); assert.strictEqual(d.notifier, true); assert.strictEqual(d.franchitCreneau, true); assert.strictEqual(d.retardMin, 60);
+  v.eta.arrivee = now + 41 * 3600; d = N.decalageEta(v, now + 41.2 * 3600); assert.strictEqual(d.franchitCreneau, false, "déjà en retard : pas signalé une deuxième fois"); assert.strictEqual(d.notifier, false);
+  d = N.decalageEta(v, now + 38 * 3600); assert.strictEqual(d.decalageMin, -180); assert.strictEqual(d.notifier, true, "une avance se signale aussi");
+  assert.strictEqual(N.decalageEta({}, now).decalageMin, 0); assert.strictEqual(N.decalageEta({}, now).retardMin, null);
+});
+
+test("attentes aux ports : partagées entre les bureaux par la synchronisation", () => {
+  const base = { attentesPort: [mesure("tmed_export", 1, 2)] }, casa = { attentesPort: [mesure("tmed_export", 1, 2), mesure("tmed_export", 2, 3)] }, francfort = { attentesPort: [mesure("tmed_export", 1, 2), mesure("alg_entry", 3, 5)] };
+  const f = N.fusionnerEtat(base, casa, francfort).etat;
+  assert.deepStrictEqual([...f.attentesPort.map((x) => x.id)].sort(), ["malg_entry3", "mtmed_export1", "mtmed_export2"]);
 });
 
 (async () => {

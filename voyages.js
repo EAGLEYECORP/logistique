@@ -122,9 +122,9 @@ function blocEta(v) {
   if (!e) return destinationDe(v) ? "" : `<p class="hint">Pour estimer l'heure d'arrivée, précisez la destination (ville connue, ou latitude et longitude).</p>`;
   const hm = (t) => new Date(t * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   const d = (t) => new Date(t * 1000).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  return `<div class="section-title">Arrivée estimée</div><div class="trav"><div><strong>${d(e.arrivee)}</strong><span class="sub">entre ${hm(e.min)} et ${hm(e.max)} · ${fmt(e.kmRestants)} km restants · ${e.pauses} pause(s) et ${e.reposJournaliers} repos de 11 h${e.traversee ? " · traversée du détroit comprise" : ""}</span></div>
+  return `<div class="section-title">Arrivée estimée</div><div class="trav"><div><strong>${d(e.arrivee)}</strong><span class="sub">${e.fourchetteMin ? `± ${e.fourchetteMin >= 90 ? fmt(e.fourchetteMin / 60, 1) + " h" : e.fourchetteMin + " min"} · ` : ""}entre ${hm(e.min)} et ${hm(e.max)} · ${fmt(e.kmRestants)} km restants · ${e.pauses} pause(s) et ${e.reposJournaliers} repos de 11 h${e.traversee ? " · traversée du détroit comprise" : ""}</span></div>
     <div class="r">${e.retardMin !== null ? badge(e.retardMin > 30 ? `Retard probable ${Math.round(e.retardMin / 6) / 10} h` : e.retardMin < -30 ? "En avance" : "Dans les temps", e.retardMin > 60 ? "danger" : e.retardMin > 30 ? "warn" : "ok") : ""}</div></div>
-    <p class="hint" style="margin-top:6px">Estimation indicative (distance à vol d'oiseau avec détour, vitesse récente, repos réglementaires).</p>`;
+    <p class="hint" style="margin-top:6px">${e.source === "operateur_calibre" ? "Calée sur vos attentes mesurées aux ports." : e.source === "mesure" ? "Ports franchis : attentes réelles prises en compte." : "Attentes aux ports : estimation générique tant que vos mesures sont trop peu nombreuses."} Distance à vol d'oiseau avec détour, vitesse récente, repos réglementaires.</p>`;
 }
 /** Chaîne du froid : analyse des températures des traces rattachées au voyage. */
 function blocFroid(v) {
@@ -166,7 +166,7 @@ function carteVoyage(v) {
       ${blocTraversee(v, "aller")}${blocTraversee(v, "retour")}
       ${ctl.length ? `<div class="section-title">À régler avant le départ</div><ul class="ctl">${ctl.map((x) => `<li class="${niveauCtl[x.niveau]}">${ic(x.niveau === "danger" ? "alert" : "clock")}<span>${esc(x.texte)}</span></li>`).join("")}</ul>` : v.statut === "prevu" ? `<p class="hint" style="color:var(--ok)">${ic("check")} Aucun point bloquant détecté.</p>` : ""}
       ${interd.length ? `<p class="hint">Départ un ${new Date(dateD + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long" })} : interdictions de circuler possibles (${interd.map((i) => i.pays).join(", ")}) — voir le tableau en bas de page.</p>` : ""}
-      ${blocEta(v)}${blocFroid(v)}${blocPreuve(v)}
+      ${blocEta(v)}${typeof blocAttentesPort === "function" ? blocAttentesPort(v) : ""}${blocFroid(v)}${blocPreuve(v)}
       <div class="fin"><div class="section-title">Coût et marge</div>
       <div class="table-wrap"><table class="plain"><tbody>
         ${v.kmPays && peagesEuropeVoyage(v).manquants.length ? `<tr><td colspan="2" class="sub">Péages d'Europe : tarif au km non renseigné pour ${peagesEuropeVoyage(v).manquants.join(", ")} (Réglages → calculs) — ces pays ne sont pas comptés.</td></tr>` : ""}

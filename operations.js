@@ -77,7 +77,7 @@ function boutonsAlerte(a) {
 const memoireJournal = new Map(); let journalPret = false;
 const auteurJournal = () => (typeof roleLire === "function" && typeof ROLES !== "undefined" ? ROLES[roleLire().role]?.lib || "" : "");
 function journalInitialiser() { if (journalPret) return; journalPret = true; for (const v of S.voyages) memoireJournal.set(v.id, instantaneVoyage(v)); }
-if (typeof sauver === "function") { const sauverSansJournal = sauver; sauver = function () { try { journalInitialiser(); if (typeof majDepenses === "function") majDepenses(); journaliser(memoireJournal, auteurJournal()); } catch (e) { console.warn("Historique :", e); } return sauverSansJournal.apply(this, arguments); }; }
+if (typeof sauver === "function") { const sauverSansJournal = sauver; sauver = function () { try { journalInitialiser(); if (typeof majDepenses === "function") majDepenses(); if (typeof majAttentesPort === "function") majAttentesPort(); journaliser(memoireJournal, auteurJournal()); } catch (e) { console.warn("Historique :", e); } return sauverSansJournal.apply(this, arguments); }; }
 if (typeof afficher === "function") { const afficherSansJournal = afficher; afficher = function () { try { journalInitialiser(); } catch { /* ignoré */ } return afficherSansJournal.apply(this, arguments); }; }
 
 function blocHistorique(v) {
@@ -85,3 +85,37 @@ function blocHistorique(v) {
   return `<details class="historique"><summary class="section-title">Historique · ${l.length}</summary>
     <ul class="histo">${l.slice(0, 60).map((e) => `<li><span class="sub">${dateHeureFr(e.date)}${e.qui ? " · " + esc(e.qui) : ""}</span><strong>${esc(LIB_AUDIT[e.action] || e.action)}</strong> ${e.avant && e.apres ? `${esc(e.avant)} → ${esc(e.apres)}` : esc(e.apres || e.avant || e.detail || "")}</li>`).join("")}</ul></details>`;
 }
+
+/* ---------- attentes aux ports : fiche du voyage et réglages ---------- */
+function blocAttentesPort(v) {
+  if (v.statut === "annule") return "";
+  const lignes = PORTS_ATTENTE.map(([portId, lib]) => { const p = passagePort(v, portId); return { portId, lib, ...p }; }).filter((p) => p.entree !== null);
+  if (!lignes.length) return "";
+  const enCours = attenteEnCours(v);
+  return `<div class="section-title">Attentes aux ports</div>${lignes.map((p) => `<div class="trav"><div><strong>${esc(p.lib)}</strong><span class="sub">${p.sortie !== null ? `${dureeTexte(p.sortie - p.entree)} d'attente · entré le ${dateHeureFr(new Date(p.entree).toISOString())}${v.scanRouge?.[p.portId] ? " · passage au scanner (hors médiane)" : ""}` : enCours?.portId === p.portId ? esc(enCours.texte.replace(p.lib + " ", "")) : "sortie non enregistrée"}</span></div>
+    <div class="r">${p.sortie === null && p.portId === "alg_entry" ? btn("sortie-alg", "Sorti du port", { id: v.id, cls: "btn sm" }) : ""}${p.sortie !== null ? btn("scan-rouge", v.scanRouge?.[p.portId] ? "Compter normalement" : "Passage au scanner", { id: `${v.id}|${p.portId}`, cls: "btn ghost sm", titre: "Un passage au scanner est une attente exceptionnelle : il n'entre pas dans la médiane" }) : ""}</div></div>`).join("")}`;
+}
+const agirVoyagesAvantAttentes = VUES.voyages.agir;
+VUES.voyages.agir = async function (act, id, b) {
+  if (act === "sortie-alg") { const v = parId(S.voyages, id); if (!v) return; (v.sortiesPort ||= {}).alg_entry = new Date().toISOString(); voyagesOuverts.add(v.id); sauver(); toast("Sortie du port d'Algeciras enregistrée"); return rafraichir(); }
+  if (act === "scan-rouge") { const [vid, portId] = id.split("|"), v = parId(S.voyages, vid); if (!v) return; v.scanRouge ||= {}; if (v.scanRouge[portId]) delete v.scanRouge[portId]; else v.scanRouge[portId] = true; voyagesOuverts.add(v.id); sauver(); return rafraichir(); }
+  return agirVoyagesAvantAttentes.call(this, act, id, b);
+};
+enregistrerCarteReglages({
+  onglet: "general", ordre: 13,
+  rendu() {
+    const seuil = num(S.params.seuilCalibrationAttente, 10);
+    return `<div class="card" id="carte-attentes"><div class="card-head"><h2>Attentes aux ports</h2>${badge(`${(S.attentesPort || []).length} mesure(s)`, "neutral")}</div>
+      <form id="f-attentes">${PORTS_ATTENTE.map(([id, lib]) => { const a = attentePort(id), n = (S.attentesPort || []).filter((x) => x.portId === id && !x.scanRouge).length, f = S.params.attentesForcees?.[id];
+        return `<div class="trav"><div><strong>${esc(lib)}</strong><span class="sub">${a.source === "operateur_calibre" ? `médiane mesurée ${dureeTexte(a.p50)} · 9 fois sur 10 moins de ${dureeTexte(a.p90)} · ${n} mesures` : a.source === "saisie_manuelle" ? `valeur saisie ${dureeTexte(a.p50)} · ${n} mesure(s) par ailleurs` : `estimation ${dureeTexte(a.p50)} · ${n} mesure(s) sur ${seuil} nécessaires`}</span></div>
+          <div class="r"><label class="f" style="margin:0">Imposer (heures)<input type="number" min="0" step="any" inputmode="decimal" name="force_${id}" value="${f ? esc(String(Math.round((f.p50_ms / 3600000) * 100) / 100)) : ""}" placeholder="—" style="width:7em"></label></div></div>`; }).join("")}
+        <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn">Enregistrer</button></div></form>
+      <p class="hint">Chaque passage est mesuré de l'entrée à la sortie du port d'après les étapes du voyage (posées par le GPS). L'arrivée estimée utilise vos mesures dès qu'elles sont assez nombreuses ; une valeur imposée passe avant tout. À Algeciras, marchandises fraîches et autres sont mesurées séparément.</p></div>`;
+  },
+  soumettre(fid, v) {
+    if (fid !== "f-attentes") return false;
+    const f = {}; for (const [id] of PORTS_ATTENTE) if (v[`force_${id}`] !== "" && num(v[`force_${id}`]) > 0) f[id] = { p50_ms: num(v[`force_${id}`]) * 3600000, source: "saisie_manuelle" };
+    if (Object.keys(f).length) S.params.attentesForcees = f; else delete S.params.attentesForcees;
+    sauver(); toast("Attentes aux ports enregistrées"); rafraichir(); return true;
+  },
+});

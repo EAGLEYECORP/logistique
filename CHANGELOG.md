@@ -52,6 +52,14 @@
 - Chaque dépense se modifie, porte la photo de son reçu, et tout changement d'un voyage (étape, statut, prix, dates, dépense) est consigné dans son **historique** avec l'auteur, l'avant et l'après.
 - La recherche (⌘K) trouve aussi les voyages, les dépenses et les échéances. Non fait : recherche dans le texte des photos (elle exigerait un service payant).
 
+### D12 — Arrivée estimée calée sur vos attentes réelles aux ports
+- Chaque passage à **Tanger Med (export)**, **Algeciras (entrée)** et **Tanger Med (import)** est mesuré de l'entrée à la sortie, d'après les étapes posées par le GPS (ou saisies). Les mesures sont partagées entre les bureaux par la synchronisation.
+- **Attente attendue** par port, heure, jour et saison : médiane, P75, P90, avec repli progressif tant que les mesures manquent, puis estimation générique. Passages au scanner hors médiane ; à Algeciras, marchandises fraîches et autres jamais mélangées ; une valeur imposée passe avant tout.
+- L'**arrivée estimée** utilise ces attentes, prend l'attente réelle dès qu'un port est franchi, et affiche sa **fourchette**, qui se resserre à chaque port. La carte du camion dit « au port depuis…, sortie attendue vers… ».
+- Un décalage de plus de 30 minutes (réglable) est signalé ; un créneau promis qui ne sera plus tenu l'est en urgence.
+- **Lien client** : même moteur côté relais, fourchette et mention « calée sur les attentes mesurées » ou « estimation », en quatre langues.
+- Non fait : arrivée estimée d'un voyage seulement prévu (sans position GPS) ; message « retard probable » envoyé automatiquement au client (il viendra avec les notifications par étape).
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

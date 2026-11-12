@@ -7,7 +7,7 @@ const path = require("path");
 
 function charger(racine = path.join(__dirname, "..")) {
   const ctx = vm.createContext({ console, Math, Date, Set, Number, String, JSON, Uint8Array, TextEncoder, TextDecoder, setTimeout, clearTimeout });
-  try { for (const f of ["data.js", "noyau.js", "adm.js", "gps.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f }); }
+  try { for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "prevision.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f }); }
   catch (e) { return { disponible: false, erreur: e.message, appeler: () => null }; }
   return {
     disponible: true,

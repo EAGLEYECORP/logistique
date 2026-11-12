@@ -24,7 +24,7 @@ function carteCalculs() {
     <div class="card-head"><h2>Calculs</h2></div>
     <form id="f-params">
       <div class="section-title" style="margin-top:0">Coûts</div>
-      ${champs([n("prixGasoil", "Prix du gasoil (MAD/L)"), n("consoDefaut", "Consommation par défaut (L/100 km)"), n("vitesseMoyenne", "Vitesse moyenne (km/h)"), n("seuilConso", "Alerte conso au-dessus de la moyenne (%)"), n("seuilAnomalie", "Anomalie : écart sur 7 jours par rapport à la référence du camion (%)")])}
+      ${champs([n("prixGasoil", "Prix du gasoil (MAD/L)"), n("consoDefaut", "Consommation par défaut (L/100 km)"), n("vitesseMoyenne", "Vitesse moyenne (km/h)"), n("seuilConso", "Alerte conso au-dessus de la moyenne (%)"), n("seuilAnomalie", "Anomalie : écart sur 7 jours par rapport à la référence du camion (%)"), n("seuilCalibrationAttente", "Attentes aux ports : mesures nécessaires avant de s'y fier"), n("seuilDecalageETA", "Arrivée estimée : décalage signalé au-delà de (minutes)")])}
       <div class="section-title">Facturation</div>
       ${champs([n("tauxEUR", "Taux de change (MAD pour 1 €)"), n("tvaDefaut", "TVA par défaut (%)"), n("delaiPaiement", "Délai de paiement par défaut (jours)")])}
       <div class="section-title">Entretien et papiers</div>

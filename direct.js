@@ -105,7 +105,7 @@ function etaDuVoyage(v) {
   const cam = parId(S.camions, v.camionId), dest = destinationDe(v);
   const hist = cam?.balise && directDonnees.hist.get(cam.balise.trim());
   if (!hist?.length || !dest) return null;
-  const e = etaVoyage(hist, maintenantS(), dest, { zones: zonesActives() });
+  const e = etaPrevision(hist, maintenantS(), dest, attentesPourEta(v, maintenantS() * 1000), { zones: zonesActives() });
   return e && { ...e, retardMin: etaRetardMin(e, v.livraisonPrevue) };
 }
 /** Pour chaque balise : état, alertes, voyage. */
@@ -148,6 +148,15 @@ function directMajVoyages(flotte) {
     const depuis = f.voyage.dateDepart ? Math.floor(new Date(f.voyage.dateDepart + "T00:00:00").getTime() / 1000) : 0;
     const an = gpsAnalyser(f.hist.filter((p) => p[0] >= depuis), zonesActives());
     const nouveaux = an.jalons.filter((j) => j.type !== "depart" && j.type !== "retour" && !(f.voyage.jalons || []).some((x) => x.type === j.type));
+    const sorties = sortiesPortDepuisVisites(an.visites, an.fin || 0);
+    if (sorties.alg_entry && !f.voyage.sortiesPort?.alg_entry && (f.voyage.jalons || []).some((x) => x.type === "debarque_alg") && Date.parse(sorties.alg_entry) >= Date.parse(f.voyage.jalons.find((x) => x.type === "debarque_alg").date)) { (f.voyage.sortiesPort ||= {}).alg_entry = sorties.alg_entry; change = true; }
+    if (f.eta) { // arrivée retenue : ne bouge (et ne se synchronise) que si le changement dépasse le seuil
+      const d = decalageEta(f.voyage, f.eta.arrivee);
+      if (!f.voyage.eta || d.notifier || d.franchitCreneau) {
+        if (f.voyage.eta && (d.notifier || d.franchitCreneau)) f.alertes.push({ niveau: d.franchitCreneau ? "danger" : "warn", cle: `eta:${f.voyage.id}:${Math.round(f.eta.arrivee / 900)}`, texte: `${f.nom} — arrivée estimée ${d.decalageMin > 0 ? "retardée" : "avancée"} de ${dureeTexte(Math.abs(d.decalageMin) * 60000)}${d.franchitCreneau ? " : le créneau promis au client ne sera pas tenu" : ""} (voyage ${f.voyage.ref || ""})` });
+        f.voyage.eta = { arrivee: f.eta.arrivee, fourchetteMin: f.eta.fourchetteMin, source: f.eta.source, maj: new Date().toISOString() }; change = true;
+      }
+    }
     if (!nouveaux.length) continue;
     (f.voyage.jalons ||= []).push(...nouveaux.map((j) => ({ type: j.type, date: j.date, source: "gps" })));
     for (const tr of an.traversees) { const x = (f.voyage.traversees || []).find((z) => z.sens === tr.sens); if (x && x.statut !== "effectuee") { const iso = gpsIso(tr.embarque); x.date = x.date || iso.slice(0, 10); x.heure = x.heure || iso.slice(11, 16); x.statut = "effectuee"; } }

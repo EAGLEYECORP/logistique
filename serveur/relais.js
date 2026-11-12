@@ -120,6 +120,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
     if (b.statut !== undefined) { o.statut = b.statut === "livre" ? "livre" : "actif"; if (o.statut === "livre" && !o.livreLe) o.livreLe = Math.floor(Date.now() / 1000); if (o.statut === "actif") delete o.livreLe; }
     if (Array.isArray(b.etapes)) o.etapes = b.etapes.slice(0, 20).map((e) => ({ libelle: textes(e.libelle, 80), date: Number.isFinite(Date.parse(e.date)) ? new Date(e.date).toISOString() : "" })).filter((e) => e.libelle);
     if (Array.isArray(b.zones)) o.zones = b.zones.slice(0, 40).map((z) => ({ id: textes(z.id, 40), nom: textes(z.nom, 80), type: textes(z.type, 20), lat: nombre(z.lat), lon: nombre(z.lon), rayon: nombre(z.rayon) })).filter((z) => z.lat !== null && z.lon !== null && z.rayon);
+    if (b.attentes !== undefined) { const a = b.attentes || {}, h = (x) => (x === null || x === undefined || !Number.isFinite(Number(x)) ? null : Math.max(0, Math.min(120, Number(x)))); o.attentes = { portH: h(a.portH), auPortH: h(a.auPortH), debarqH: h(a.debarqH), fourchetteMin: h(a.fourchetteMin / 60) === null ? 0 : Math.round(h(a.fourchetteMin / 60) * 60), source: ["operateur_calibre", "mesure", "saisie_manuelle"].includes(a.source) ? a.source : "estimation_generique" }; }
     if (b.jours !== undefined || !o.expire) o.expire = Math.floor(Date.now() / 1000) + Math.max(1, Math.min(120, Number(b.jours) || 14)) * 86400;
     return o;
   }
@@ -135,7 +136,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
     out.maj = last[0];
     if (moteur.disponible) {
       out.etat = moteur.appeler("directEtat", h, maintenant, zones).code;
-      if (dest) { const e = moteur.appeler("etaVoyage", h, maintenant, dest, { zones }); if (e) { out.eta = { arrivee: e.arrivee, min: e.min, max: e.max }; out.retardMin = p.livraisonPrevue ? moteur.appeler("etaRetardMin", e, p.livraisonPrevue) : null; } }
+      if (dest) { const e = moteur.appeler("etaPrevision", h, maintenant, dest, p.attentes || null, { zones }); if (e) { out.eta = { arrivee: e.arrivee, min: e.min, max: e.max, fourchetteMin: e.fourchetteMin, source: e.source }; out.retardMin = p.livraisonPrevue ? moteur.appeler("etaRetardMin", e, p.livraisonPrevue) : null; } }
     } else out.etat = maintenant - last[0] > 1800 ? "hors_ligne" : (last[3] ?? 0) >= 5 ? "en_route" : "arret";
     if (orig && dest) { const dist = (a, b) => { const r = Math.PI / 180, x = Math.sin(((b[0] - a[0]) * r) / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(((b[1] - a[1]) * r) / 2) ** 2; return 12742 * Math.asin(Math.sqrt(x)); }; const d1 = dist(orig, [last[1], last[2]]), d2 = dist([last[1], last[2]], dest); out.progression = d1 + d2 > 0 ? Math.max(0, Math.min(100, Math.round((100 * d1) / (d1 + d2)))) : null; }
     const dec = p.precision === "exacte" ? 1e4 : 10;

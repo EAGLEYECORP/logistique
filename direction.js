@@ -162,7 +162,7 @@ const listeAnomalies = (l) => `<ul class="ctl">${l.map((x) => `<li class="${x.ni
 function blocAnomalies() {
   const a = anomalies(); if (!a.length) return "";
   return `<div class="section-title">Anomalies · ${a.length}</div><div class="card" id="bloc-anomalies">${listeAnomalies(a)}
-    <p class="hint">Chaque camion est comparé à sa propre moyenne des 90 jours précédents, recalculée chaque semaine. Seuil réglable : Réglages → calculs.</p></div>`;
+    <p class="hint">Chaque camion est comparé à sa propre moyenne des 90 jours précédents, recalculée chaque semaine. Seuil réglable : Réglages → Général.</p></div>`;
 }
 
 /* ---------- accueil du chef d'entreprise (profil Direction) ---------- */

@@ -87,6 +87,8 @@ function appliquerTraceAuVoyage(t, v) {
   let n = 0;
   v.jalons ||= [];
   for (const j of t.jalons) if (!v.jalons.some((x) => x.type === j.type)) { v.jalons.push({ type: j.type, date: j.date, source: "gps" }); n++; }
+  const sorties = sortiesPortDepuisVisites(t.visites, t.fin || 0);
+  if (sorties.alg_entry && !v.sortiesPort?.alg_entry) { (v.sortiesPort ||= {}).alg_entry = sorties.alg_entry; n++; }
   for (const tr of t.traversees) {
     const x = (v.traversees || []).find((z) => z.sens === tr.sens);
     if (x) { const iso = gpsIso(tr.embarque); x.date = x.date || iso.slice(0, 10); x.heure = x.heure || iso.slice(11, 16); x.statut = "effectuee"; }

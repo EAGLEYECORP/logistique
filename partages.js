@@ -26,7 +26,7 @@ function corpsPartage(v, options = {}) {
   const etapes = (v.jalons || []).filter((j) => ETAPES_CLIENT[j.type]).map((j) => ({ libelle: ETAPES_CLIENT[j.type], date: j.date }));
   const livre = (v.jalons || []).some((j) => j.type === "livre");
   return { ...options, balise: cam?.balise?.trim() || "", origine: v.origine, destination: v.destination, destLat: dest?.[0] ?? null, destLon: dest?.[1] ?? null, origLat: orig?.[0] ?? null, origLon: orig?.[1] ?? null,
-    livraisonPrevue: v.livraisonPrevue || "", etapes, statut: livre ? "livre" : "actif", zones: zonesActives().filter((z) => ["port_maroc", "port_europe", "frontiere", "douane"].includes(z.type)).map(({ id, nom, type, lat, lon, rayon }) => ({ id, nom, type, lat, lon, rayon })) };
+    livraisonPrevue: v.livraisonPrevue || "", etapes, attentes: (({ portH, auPortH, debarqH, fourchetteMin, source }) => ({ portH, auPortH, debarqH, fourchetteMin, source }))(attentesPourEta(v)), statut: livre ? "livre" : "actif", zones: zonesActives().filter((z) => ["port_maroc", "port_europe", "frontiere", "douane"].includes(z.type)).map(({ id, nom, type, lat, lon, rayon }) => ({ id, nom, type, lat, lon, rayon })) };
 }
 const lienClient = (v) => { const r = partageRelais(); return r && v.partage ? `${r.base}${v.partage.chemin}${v.partage.langue && v.partage.langue !== "fr" ? `?lang=${v.partage.langue}` : ""}` : ""; };
 let partageDerniereSync = 0;

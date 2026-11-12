@@ -1,6 +1,6 @@
 {
   "name": "logistique-fret",
-  "version": "4.0.0-alpha.3",
+  "version": "4.0.0-alpha.4",
   "private": true,
   "description": "Application hors ligne de gestion pour transporteurs routiers : commandes, flotte, chauffeurs, douane, facturation.",
   "scripts": {

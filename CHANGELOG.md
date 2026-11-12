@@ -60,6 +60,14 @@
 - **Lien client** : même moteur côté relais, fourchette et mention « calée sur les attentes mesurées » ou « estimation », en quatre langues.
 - Non fait : arrivée estimée d'un voyage seulement prévu (sans position GPS) ; message « retard probable » envoyé automatiquement au client (il viendra avec les notifications par étape).
 
+### D11 — Notifications par étape
+- **Routage par étape** (11 étapes) : qui est prévenu (exploitation Maroc et Allemagne, direction, commercial, comptabilité, transitaire, client, chauffeur), par quel canal (fil de l'application, ntfy, e-mail, WhatsApp, canaux du relais), automatiquement ou par le bouton **« Notifier »** de chaque étape, avec le texte modifiable avant l'envoi.
+- **Messages en français, anglais, espagnol et arabe**, choisis selon la langue de chaque destinataire ; éditeur avec aperçu en direct.
+- **Rappels programmés** : veille du départ à 18 h, présentation au port, embarquement, livraison (chauffeur), facture à émettre 24 h après la livraison. Ils suivent le voyage (un départ décalé décale ses rappels) et partent du relais à l'heure, **même application fermée** ; panneau « Notifications » pour les annuler ou les reporter.
+- **Client** : prévenu seulement s'il l'a accepté (fiche client : accord, canal préféré, langue). WhatsApp avec repli sur l'e-mail.
+- **Relais 1.6.0** : plan exécuté chaque minute et conservé après redémarrage, envoi d'e-mails par SMTP sans dépendance, serveurs ntfy autorisés, doublons entre bureaux écartés. Sans relais : ntfy part de l'application, WhatsApp, e-mail et SMS s'ouvrent prêts à envoyer.
+- Schéma 8 (migration sans perte). Non fait : pièces jointes PDF (le message contient le lien de suivi) ; réglage SMTP depuis l'application (le relais ne lit pas les données synchronisées : il se règle par ses variables).
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

@@ -30,8 +30,8 @@ const PARAMS_DEFAUT = {
   rappelSauvegarde: 7,     // jours sans sauvegarde avant rappel
 };
 
-/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones · 6 = + gares de péage et relevés Jawaz · 7 = + lignes de coût des voyages, charges fixes détaillées, charges générales, échéances. */
-const VERSION_SCHEMA = 7;
+/** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones · 6 = + gares de péage et relevés Jawaz · 7 = + lignes de coût des voyages, charges fixes détaillées, charges générales, échéances · 8 = + notifications par étape (routage, fil de l'application, rappels annulés ou reportés). */
+const VERSION_SCHEMA = 8;
 const COLLECTIONS = ["camions", "pleins", "interventions", "chauffeurs", "trajets", "dossiers", "codes", "clients", "commandes", "factures", "voyages", "autorisations", "traces"];
 
 // Documents suivis avec date d'expiration (transport national et international).
@@ -63,7 +63,7 @@ const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "P
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [], depensesAttente: [], attentesPort: [],
+    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [], depensesAttente: [], attentesPort: [], routageJalons: [], notificationsApp: [], notifsEtat: { annulees: {}, reports: {} },
     params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }
@@ -102,6 +102,10 @@ function migrer(brut) {
   if (depuis < 7) { // les anciens champs de coût restent en place : ils sont projetés en lignes à la lecture (lignesVoyage)
     e.chargesGenerales = Array.isArray(e.chargesGenerales) ? e.chargesGenerales : []; e.echeances = Array.isArray(e.echeances) ? e.echeances : []; e.depensesAttente = Array.isArray(e.depensesAttente) ? e.depensesAttente : [];
     e.voyages.forEach((v) => { v.lignesCout = Array.isArray(v.lignesCout) ? v.lignesCout : []; });
+  }
+  if (depuis < 8) { // routage vide = routage par défaut (jalons_notifications.js) : seules les étapes modifiées sont enregistrées
+    e.routageJalons = Array.isArray(e.routageJalons) ? e.routageJalons : []; e.notificationsApp = Array.isArray(e.notificationsApp) ? e.notificationsApp : [];
+    e.notifsEtat = e.notifsEtat && typeof e.notifsEtat === "object" ? { annulees: e.notifsEtat.annulees || {}, reports: e.notifsEtat.reports || {} } : { annulees: {}, reports: {} };
   }
   e.meta.version = VERSION_SCHEMA;
   return { etat: e, depuis, migre: depuis < VERSION_SCHEMA };

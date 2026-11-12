@@ -106,6 +106,30 @@ Le relais transmet chaque alerte de l'application (`POST /api/alertes`, jeton de
 
 Une même alerte (même clé) n'est transmise qu'une fois par 6 heures ; 60 alertes par heure au plus ; un canal en échec n'empêche pas les autres.
 
+## Notifications par étape et rappels programmés
+
+L'application rédige les messages (dans la langue de chaque destinataire) et les confie au relais, qui les envoie **à l'heure, même application fermée**. Le relais ne lit jamais vos voyages : il ne reçoit que l'heure, le canal, le destinataire et le texte.
+
+| Variable | Rôle |
+|---|---|
+| `NTFY_HOTES` | Serveurs ntfy autorisés pour les sujets choisis dans l'application (par défaut `ntfy.sh` ; celui de `NTFY_URL` est ajouté). |
+| `SMTP_HOTE`, `SMTP_PORT`, `SMTP_SECURITE` | Serveur d'envoi d'e-mails. Sécurité : `tls` (port 465), `starttls` (port 587, par défaut). |
+| `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE`, `SMTP_DE` | Identifiants et adresse d'expédition. Gratuit : la boîte de l'entreprise, ou Gmail avec un **mot de passe d'application** (environ 500 messages par jour). |
+
+WhatsApp vers un client utilise le compte WhatsApp Cloud déjà décrit plus haut (`WHATSAPP_TOKEN`…) ; s'il échoue ou n'est pas configuré, le message part par e-mail si le client en a un. Sans compte WhatsApp, l'application ouvre le message prêt à envoyer depuis votre téléphone. **Le client n'est jamais prévenu sans son accord** (case à cocher sur sa fiche).
+
+Routes (jeton de lecture) :
+
+| Route | Rôle |
+|---|---|
+| `PUT /api/notifications/plan` | Remplace les messages à venir. Ce qui est déjà parti ou annulé le reste : renvoyer le plan ne renvoie rien. |
+| `GET /api/notifications/scheduler?debut=&fin=` | Messages programmés et leur état (`a_venir`, `envoye`, `erreur`, `annule`, `perime`). |
+| `DELETE /api/notifications/scheduler/<id>` | Annule un message. |
+| `POST /api/notifications/manuelle` | Envoie tout de suite (bouton « Notifier »). Un même message envoyé par deux appareils dans les 6 h ne part qu'une fois. |
+| `POST /api/notifications/test` | Essaie chaque canal configuré et dit ce qui est arrivé. |
+
+Le plan est enregistré dans `donnees/scheduler.json` ; il survit à un redémarrage. Un message en retard de plus de 6 h (relais arrêté) n'est plus envoyé. 300 messages par heure au plus.
+
 ## Alertes sur le téléphone du bureau
 
 Suivi en direct → Réglages de la source → « Alertes sur le téléphone du bureau » : adresse d'un sujet [ntfy](https://ntfy.sh) (`https://ntfy.sh/<sujet-long-et-secret>`). Installez l'application ntfy sur le téléphone du bureau et abonnez-vous au sujet. Chaque nouvelle alerte du suivi (signal perdu, conduite continue, température, retard…) y est envoyée. Le sujet fait office de mot de passe : choisissez un nom long et imprévisible, ou hébergez votre propre serveur ntfy.

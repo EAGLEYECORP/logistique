@@ -10,9 +10,10 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { charger } = require("./moteur.js");
+const { envoyerCourriel, adresseValide, motEntete } = require("./courriel.js");
 const { page } = require("./page-client.js");
 
-const VERSION = "1.5.0";
+const VERSION = "1.6.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -34,7 +35,7 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null, ...(temp !== null ? { temp } : {}) };
 }
 
-function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048 } = {}) {
+function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel } = {}) {
   if (!jetonEcriture || !jetonLecture) throw new Error("JETON_ECRITURE et JETON_LECTURE sont obligatoires.");
   const historique = new Map(); // id -> [positions triées]
   const noms = new Map();
@@ -104,6 +105,66 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
     }
     if (canaux.webhook?.url) await poste("webhook", canaux.webhook.url, { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texte, niveau, cle, t: Math.floor(Date.now() / 1000) }) });
     return { envoyes, erreurs };
+  }
+  /* ---------- notifications par étape : messages rédigés par l'application, envoyés à l'heure par le relais ---------- */
+  // Le relais ne lit pas les voyages : il reçoit le plan (heure, canal, destinataire, texte) et l'exécute, même application fermée.
+  const hotesNtfy = new Set([...ntfyHotes, ...(canaux.ntfy?.url ? [(() => { try { return new URL(canaux.ntfy.url).hostname; } catch { return ""; } })()] : [])].filter(Boolean));
+  let planif = { messages: [], etats: {} };
+  const fichierPlanif = () => path.join(dossier, "scheduler.json");
+  if (dossier) { try { const p = JSON.parse(fs.readFileSync(fichierPlanif(), "utf8")); planif = { messages: Array.isArray(p.messages) ? p.messages : [], etats: p.etats || {} }; } catch { /* aucun plan */ } }
+  const sauverPlanif = () => {
+    const limite = Date.now() - 30 * 86400000; for (const [k, e] of Object.entries(planif.etats)) if (e.t < limite) delete planif.etats[k]; // états gardés 30 jours
+    if (dossier) { try { fs.writeFileSync(fichierPlanif(), JSON.stringify(planif), { mode: 0o600 }); } catch { /* garde en mémoire */ } }
+  };
+  const canauxNotif = () => [...(Object.keys(canaux).length ? ["equipe"] : []), "ntfy", ...(canaux.whatsapp ? ["whatsapp"] : []), ...(smtp ? ["email"] : [])];
+  /** Message accepté depuis l'application (tout le reste est refusé) : renvoie le message nettoyé ou une raison. */
+  function validerNotif(m) {
+    if (!m || typeof m !== "object") return { refus: "message illisible" };
+    const id = String(m.id ?? "").slice(0, 160), canal = String(m.canal ?? ""), destination = String(m.destination ?? "").trim(), texte = String(m.texte ?? "").slice(0, 2000).trim(), quand = Number(m.quand);
+    if (!id || !texte) return { refus: "identifiant et texte obligatoires" };
+    if (!["equipe", "ntfy", "whatsapp", "email"].includes(canal)) return { refus: `canal ${canal || "?"} non géré par le relais` };
+    if (canal === "ntfy") { let u; try { u = new URL(destination); } catch { return { refus: "sujet ntfy invalide" }; } if (u.protocol !== "https:" || !hotesNtfy.has(u.hostname) || !/^\/[A-Za-z0-9_-]{6,64}$/.test(u.pathname)) return { refus: `serveur ntfy non autorisé (${u.hostname}) : ajoutez-le à NTFY_HOTES` }; }
+    if (canal === "whatsapp" && !/^\d{8,15}$/.test(destination)) return { refus: "numéro WhatsApp invalide" };
+    if (canal === "email" && !adresseValide(destination)) return { refus: "adresse e-mail invalide" };
+    const r = { id, canal, destination: canal === "equipe" ? "" : destination, texte, sujet: String(m.sujet ?? "").slice(0, 200).replace(/[\r\n]+/g, " "), cle: String(m.cle ?? id).slice(0, 200), quand: Number.isFinite(quand) ? quand : Date.now(), voyageId: String(m.voyageId ?? "").slice(0, 60), niveau: m.niveau === "danger" ? "danger" : "warn" };
+    if (m.repli && m.repli.canal === "email" && adresseValide(String(m.repli.destination ?? ""))) r.repli = { canal: "email", destination: String(m.repli.destination).trim() };
+    return { message: r };
+  }
+  async function envoyerNotif(m) {
+    const envoyes = [], erreurs = [];
+    const poste = async (nom, url, opts) => { try { const r = await http_(url, { method: "POST", ...opts }); if (r.ok) envoyes.push(nom); else erreurs.push(`${nom} : réponse ${r.status}`); } catch (e) { erreurs.push(`${nom} : ${e.message}${e.cause?.code ? " (" + e.cause.code + ")" : ""}`); } };
+    const parCourriel = async (a) => { if (!smtp) { erreurs.push("email : aucun serveur SMTP configuré sur le relais"); return; } try { await courriel_(smtp, { a, sujet: m.sujet || "Logistique Fret", texte: m.texte }); envoyes.push(`email:${a}`); } catch (e) { erreurs.push(`email:${a} : ${e.message}`); } };
+    if (m.canal === "equipe") { const r = await diffuserAlerte({ texte: m.texte, niveau: m.niveau, cle: m.cle }); envoyes.push(...r.envoyes); erreurs.push(...r.erreurs); }
+    else if (m.canal === "ntfy") await poste("ntfy", m.destination, { body: m.texte, headers: { Title: motEntete(m.sujet || "Logistique Fret"), Tags: "truck" } });
+    else if (m.canal === "email") await parCourriel(m.destination);
+    else if (m.canal === "whatsapp") {
+      const avant = envoyes.length;
+      if (!canaux.whatsapp?.token) erreurs.push("whatsapp : non configuré sur le relais");
+      else {
+        const c = canaux.whatsapp, corps = c.modele ? { messaging_product: "whatsapp", to: m.destination, type: "template", template: { name: c.modele, language: { code: c.langue || "fr" }, components: [{ type: "body", parameters: [{ type: "text", text: m.texte.slice(0, 900) }] }] } } : { messaging_product: "whatsapp", to: m.destination, type: "text", text: { body: m.texte.slice(0, 3800) } };
+        await poste(`whatsapp:${m.destination}`, `${c.api || "https://graph.facebook.com/v20.0"}/${c.phoneId}/messages`, { headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" }, body: JSON.stringify(corps) });
+      }
+      if (envoyes.length === avant && m.repli) await parCourriel(m.repli.destination); // repli sur l'e-mail si WhatsApp échoue ou n'est pas configuré
+    }
+    return { envoyes, erreurs };
+  }
+  let notifHeure = { h: 0, n: 0 }; const notifsVues = new Map();
+  const quotaNotif = (maintenant) => { const h = Math.floor(maintenant / 3600000); if (notifHeure.h !== h) notifHeure = { h, n: 0 }; return notifHeure.n++ < 300; };
+  let tickEnCours = false;
+  /** Envoie les messages programmés arrivés à échéance. Un message en retard de plus de 6 h n'est plus envoyé (« périmé »). */
+  async function tick(maintenant = Date.now()) {
+    if (tickEnCours) return []; tickEnCours = true; const faits = [];
+    try {
+      for (const m of planif.messages) {
+        if (planif.etats[m.id] || m.quand > maintenant) continue;
+        if (maintenant - m.quand > 6 * 3600000) { planif.etats[m.id] = { statut: "perime", t: maintenant }; faits.push({ id: m.id, statut: "perime" }); continue; }
+        if (!quotaNotif(maintenant)) break;
+        const r = await envoyerNotif(m), statut = r.envoyes.length ? "envoye" : "erreur";
+        planif.etats[m.id] = { statut, t: maintenant, envoyes: r.envoyes, erreurs: r.erreurs.slice(0, 5) }; faits.push({ id: m.id, statut, ...r });
+      }
+      if (faits.length) sauverPlanif();
+    } finally { tickEnCours = false; }
+    return faits;
   }
   const nombre = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
   const textes = (v, max = 120) => String(v ?? "").slice(0, max).trim();
@@ -268,12 +329,53 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           alertesVues.set(cle, maintenant); alertesHeure.n++; if (alertesVues.size > 500) for (const [k, t] of alertesVues) if (t < maintenant - 6 * 3600000) alertesVues.delete(k);
           return json(res, 200, { ok: true, ...(await diffuserAlerte({ texte, niveau, cle })) });
         }
-        if (p === "/api/etat") return json(res, 200, { version: VERSION, appareils: historique.size, positions: total, retentionJours, partages: partages.size, moteur: moteur.disponible, canaux: Object.keys(canaux), synchro: synchro.version, maintenant: Math.floor(Date.now() / 1000) });
+        const mpn = p.match(/^\/api\/notifications\/(plan|scheduler|manuelle|test)(?:\/(.+))?$/);
+        if (mpn) {
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          const [, quoi, idn] = mpn, maintenant = Date.now();
+          if (quoi === "plan" && req.method === "PUT") { // remplace les messages à venir ; ce qui est déjà envoyé ou annulé le reste (un nouvel envoi du plan ne renvoie rien)
+            let b; try { b = JSON.parse(await corps(req, 2 * 1024 * 1024)); } catch { return json(res, 400, { erreur: "JSON invalide." }); }
+            if (!Array.isArray(b.messages) || b.messages.length > 2000) return json(res, 400, { erreur: "messages : liste de 2000 au plus." });
+            const garder = [], refus = [];
+            for (const m of b.messages) { const v = validerNotif(m); if (v.refus) refus.push({ id: m?.id, raison: v.refus }); else if (v.message.quand <= maintenant + 31 * 86400000) garder.push(v.message); }
+            planif.messages = garder.sort((x, y) => x.quand - y.quand); sauverPlanif();
+            return json(res, 200, { ok: true, programmes: garder.filter((m) => !planif.etats[m.id]).length, refus });
+          }
+          if (quoi === "scheduler" && req.method === "GET") {
+            const borne = (x, d) => { const n = Number(x); return Number.isFinite(n) ? n : Number.isFinite(Date.parse(x || "")) ? Date.parse(x) : d; };
+            const debut = borne(url.searchParams.get("debut"), maintenant - 86400000), fin = borne(url.searchParams.get("fin"), maintenant + 7 * 86400000);
+            return json(res, 200, { canaux: canauxNotif(), messages: planif.messages.filter((m) => m.quand >= debut && m.quand <= fin).map((m) => ({ id: m.id, quand: m.quand, canal: m.canal, destination: m.destination, sujet: m.sujet, texte: m.texte, voyageId: m.voyageId, ...(planif.etats[m.id] ? { statut: planif.etats[m.id].statut, envoyes: planif.etats[m.id].envoyes, erreurs: planif.etats[m.id].erreurs } : { statut: "a_venir" }) })) });
+          }
+          if (quoi === "scheduler" && req.method === "DELETE" && idn) { const id = decodeURIComponent(idn).slice(0, 160); planif.etats[id] = { statut: "annule", t: maintenant }; sauverPlanif(); return json(res, 200, { ok: true }); }
+          if (quoi === "manuelle" && req.method === "POST") {
+            let b; try { b = JSON.parse(await corps(req, 512 * 1024)); } catch { return json(res, 400, { erreur: "JSON invalide." }); }
+            const liste = Array.isArray(b.messages) ? b.messages.slice(0, 50) : [], journal = [];
+            for (const m of liste) {
+              const v = validerNotif({ ...m, quand: maintenant }); if (v.refus) { journal.push({ id: m?.id, statut: "refuse", raison: v.refus }); continue; }
+              if (!b.forcer && notifsVues.get(v.message.cle) > maintenant - 6 * 3600000) { journal.push({ id: v.message.id, statut: "deja_envoye" }); continue; } // deux appareils qui notifient la même étape
+              if (!quotaNotif(maintenant)) { journal.push({ id: v.message.id, statut: "quota" }); continue; }
+              notifsVues.set(v.message.cle, maintenant); const r = await envoyerNotif(v.message); journal.push({ id: v.message.id, statut: r.envoyes.length ? "envoye" : "erreur", ...r });
+            }
+            if (notifsVues.size > 2000) for (const [k, t] of notifsVues) if (t < maintenant - 6 * 3600000) notifsVues.delete(k);
+            return json(res, 200, { ok: true, journal });
+          }
+          if (quoi === "test" && req.method === "POST") {
+            let b = {}; try { b = JSON.parse((await corps(req)) || "{}"); } catch { /* corps vide */ }
+            const r = { canaux: canauxNotif(), resultats: [] }, essai = "Essai : les notifications de Logistique Fret arrivent bien ici.";
+            if (Object.keys(canaux).length) r.resultats.push({ canal: "equipe", ...(await diffuserAlerte({ texte: essai, niveau: "warn", cle: "essai-notif" })) });
+            if (b.ntfy) { const v = validerNotif({ id: "essai", canal: "ntfy", destination: b.ntfy, texte: essai, sujet: "Essai" }); r.resultats.push(v.refus ? { canal: "ntfy", envoyes: [], erreurs: [v.refus] } : { canal: "ntfy", ...(await envoyerNotif(v.message)) }); }
+            const mail = b.email || smtp?.de; if (smtp && mail) { const v = validerNotif({ id: "essai", canal: "email", destination: mail, texte: essai, sujet: "Essai — Logistique Fret" }); r.resultats.push(v.refus ? { canal: "email", envoyes: [], erreurs: [v.refus] } : { canal: "email", ...(await envoyerNotif(v.message)) }); }
+            if (!smtp) r.resultats.push({ canal: "email", envoyes: [], erreurs: ["aucun serveur SMTP configuré (SMTP_HOTE, SMTP_DE…)"] });
+            return json(res, 200, r);
+          }
+          return json(res, 405, { erreur: "Méthode non permise." });
+        }
+        if (p === "/api/etat") return json(res, 200, { version: VERSION, notifications: canauxNotif(), planifies: planif.messages.filter((m) => !planif.etats[m.id]).length, appareils: historique.size, positions: total, retentionJours, partages: partages.size, moteur: moteur.disponible, canaux: Object.keys(canaux), synchro: synchro.version, maintenant: Math.floor(Date.now() / 1000) });
       }
       return json(res, 404, { erreur: "Introuvable." });
     } catch (e) { return json(res, 500, { erreur: "Erreur du serveur." }); }
   });
-  return { serveur, historique, enregistrer, partages, donneesPartage };
+  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif };
 }
 
 module.exports = { creer, normaliser, VERSION };
@@ -295,13 +397,17 @@ if (require.main === module) {
   if (e.TELEGRAM_TOKEN && e.TELEGRAM_CHAT) canaux.telegram = { token: e.TELEGRAM_TOKEN, chat: e.TELEGRAM_CHAT, api: e.TELEGRAM_API || undefined };
   if (e.WHATSAPP_TOKEN && e.WHATSAPP_PHONE_ID) canaux.whatsapp = { token: e.WHATSAPP_TOKEN, phoneId: e.WHATSAPP_PHONE_ID, destinataires: String(e.WHATSAPP_DEST || "").split(",").map((x) => x.trim()).filter(Boolean), modele: e.WHATSAPP_MODELE || "", langue: e.WHATSAPP_LANGUE || "fr", api: e.WHATSAPP_API || undefined };
   if (e.WEBHOOK_URL) canaux.webhook = { url: e.WEBHOOK_URL };
-  const { serveur } = creer({ ...jetons, dossier, retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048) });
+  const smtp = e.SMTP_HOTE && e.SMTP_DE ? { hote: e.SMTP_HOTE, port: Number(e.SMTP_PORT || 0) || undefined, securite: e.SMTP_SECURITE || undefined, utilisateur: e.SMTP_UTILISATEUR || "", motDePasse: e.SMTP_MOT_DE_PASSE || "", de: e.SMTP_DE } : null;
+  const ntfyHotes = String(e.NTFY_HOTES || "ntfy.sh").split(",").map((x) => x.trim()).filter(Boolean);
+  const { serveur, tick } = creer({ ...jetons, dossier, retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
+  setInterval(() => { tick().catch(() => { /* réessayé à la minute suivante */ }); }, 60000); // notifications programmées
   const port = Number(e.PORT || 8787);
   serveur.listen(port, e.HOTE || "0.0.0.0", () => {
     console.log(`Relais de positions ${VERSION} sur le port ${port}`);
     console.log(`  Jeton d'écriture (balises, Traccar) : ${jetons.jetonEcriture}`);
     console.log(`  Jeton de lecture (application)      : ${jetons.jetonLecture}`);
     if (Object.keys(canaux).length) console.log(`  Alertes transmises à : ${Object.keys(canaux).join(", ")}`);
+    console.log(`  Notifications programmées : ntfy (${ntfyHotes.join(", ")})${smtp ? `, e-mail (${smtp.hote})` : ""}${canaux.whatsapp ? ", WhatsApp" : ""}`);
     console.log(`  Réception : POST /api/positions · GET /osmand · POST /traccar    Lecture : /api/derniere · /api/trace`);
   });
 }

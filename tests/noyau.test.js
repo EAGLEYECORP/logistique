@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1151,7 +1151,7 @@ test("migration 6 → 7 : rien n'est perdu, les anciens champs restent et sont p
     voyages: [{ id: "v1", ref: "V1", prix: 30000, devise: "MAD", peagesMad: 500, peagesEur: 100, carburantMad: 8000, fraisRouteMad: 1500, douaneMad: 700, autresMad: 200, kmAller: 1000 }] };
   const avant = JSON.stringify(v6.voyages[0]);
   const r = N.migrer(JSON.parse(JSON.stringify(v6)));
-  assert.strictEqual(r.migre, true); assert.strictEqual(r.etat.meta.version, 7);
+  assert.strictEqual(r.migre, true); assert.strictEqual(r.etat.meta.version, N.VERSION_SCHEMA); assert.ok(N.VERSION_SCHEMA >= 7);
   assert.deepStrictEqual([...r.etat.chargesGenerales], []); assert.deepStrictEqual([...r.etat.echeances], []);
   const v = r.etat.voyages[0];
   assert.deepStrictEqual([...v.lignesCout], []);
@@ -1891,6 +1891,105 @@ test("attentes aux ports : partagées entre les bureaux par la synchronisation",
   const base = { attentesPort: [mesure("tmed_export", 1, 2)] }, casa = { attentesPort: [mesure("tmed_export", 1, 2), mesure("tmed_export", 2, 3)] }, francfort = { attentesPort: [mesure("tmed_export", 1, 2), mesure("alg_entry", 3, 5)] };
   const f = N.fusionnerEtat(base, casa, francfort).etat;
   assert.deepStrictEqual([...f.attentesPort.map((x) => x.id)].sort(), ["malg_entry3", "mtmed_export1", "mtmed_export2"]);
+});
+
+/* ---------- D11 : notifications par étape ---------- */
+const etatNotif = () => {
+  N.S.params.tauxEUR = 10; N.S.routageJalons = []; N.S.notifsEtat = { annulees: {}, reports: {} }; N.S.commandes = []; N.S.factures = [];
+  N.S.entreprise = { nom: "Atlas Fret", langueDefaut: "fr", audiences: { dispatcher_casa: { ntfy: "https://ntfy.sh/atlas-casa-7f3k" }, exploitante_frankfurt: { ntfy: "https://ntfy.sh/atlas-ffm-9q2z" }, comptabilite: { email: "compta@atlas.example" } } };
+  N.S.clients = [{ id: "k1", nom: "Primeurs du Sud", tel: "+33 4 68 00 00 00", email: "achats@primeurs.example", langueNotif: "es", canalNotifPrefere: "whatsapp", notificationsClientAutorisees: true }, { id: "k2", nom: "Sans accord", tel: "0600000000", email: "x@y.example" }];
+  N.S.chauffeurs = [{ id: "h1", nom: "Youssef", tel: "0612345678", langueNotif: "ar" }, { id: "h2", nom: "Karim", ntfy: "https://ntfy.sh/karim-camion-01" }];
+  N.S.camions = [{ id: "c1", immat: "12345-A-6" }];
+  N.S.voyages = [{ id: "v1", ref: "V-26-001", clientId: "k1", camionId: "c1", chauffeurId: "h1", statut: "prevu", origine: "Agadir", destination: "Perpignan", dateDepart: "2026-11-20", heureDepart: "05:30", dateRetourPrevue: "2026-11-28", livraisonPrevue: "2026-11-23T08:00:00.000Z",
+    traversees: [{ sens: "aller", ligne: "tmed-alg", date: "2026-11-20", heure: "16:00", ref: "DFDS-778", statut: "reservee" }, { sens: "retour", ligne: "alg-tmed", statut: "a_reserver" }], jalons: [], lignesCout: [] }];
+};
+
+test("routage des étapes : 11 étapes par défaut, valides ; une étape personnalisée remplace la sienne ; erreurs détectées", () => {
+  etatNotif();
+  const d = N.routageDefaut(); assert.strictEqual(d.length, 11); assert.deepStrictEqual([...d.map((r) => r.jalon)], [...N.JALONS_VOYAGE.map(([k]) => k)]);
+  assert.ok(d.every((r) => N.routageErreurs(r).length === 0), JSON.stringify(d.map(N.routageErreurs)));
+  assert.strictEqual(d.find((r) => r.jalon === "livre").auto, false); assert.strictEqual(d.find((r) => r.jalon === "port_tmed").auto, true); assert.deepStrictEqual([...d.find((r) => r.jalon === "livre").audiences.client_externe], ["prefere"]);
+  N.S.routageJalons = [{ ...d[0], audiences: { chef_entreprise: ["in_app"] } }];
+  assert.deepStrictEqual(Object.keys(N.routageJalons()[0].audiences), ["chef_entreprise"]); assert.strictEqual(N.routageJalons().length, 11);
+  assert.deepStrictEqual([...N.routageErreurs({ jalon: "x", auto: "oui", audiences: { pirate: ["ntfy"], chauffeur: ["pigeon"] }, pre_notifications: [{ audience: "chauffeur", canal: "ntfy" }], modeles: { de: "Hallo" } })],
+    ["Étape inconnue", "« auto » doit valoir vrai ou faux", "Destinataire inconnu : pirate", "Canaux invalides pour chauffeur", "Rappel avant : décalage en heures ou jour et heure attendus", "Message invalide (de)"]);
+  assert.deepStrictEqual([...N.routageErreurs(null)], ["Entrée illisible"]);
+});
+
+test("étape atteinte : destinataires résolus (équipe, client avec accord, comptabilité), langue de chacun, manques signalés", () => {
+  etatNotif(); const v = N.S.voyages[0]; v.statut = "en_cours"; v.jalons = [{ type: "livre", date: "2026-11-23T07:40:00.000Z" }];
+  const { messages, manques } = N.notificationsJalon(v, "livre");
+  const par = (a) => messages.find((m) => m.audience === a);
+  const cl = par("client_externe"); assert.strictEqual(cl.canal, "whatsapp"); assert.strictEqual(cl.destination, "33468000000"); assert.strictEqual(cl.langue, "es"); assert.deepStrictEqual({ ...cl.repli }, { canal: "email", destination: "achats@primeurs.example" });
+  assert.strictEqual(cl.texte, "Hola, su mercancía (V-26-001) fue entregada en Perpignan el 23/11 08:40. Gracias por su confianza — Atlas Fret.");
+  const co = par("comptabilite"); assert.strictEqual(co.canal, "email"); assert.strictEqual(co.destination, "compta@atlas.example"); assert.ok(/V-26-001 livré le 23\/11 08:40 \(Primeurs du Sud\) : facture à émettre/.test(co.texte), co.texte); assert.strictEqual(co.sujet, "V-26-001 — Livré");
+  assert.strictEqual(par("chef_entreprise").canal, "in_app"); assert.strictEqual(par("commercial").canal, "in_app");
+  assert.strictEqual(messages.length, 4); assert.deepStrictEqual([...manques], []); assert.ok(messages.every((m) => m.id && m.cle && m.texte && !/\{\w+\}/.test(m.texte)));
+  // client sans accord : jamais prévenu
+  v.clientId = "k2"; const r = N.notificationsJalon(v, "livre"); assert.ok(!r.messages.some((m) => m.audience === "client_externe")); assert.ok(r.manques.some((x) => /notifications non autorisées/.test(x)));
+  // étape d'équipe : sujet ntfy ; destinataire non renseigné → manque
+  const e = N.notificationsJalon(v, "embarque_aller"); assert.deepStrictEqual([...e.messages.map((m) => [m.audience, m.canal])], [["dispatcher_casa", "ntfy"], ["exploitante_frankfurt", "ntfy"], ["chef_entreprise", "in_app"]]);
+  assert.ok(/^V-26-001 — Embarqué \(aller\) \(\d\d\/\d\d \d\d:\d\d\)\. 12345-A-6 · Youssef · Agadir → Perpignan\.$/.test(e.messages[0].texte), e.messages[0].texte);
+  delete N.S.entreprise.audiences.exploitante_frankfurt; assert.ok(N.notificationsJalon(v, "embarque_aller").manques.some((x) => /Exploitation Allemagne : sujet ntfy à renseigner/.test(x)));
+});
+
+test("messages : modèle personnalisé de l'étape dans la langue du destinataire, sinon modèle par défaut ; variables inconnues visibles", () => {
+  etatNotif(); const v = N.S.voyages[0];
+  N.S.routageJalons = [{ ...N.routageDefaut()[2], modeles: { fr: "{ref} au port à {heure} — {camion}", ar: "{ref} في الميناء {heure}" } }];
+  N.S.entreprise.audiences.dispatcher_casa.langue = "ar"; v.jalons = [{ type: "port_tmed", date: "2026-11-20T11:00:00.000Z" }];
+  const m = N.notificationsJalon(v, "port_tmed").messages; assert.strictEqual(m[0].texte, "V-26-001 في الميناء 20/11 12:00"); assert.strictEqual(m[1].texte, "V-26-001 au port à 20/11 12:00 — 12345-A-6");
+  N.S.entreprise.audiences.exploitante_frankfurt.langue = "en"; assert.ok(/^V-26-001 — Entry into Tanger Med port \(20\/11 12:00\)|^V-26-001 — Entry into Tanger Med port \(2026-11-20 12:00\)/.test(N.notificationsJalon(v, "port_tmed").messages[1].texte), "pas de modèle anglais personnalisé : modèle par défaut en anglais");
+  assert.strictEqual(N.remplirModele("{ref} {inconnue}", { ref: "A" }), "A {inconnue}"); assert.strictEqual(N.heureNotif(Date.parse("2026-11-20T23:30:00Z")), "21/11 00:30", "heure du Maroc (UTC+1)");
+});
+
+test("rappels programmés : veille du départ à 18 h, présentation au port, embarquement, livraison — ils suivent le voyage", () => {
+  etatNotif(); const v = N.S.voyages[0]; N.S.chauffeurs[0].ntfy = "https://ntfy.sh/youssef-camion-1";
+  const p = N.planNotifications({ depuis: Date.parse("2026-11-15T00:00:00Z"), jusqua: Date.parse("2026-12-01T00:00:00Z"), maintenant: Date.parse("2026-11-15T00:00:00Z") });
+  const vue = p.map((x) => [x.jalon, x.type, new Date(x.quand).toISOString().slice(0, 16), x.audience, x.canal]);
+  assert.strictEqual(JSON.stringify(vue), JSON.stringify([
+    ["depart", "pre", "2026-11-19T17:00", "dispatcher_casa", "ntfy"],        // veille à 18 h (Maroc)
+    ["port_tmed", "pre", "2026-11-20T10:00", "chauffeur", "ntfy"],          // embarquement 16 h − 3 h de présentation − 2 h
+    ["embarque_aller", "pre", "2026-11-20T12:00", "chauffeur", "ntfy"],     // 16 h − 3 h
+    ["livre", "pre", "2026-11-23T07:00", "chauffeur", "ntfy"],              // créneau promis − 1 h
+  ]));
+  assert.strictEqual(p[1].langue, "ar"); assert.strictEqual(p[1].texte, "التقديم في ميناء طنجة المتوسط بعد ساعتين (20/11 13:00) — الرحلة V-26-001."); assert.ok(/Contrôles : /.test(p[0].texte)); assert.ok(/DFDS-778/.test(p[2].texte));
+  // le départ est décalé d'un jour : le rappel de la veille aussi
+  v.dateDepart = "2026-11-21"; const p2 = N.planNotifications({ depuis: Date.parse("2026-11-15T00:00:00Z"), jusqua: Date.parse("2026-12-01T00:00:00Z"), maintenant: Date.parse("2026-11-15T00:00:00Z") });
+  const d2 = p2.find((x) => x.jalon === "depart"); assert.strictEqual(new Date(d2.quand).toISOString().slice(0, 16), "2026-11-20T17:00"); assert.strictEqual(d2.id, p[0].id, "même identifiant : une annulation tient malgré le décalage"); assert.notStrictEqual(d2.cle, p[0].cle);
+  // l'arrivée estimée recalculée décale le rappel de livraison
+  v.eta = { arrivee: Date.parse("2026-11-23T12:00:00Z") / 1000 }; assert.strictEqual(new Date(N.planNotifications({ depuis: 0, jusqua: Date.parse("2026-12-01T00:00:00Z"), maintenant: Date.parse("2026-11-15T00:00:00Z") }).find((x) => x.jalon === "livre").quand).toISOString().slice(11, 16), "11:00");
+  // étape atteinte : plus de rappel avant elle ; fenêtre ; passé
+  v.jalons = [{ type: "depart", date: "2026-11-21T05:00:00Z" }]; assert.ok(!N.planNotifications({ depuis: 0, jusqua: Date.parse("2026-12-01T00:00:00Z"), maintenant: 0 }).some((x) => x.jalon === "depart"));
+  assert.strictEqual(N.planNotifications({ depuis: Date.parse("2026-11-20T00:00:00Z"), jusqua: Date.parse("2026-11-20T11:00:00Z"), maintenant: Date.parse("2026-11-20T00:00:00Z") }).length, 1);
+  assert.strictEqual(N.planNotifications({ depuis: 0, jusqua: Date.parse("2026-12-01T00:00:00Z"), maintenant: Date.parse("2026-11-24T00:00:00Z") }).length, 0, "tout est passé");
+  // chauffeur sans moyen de contact : rappel signalé, pas inventé
+  delete N.S.chauffeurs[0].ntfy; N.S.chauffeurs[0].tel = ""; const p3 = N.planNotifications({ depuis: 0, jusqua: Date.parse("2026-12-01T00:00:00Z"), maintenant: Date.parse("2026-11-15T00:00:00Z") });
+  assert.ok(!p3.some((x) => x.audience === "chauffeur")); assert.ok(p3.manques.length >= 3 && p3.manques.every((m) => /Youssef/.test(m.texte)));
+});
+
+test("rappels après une étape (facture à émettre), annulation et report d'un rappel", () => {
+  etatNotif(); const v = N.S.voyages[0]; v.statut = "en_cours"; v.jalons = [{ type: "livre", date: "2026-11-23T07:40:00Z" }];
+  const w = { depuis: Date.parse("2026-11-23T08:00:00Z"), jusqua: Date.parse("2026-11-30T00:00:00Z"), maintenant: Date.parse("2026-11-23T08:00:00Z") };
+  let p = N.planNotifications(w); const f = p.find((x) => x.type === "post");
+  assert.strictEqual(f.audience, "comptabilite"); assert.strictEqual(f.canal, "email"); assert.strictEqual(new Date(f.quand).toISOString(), "2026-11-24T07:40:00.000Z"); assert.ok(/facture à émettre/.test(f.texte));
+  N.S.commandes = [{ id: "o1", factureId: "f1" }]; v.commandeId = "o1"; assert.ok(!N.planNotifications(w).some((x) => x.type === "post"), "déjà facturé : pas de rappel"); v.commandeId = "";
+  N.S.notifsEtat.reports[f.id] = 2 * 3600000; p = N.planNotifications(w); assert.strictEqual(p.find((x) => x.id === f.id).quand, f.quand + 2 * 3600000); assert.strictEqual(p.find((x) => x.id === f.id).reporte, true);
+  N.S.notifsEtat.annulees[f.id] = "2026-11-23T09:00:00Z"; assert.ok(!N.planNotifications(w).some((x) => x.id === f.id));
+});
+
+test("étapes à notifier automatiquement : récentes, routage automatique, une seule fois", () => {
+  etatNotif(); const v = N.S.voyages[0], now = Date.parse("2026-11-20T15:00:00Z");
+  v.jalons = [{ type: "depart", date: "2026-11-20T05:00:00Z" }, { type: "douane_export", date: "2026-11-20T13:00:00Z" }, { type: "port_tmed", date: "2026-11-20T14:30:00Z" }];
+  assert.deepStrictEqual([...N.jalonsANotifier(now).map((x) => x.jalon)], ["port_tmed"], "départ trop ancien (10 h), douane manuelle");
+  v.notifsJalons = ["port_tmed"]; assert.strictEqual(N.jalonsANotifier(now).length, 0);
+  v.statut = "annule"; v.notifsJalons = []; assert.strictEqual(N.jalonsANotifier(now).length, 0);
+});
+
+test("schéma 8 : migration sans perte, routage vide = routage par défaut", () => {
+  const r = N.migrer({ meta: { version: 7 }, voyages: [{ id: "v1", lignesCout: [{ id: "l" }] }], chargesGenerales: [{ id: "g" }] });
+  assert.strictEqual(r.etat.meta.version, 8); assert.deepStrictEqual([...r.etat.routageJalons], []); assert.deepStrictEqual([...r.etat.notificationsApp], []); assert.deepStrictEqual(JSON.parse(JSON.stringify(r.etat.notifsEtat)), { annulees: {}, reports: {} });
+  assert.strictEqual(r.etat.voyages[0].lignesCout.length, 1); assert.strictEqual(r.etat.chargesGenerales.length, 1);
+  const k = N.migrer({ meta: { version: 7 }, notifsEtat: { annulees: { a: "x" } } }); assert.strictEqual(k.etat.notifsEtat.annulees.a, "x");
 });
 
 (async () => {

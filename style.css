@@ -713,3 +713,12 @@ tr.cliquable { cursor: pointer; } tr.cliquable.actif td { background: color-mix(
 .l-bureau-maroc { background: var(--ok); } .l-bureau-allemagne { background: var(--primary); }
 .histo { list-style: none; margin: 6px 0 0; padding: 0; font-size: .86rem; } .histo li { padding: 6px 0; border-top: 1px solid var(--border); } .histo li .sub { display: block; }
 details.historique > summary { cursor: pointer; list-style: none; } details.historique > summary::-webkit-details-marker { display: none; }
+
+/* notifications par étape */
+.timeline li { position: relative; } .timeline li > .icon-btn { position: absolute; right: 0; top: 0; }
+.notif-ligne { border-top: 1px solid var(--border); padding: 8px 0; } .notif-ligne textarea { width: 100%; margin-top: 6px; }
+.liens-envoi { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+#bloc-notifications .trav.nouveau strong { color: var(--primary); }
+.grille-notif td, .grille-notif th { text-align: center; padding: 4px 6px; } .grille-notif td:first-child, .grille-notif th:first-child { text-align: left; white-space: nowrap; }
+#carte-notif-jalons input:not([type=checkbox]), #carte-notif-jalons select { width: 100%; min-width: 120px; }
+.apercu { margin: -4px 0 10px; font-style: italic; }

@@ -547,6 +547,8 @@ const champsChauffeur = (ch = {}) => [
   { name: "camionId", label: "Camion sous sa responsabilité", type: "select", options: optsCamions(), value: ch.camionId, full: true },
   { name: "perDiemJournalier", label: "Per diem par jour de voyage", type: "number", min: 0, value: ch.perDiemJournalier, placeholder: "compté seul dans chaque voyage" },
   { name: "perDiemDevise", label: "Devise du per diem", type: "select", options: [["MAD", "MAD"], ["EUR", "EUR"]], value: ch.perDiemDevise || "MAD" },
+  { name: "ntfy", label: "Sujet ntfy du chauffeur (rappels : port, embarquement, livraison)", value: ch.ntfy, placeholder: "https://ntfy.sh/sujet-secret", full: true },
+  { name: "langueNotif", label: "Langue des rappels", type: "select", options: [["fr", "Français"], ["ar", "العربية"], ["es", "Español"], ["en", "English"]], value: ch.langueNotif || "fr" },
   { name: "conge", label: "En congé", type: "checkbox", value: ch.conge, full: true },
 ];
 
@@ -587,7 +589,7 @@ VUES.chauffeurs = {
           autre.camionId = "";
         }
       }
-      const data = { nom: v.nom, tel: v.tel, camionId: v.camionId, conge: v.conge, perDiemJournalier: v.perDiemJournalier === "" ? undefined : num(v.perDiemJournalier), perDiemDevise: v.perDiemJournalier === "" ? undefined : v.perDiemDevise, ...Object.fromEntries(DOCS_CHAUFFEUR.map(([k]) => [k, v[k]])) };
+      const data = { nom: v.nom, tel: v.tel, camionId: v.camionId, conge: v.conge, perDiemJournalier: v.perDiemJournalier === "" ? undefined : num(v.perDiemJournalier), perDiemDevise: v.perDiemJournalier === "" ? undefined : v.perDiemDevise, ntfy: (v.ntfy || "").trim() || undefined, langueNotif: v.langueNotif || undefined, ...Object.fromEntries(DOCS_CHAUFFEUR.map(([k]) => [k, v[k]])) };
       if (existant) Object.assign(existant, data); else S.chauffeurs.push({ id: uid(), ...data });
       return true;
     };

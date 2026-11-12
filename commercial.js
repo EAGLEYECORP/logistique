@@ -152,6 +152,9 @@ const champsClient = (c = {}) => [
   { name: "pays", label: "Pays", type: "select", options: optsPays, value: c.pays || "Maroc" },
   { name: "delai", label: "Délai de paiement (jours)", type: "number", value: c.delai ?? S.params.delaiPaiement, min: 0, step: 1 },
   { name: "adresse", label: "Adresse", type: "textarea", full: true, value: c.adresse },
+  { name: "notificationsClientAutorisees", label: "Le client accepte d'être prévenu aux étapes de ses voyages (WhatsApp ou e-mail)", type: "checkbox", full: true, value: c.notificationsClientAutorisees },
+  { name: "canalNotifPrefere", label: "Canal préféré du client", type: "select", options: [["whatsapp", "WhatsApp"], ["email", "E-mail"], ["sms", "SMS"]], value: c.canalNotifPrefere || "whatsapp" },
+  { name: "langueNotif", label: "Langue des messages", type: "select", options: [["fr", "Français"], ["en", "English"], ["es", "Español"], ["ar", "العربية"]], value: c.langueNotif || "fr" },
 ];
 
 VUES.clients = {

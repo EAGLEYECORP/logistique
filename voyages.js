@@ -180,7 +180,7 @@ function carteVoyage(v) {
         ${num(v.kmRetourVide) ? `<tr><td>Retour à vide</td><td class="r num">${fmt(v.kmRetourVide)} km · ≈ ${fmt(c.coutKm * num(v.kmRetourVide))} MAD</td></tr>` : ""}
       </tbody></table></div>${blocLignesCout(v)}</div>
       <div class="section-title">Étapes</div>
-      <ol class="timeline">${JALONS_VOYAGE.map(([k, l]) => { const j = jalons.find((x) => x.type === k); return `<li class="${j ? "fait" : ""}"><span class="pt"></span><div><strong>${esc(l)}</strong>${j ? `<span class="sub">${dateHeureFr(j.date)}${j.source === "gps" ? " · " + badge("GPS", "ok") : ""}</span>` : ""}</div></li>`; }).join("")}</ol>
+      <ol class="timeline">${JALONS_VOYAGE.map(([k, l]) => { const j = jalons.find((x) => x.type === k); return `<li class="${j ? "fait" : ""}"><span class="pt"></span><div><strong>${esc(l)}</strong>${j ? `<span class="sub">${dateHeureFr(j.date)}${j.source === "gps" ? " · " + badge("GPS", "ok") : ""}${(v.notifsJalons || []).includes(k) ? " · notifié" : ""}</span>` : ""}</div>${j && v.statut !== "annule" ? iconBtn("notifier-jalon", "mail", "Notifier", `${v.id}|${k}`) : ""}</li>`; }).join("")}</ol>
       <div class="row">${prochain && v.statut !== "annule" ? btn("jalon", `Marquer : ${prochain[1]}`, { id: v.id, icone: "flag", cls: "btn sm" }) : ""}${jalons.length ? btn("annuler-jalon", "Annuler la dernière étape", { id: v.id, cls: "btn ghost sm" }) : ""}</div>
       <div class="section-title">Listes de contrôle</div>
       <div class="segmented">${Object.entries(LIB_CHECKLISTS_VOYAGE).map(([k, l]) => `<button type="button" data-act="onglet-check" data-id="${v.id}|${k}" aria-selected="${k === ck}">${l}</button>`).join("")}</div>

@@ -18,8 +18,8 @@ test("normaliser : formes variées, unités, bornes", () => {
   for (const m of [{ id: "", lat: 1, lon: 1 }, { id: "A", lat: 91, lon: 1 }, { id: "A", lat: 0, lon: 0 }, { id: "A", lat: 1, lon: 1, t: t + 3600 }, { id: "A", lat: 1, lon: 1, t: t - 9 * 86400 }, null, "x"]) assert.strictEqual(normaliser(m), null);
 });
 
-async function demarrer(dossier = null) {
-  const r = creer({ jetonEcriture: "ecrit", jetonLecture: "lit", dossier });
+async function demarrer(dossier = null, options = {}) {
+  const r = creer({ jetonEcriture: "ecrit", jetonLecture: "lit", dossier, ...options });
   await new Promise((ok) => r.serveur.listen(0, "127.0.0.1", ok));
   const base = `http://127.0.0.1:${r.serveur.address().port}`;
   const appel = async (chemin, { jeton = "", methode = "GET", corps } = {}) => { const res = await fetch(base + chemin, { method: methode, headers: { ...(jeton ? { authorization: `Bearer ${jeton}` } : {}), "content-type": "application/json" }, body: corps === undefined ? undefined : JSON.stringify(corps) }); return { code: res.status, json: await res.json().catch(() => null), cors: res.headers.get("access-control-allow-origin") }; };
@@ -131,6 +131,101 @@ test("lien client : arrivée calée sur les attentes de l'opérateur, même mote
     await s.appel(`/api/partages/${b}`, { methode: "PUT", jeton: "lit", corps: { attentes: { portH: -4, debarqH: "x", fourchetteMin: 1e9, source: "n'importe quoi" } } });
     const dc = await (await fetch(s.base + `/suivi/${b}/donnees`)).json(); assert.strictEqual(dc.eta.source, "estimation_generique"); assert.ok(dc.eta.fourchetteMin <= 120 * 60 + 600); assert.ok(dc.eta.arrivee < db.eta.arrivee);
     const html = await (await fetch(s.base + `/suivi/${b}?lang=ar`)).text(); assert.ok(html.includes("T.calibre") && html.includes("calibre")); new Function(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+  } finally { await s.arreter(); }
+});
+
+/** Faux serveur SMTP local : enregistre le dialogue et le message reçu. */
+async function fauxSmtp({ refuserRcpt = false } = {}) {
+  const net = require("net"), recu = { commandes: [], donnees: "" };
+  const serveur = net.createServer((c) => {
+    let tampon = "", enDonnees = false; c.write("220 faux.smtp ESMTP\r\n");
+    c.on("data", (b) => {
+      tampon += b.toString("utf8");
+      if (enDonnees) { const i = tampon.indexOf("\r\n.\r\n"); if (i < 0) return; recu.donnees = tampon.slice(0, i); tampon = tampon.slice(i + 5); enDonnees = false; c.write("250 2.0.0 accepte\r\n"); }
+      let i; while (!enDonnees && (i = tampon.indexOf("\r\n")) >= 0) {
+        const l = tampon.slice(0, i); tampon = tampon.slice(i + 2); recu.commandes.push(l);
+        if (/^EHLO/.test(l)) c.write("250-faux.smtp\r\n250-AUTH LOGIN\r\n250 8BITMIME\r\n"); else if (l === "AUTH LOGIN") c.write("334 VXNlcm5hbWU6\r\n");
+        else if (recu.commandes[recu.commandes.length - 2] === "AUTH LOGIN") c.write("334 UGFzc3dvcmQ6\r\n"); else if (recu.commandes[recu.commandes.length - 3] === "AUTH LOGIN") c.write("235 ok\r\n");
+        else if (/^MAIL FROM/.test(l)) c.write("250 ok\r\n"); else if (/^RCPT TO/.test(l)) c.write(refuserRcpt ? "550 boite inconnue\r\n" : "250 ok\r\n");
+        else if (l === "DATA") { c.write("354 allez-y\r\n"); enDonnees = true; } else if (l === "QUIT") { c.write("221 au revoir\r\n"); c.end(); }
+      }
+    });
+  });
+  await new Promise((ok) => serveur.listen(0, "127.0.0.1", ok));
+  return { recu, port: serveur.address().port, fermer: () => new Promise((ok) => serveur.close(ok)) };
+}
+const decoderParties = (d) => [...d.matchAll(/Content-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=\r\n]+?)\r\n--/g)].map((m) => Buffer.from(m[1].replace(/\r\n/g, ""), "base64").toString("utf8"));
+
+test("e-mail : dialogue SMTP complet (authentification, sujet accentué, texte et HTML), refus et adresses piégées", async () => {
+  const { envoyerCourriel, composer } = require("../serveur/courriel.js"), f = await fauxSmtp();
+  try {
+    const cfg = { hote: "127.0.0.1", port: f.port, securite: "aucune", utilisateur: "compta@atlas.example", motDePasse: "s3cret", de: "compta@atlas.example" };
+    const r = await envoyerCourriel(cfg, { a: "achats@primeurs.example", sujet: "V-26-001 — Livré · تم التسليم", texte: "Votre marchandise a été livrée.\n.ligne qui commence par un point\nSuivi : https://exemple.org/suivi/abc" });
+    assert.strictEqual(r.ok, true);
+    const c = f.recu.commandes; assert.ok(c[0].startsWith("EHLO ")); assert.strictEqual(c[1], "AUTH LOGIN"); assert.strictEqual(Buffer.from(c[2], "base64").toString(), "compta@atlas.example"); assert.strictEqual(Buffer.from(c[3], "base64").toString(), "s3cret");
+    assert.ok(c.includes("MAIL FROM:<compta@atlas.example>") && c.includes("RCPT TO:<achats@primeurs.example>") && c.includes("DATA") && c.includes("QUIT"));
+    const d = f.recu.donnees, sujet = d.match(/^Subject: =\?UTF-8\?B\?([^?]+)\?=/m); assert.ok(sujet, "sujet encodé"); assert.strictEqual(Buffer.from(sujet[1], "base64").toString(), "V-26-001 — Livré · تم التسليم");
+    const [texte, html] = decoderParties(d); assert.ok(texte.includes(".ligne qui commence par un point")); assert.ok(html.includes('<a href="https://exemple.org/suivi/abc">') && html.includes("<br>"));
+    assert.ok(/multipart\/alternative/.test(d) && /^From: compta@atlas\.example$/m.test(d) && /^To: achats@primeurs\.example$/m.test(d));
+    const f2 = await fauxSmtp({ refuserRcpt: true }); await assert.rejects(() => envoyerCourriel({ ...cfg, port: f2.port }, { a: "x@y.example", sujet: "s", texte: "t" }), /RCPT refusé.*550/); await f2.fermer();
+    assert.throws(() => composer({ de: "a@b.example", a: "x@y.example\r\nBcc: espion@z.example", sujet: "s", texte: "t" }), /invalide/);
+    assert.ok(!composer({ de: "a@b.example", a: "x@y.example", sujet: "s\r\nBcc: espion@z.example", texte: "t" }).includes("\r\nBcc:"), "pas d'en-tête injecté par le sujet");
+    await assert.rejects(() => envoyerCourriel({ ...cfg, port: 1 }, { a: "x@y.example", sujet: "s", texte: "t" }, { delai: 3000 }), /SMTP/);
+  } finally { await f.fermer(); }
+});
+
+test("notifications programmées : plan, envoi à l'heure (ntfy, e-mail), périmées, annulation, persistance après redémarrage", async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), "relais-notif-")), appels = [], mails = [];
+  const http_ = async (url, o) => { appels.push({ url, corps: o.body, titre: o.headers?.Title }); return { ok: true, status: 200 }; };
+  const courriel_ = async (cfg, m) => { mails.push(m); return { ok: true }; };
+  const opts = { http_, courriel_, smtp: { hote: "smtp.exemple.org", de: "relais@atlas.example" } };
+  let s = await demarrer(dossier, opts); const T = Date.now();
+  try {
+    const plan = { messages: [
+      { id: "v1:depart:pre:0", quand: T + 3600000, canal: "ntfy", destination: "https://ntfy.sh/atlas-casa-7f3k", sujet: "V-1 — Départ du dépôt", texte: "Récap : voyage V-1 demain 05:30" },
+      { id: "v1:livre:post:0", quand: T + 7200000, canal: "email", destination: "compta@atlas.example", sujet: "V-1 — Livré", texte: "Facture à émettre" },
+      { id: "vieux", quand: T - 7 * 3600000, canal: "ntfy", destination: "https://ntfy.sh/atlas-casa-7f3k", texte: "trop tard" },
+      { id: "pirate", quand: T, canal: "ntfy", destination: "https://evil.example/atlas-casa-7f3k", texte: "x" },
+      { id: "sms", quand: T, canal: "sms", destination: "33600000000", texte: "x" },
+      { id: "court", quand: T, canal: "ntfy", destination: "https://ntfy.sh/abc", texte: "x" },
+    ] };
+    assert.strictEqual((await s.appel("/api/notifications/plan", { methode: "PUT", jeton: "ecrit", corps: plan })).code, 401, "le jeton des balises ne programme rien");
+    const r = await s.appel("/api/notifications/plan", { methode: "PUT", jeton: "lit", corps: plan });
+    assert.strictEqual(r.code, 200); assert.strictEqual(r.json.programmes, 3); assert.deepStrictEqual(r.json.refus.map((x) => x.id), ["pirate", "sms", "court"]);
+    assert.ok(/non autorisé \(evil\.example\)/.test(r.json.refus[0].raison));
+    let f = await s.tick(T); assert.deepStrictEqual(f.map((x) => [x.id, x.statut]), [["vieux", "perime"]]); assert.strictEqual(appels.length, 0);
+    f = await s.tick(T + 3600000 + 1000); assert.deepStrictEqual(f.map((x) => [x.id, x.statut]), [["v1:depart:pre:0", "envoye"]]);
+    assert.strictEqual(appels[0].url, "https://ntfy.sh/atlas-casa-7f3k"); assert.strictEqual(appels[0].corps, "Récap : voyage V-1 demain 05:30"); assert.ok(appels[0].titre.startsWith("=?UTF-8?B?"), "titre accentué encodé pour l'en-tête");
+    assert.strictEqual((await s.tick(T + 3600000 + 2000)).length, 0, "pas envoyé deux fois");
+    // annulation, puis redémarrage du relais : l'état est conservé
+    assert.strictEqual((await s.appel(`/api/notifications/scheduler/${encodeURIComponent("v1:livre:post:0")}`, { methode: "DELETE", jeton: "lit" })).code, 200);
+    await s.arreter(); s = await demarrer(dossier, opts);
+    const l = await s.appel(`/api/notifications/scheduler?debut=${T - 86400000}&fin=${T + 86400000}`, { jeton: "lit" });
+    assert.deepStrictEqual(l.json.messages.map((m) => [m.id, m.statut]), [["vieux", "perime"], ["v1:depart:pre:0", "envoye"], ["v1:livre:post:0", "annule"]]); assert.deepStrictEqual(l.json.canaux, ["ntfy", "email"]);
+    assert.strictEqual((await s.tick(T + 9 * 3600000)).length, 0); assert.strictEqual(mails.length, 0, "annulé : rien n'est parti");
+    // un nouveau plan (voyage décalé) ne renvoie pas ce qui est déjà parti, et programme ce qui est nouveau
+    const r2 = await s.appel("/api/notifications/plan", { methode: "PUT", jeton: "lit", corps: { messages: [{ ...plan.messages[0], quand: T + 26 * 3600000 }, { id: "v1:livre:post:1", quand: T + 10 * 3600000, canal: "email", destination: "compta@atlas.example", texte: "Rappel" }] } });
+    assert.strictEqual(r2.json.programmes, 1); f = await s.tick(T + 10 * 3600000 + 1000); assert.deepStrictEqual(f.map((x) => x.id), ["v1:livre:post:1"]); assert.strictEqual(mails[0].a, "compta@atlas.example"); assert.strictEqual(mails[0].texte, "Rappel");
+    assert.strictEqual((await s.appel("/api/etat", { jeton: "lit" })).json.notifications.join(), "ntfy,email");
+  } finally { await s.arreter(); fs.rmSync(dossier, { recursive: true, force: true }); }
+});
+
+test("notifications immédiates : envoi, doublon d'un autre appareil écarté, WhatsApp avec repli e-mail, essai des canaux", async () => {
+  const appels = [], mails = []; let whatsappEnPanne = true;
+  const http_ = async (url, o) => { appels.push(url); return { ok: !(whatsappEnPanne && /graph/.test(url)), status: whatsappEnPanne && /graph/.test(url) ? 400 : 200 }; };
+  const courriel_ = async (cfg, m) => { if (/refus/.test(m.a)) throw new Error("boîte inconnue"); mails.push(m); return { ok: true }; };
+  const s = await demarrer(null, { http_, courriel_, smtp: { hote: "smtp.exemple.org", de: "relais@atlas.example" }, canaux: { whatsapp: { token: "t", phoneId: "123", destinataires: [] }, ntfy: { url: "https://ntfy.monserveur.example/equipe" } } });
+  try {
+    const m = { id: "v1:livre:jalon:client_externe:whatsapp", canal: "whatsapp", destination: "33468000000", repli: { canal: "email", destination: "achats@primeurs.example" }, sujet: "V-1 — Livré", texte: "Hola, su mercancía fue entregada.", cle: "jalon:v1:livre:client" };
+    let r = await s.appel("/api/notifications/manuelle", { methode: "POST", jeton: "lit", corps: { messages: [m] } });
+    assert.strictEqual(r.json.journal[0].statut, "envoye"); assert.ok(r.json.journal[0].erreurs[0].startsWith("whatsapp:33468000000 : réponse 400")); assert.deepStrictEqual(r.json.journal[0].envoyes, ["email:achats@primeurs.example"]);
+    r = await s.appel("/api/notifications/manuelle", { methode: "POST", jeton: "lit", corps: { messages: [m] } }); assert.strictEqual(r.json.journal[0].statut, "deja_envoye", "l'autre bureau a déjà prévenu le client");
+    whatsappEnPanne = false; r = await s.appel("/api/notifications/manuelle", { methode: "POST", jeton: "lit", corps: { forcer: true, messages: [m] } }); assert.deepStrictEqual(r.json.journal[0].envoyes, ["whatsapp:33468000000"]); assert.strictEqual(mails.length, 1, "WhatsApp passe : pas de repli");
+    r = await s.appel("/api/notifications/manuelle", { methode: "POST", jeton: "lit", corps: { messages: [{ id: "a", canal: "email", destination: "refus@x.example", texte: "t" }, { id: "b", canal: "ntfy", destination: "https://ntfy.monserveur.example/sujet-equipe-1", texte: "t" }, { id: "c", canal: "in_app", texte: "t" }] } });
+    assert.deepStrictEqual(r.json.journal.map((x) => x.statut), ["erreur", "envoye", "refuse"]); assert.ok(/boîte inconnue/.test(r.json.journal[0].erreurs[0]), "hôte ntfy du relais autorisé, canal de l'application refusé");
+    const t = await s.appel("/api/notifications/test", { methode: "POST", jeton: "lit", corps: { ntfy: "https://ntfy.sh/essai-atlas-01", email: "moi@atlas.example" } });
+    assert.deepStrictEqual(t.json.resultats.map((x) => [x.canal, x.envoyes.length > 0]), [["equipe", true], ["ntfy", true], ["email", true]]); assert.deepStrictEqual(t.json.canaux, ["equipe", "ntfy", "whatsapp", "email"]);
+    assert.strictEqual((await s.appel("/api/notifications/test", { methode: "POST" })).code, 401);
   } finally { await s.arreter(); }
 });
 

@@ -31,6 +31,10 @@
 - Solde jour par jour : factures à leur échéance (les retards sont signalés), échéances récurrentes développées, dépenses encore estimées et recette des voyages en cours.
 - Zone rouge et date du passage sous zéro ; un jour touché sur la courbe montre ce qui tombe ce jour-là.
 
+### D6 — Simulateur d'achat de camion
+- Prix, financement (comptant, crédit avec tableau d'amortissement, leasing), répartition sur 1 à 3 corridors, taux de charge.
+- Réponses : charge fixe ajoutée par mois, **taux de charge d'équilibre**, délai de retour, trésorerie cumulée sur 36 mois, tableau de sensibilité — à partir de la **marge au kilomètre réellement observée** sur vos corridors.
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

@@ -116,3 +116,43 @@ VUES.direction = {
     if (act === "simuler" && typeof ouvrirSimulateur === "function") return ouvrirSimulateur();
   },
 };
+
+/* ---------- simulateur d'achat de camion ---------- */
+let simHypotheses = null;
+async function ouvrirSimulateur() {
+  const o = corridorsObserves(365), h = simHypotheses || { prix: "", mode: "credit", apport: "", taux: 6, duree_mois: 60, loyer: "", annexes_mensuel: "", km_mois: o.flotte.kmMoisParCamion >= 3000 ? Math.round(o.flotte.kmMoisParCamion / 100) * 100 : 9000, taux_charge: 85, c1: o.corridors[0]?.nom || "", p1: o.corridors.length ? 100 : "", c2: "", p2: "", c3: "", p3: "", marge_manuelle: "" };
+  const optsCor = [["", "—"], ...o.corridors.map((c) => [c.nom, `${c.nom} — ${fmt(c.margeKm, 2)} MAD/km sur ${c.nb} voyage(s)`])];
+  const f = await formulaire("Simuler l'achat d'un camion", [
+    { name: "prix", label: "Prix du camion (MAD)", type: "number", min: 0, value: h.prix, required: true },
+    { name: "mode", label: "Financement", type: "select", options: [["credit", "Crédit"], ["leasing", "Leasing"], ["comptant", "Comptant"]], value: h.mode },
+    { name: "apport", label: "Apport (crédit, MAD)", type: "number", min: 0, value: h.apport },
+    { name: "taux", label: "Taux du crédit (% par an)", type: "number", min: 0, value: h.taux },
+    { name: "duree_mois", label: "Durée (mois)", type: "number", min: 0, value: h.duree_mois },
+    { name: "loyer", label: "Loyer du leasing par mois (MAD)", type: "number", min: 0, value: h.loyer },
+    { name: "annexes_mensuel", label: "Assurance, taxe, salaire fixe par mois (MAD)", type: "number", min: 0, value: h.annexes_mensuel },
+    { name: "km_mois", label: "Kilomètres par mois à pleine charge", type: "number", min: 0, value: h.km_mois, required: true },
+    { name: "taux_charge", label: "Taux de charge attendu (%)", type: "number", min: 0, value: h.taux_charge, required: true },
+    ...(o.corridors.length ? [1, 2, 3].flatMap((i) => [{ name: `c${i}`, label: `Corridor ${i}`, type: "select", options: optsCor, value: h[`c${i}`] }, { name: `p${i}`, label: `Part du corridor ${i} (%)`, type: "number", min: 0, value: h[`p${i}`] }]) : []),
+    { name: "marge_manuelle", label: `Marge directe par km (MAD)${o.corridors.length ? " — seulement si aucun corridor n'est choisi" : ""}`, type: "number", value: h.marge_manuelle, full: true },
+  ], { valider: "Calculer", aide: o.corridors.length ? `Les marges au kilomètre viennent de vos voyages des 12 derniers mois (flotte : ${fmt(o.flotte.margeKm, 2)} MAD/km, retours à vide compris).` : "Aucun voyage avec kilomètres et prix sur 12 mois : indiquez une marge directe par kilomètre." });
+  if (!f) return;
+  simHypotheses = f;
+  let corridors = [1, 2, 3].map((i) => ({ c: o.corridors.find((x) => x.nom === f[`c${i}`]), pct: num(f[`p${i}`]) })).filter((x) => x.c && x.pct > 0).map((x) => ({ nom: x.c.nom, pct: x.pct, margeKm: x.c.margeKm }));
+  if (!corridors.length) corridors = [{ nom: "marge indiquée", pct: 100, margeKm: num(f.marge_manuelle) }];
+  const r = simulerInvestissement({ ...f, corridors }), c = courbeMini(r.tresorerie.map((x) => x.cumul), 640, 110);
+  const verdict = r.seuil_charge === null ? "Sans marge au kilomètre positive, ce camion ne peut pas couvrir sa charge." : r.atteignable ? `Le camion couvre sa charge à partir de <strong>${fmt(r.seuil_charge, 0)} % de taux de charge</strong>${r.retour_mois === null ? "" : r.retour_mois === 0 ? " ; aucune mise de départ à récupérer" : ` ; la mise de départ est récupérée en <strong>${r.retour_mois} mois</strong>`}.` : `Il faudrait <strong>${fmt(r.seuil_charge, 0)} % de taux de charge</strong> : impossible avec cette marge au kilomètre.`;
+  const encore = await modale({ titre: "Résultat de la simulation", valider: "Modifier les hypothèses", annuler: "Fermer", corps: `<div id="sim-resultat">
+    <p class="${r.atteignable && r.resultat_mensuel >= 0 ? "" : "alerte-treso"}" style="margin-top:0">${verdict}</p>
+    <div class="kpis compact">
+      <div class="kpi"><div class="l">Charge fixe ajoutée</div>${deuxDevises(r.fixe_mensuel)}<div class="s">par mois${r.mode === "credit" ? ` · mensualité ${fmt(r.mensualite)} · intérêts ${fmt(r.total_interets)}` : r.mode === "comptant" ? ` · amortissement ${fmt(r.amortissement_mensuel)}` : ""}</div></div>
+      <div class="kpi"><div class="l">Marge attendue</div>${deuxDevises(r.marge_mensuelle)}<div class="s">par mois à ${fmt(num(f.taux_charge), 0)} % · ${fmt(r.marge_km, 2)} MAD/km</div></div>
+      <div class="kpi"><div class="l">Résultat mensuel</div>${deuxDevises(r.resultat_mensuel, r.resultat_mensuel < 0 ? "neg" : "pos")}<div class="s">après charge fixe</div></div>
+      <div class="kpi"><div class="l">Trésorerie à 36 mois</div>${deuxDevises(r.impact_36, r.impact_36 < 0 ? "neg" : "pos")}<div class="s">point bas ${fmt(r.point_bas)} MAD</div></div>
+    </div>
+    <div class="chart"><svg viewBox="0 0 640 110" role="img" aria-label="Trésorerie cumulée sur 36 mois"><line x1="0" x2="640" y1="${c.zero}" y2="${c.zero}" class="axe"/><polyline points="${c.points}" class="courbe ${r.impact_36 < 0 ? "neg" : ""}"/></svg><div class="legende"><span>Trésorerie cumulée, mois 0 à 36 (ligne : équilibre)</span></div></div>
+    <div class="section-title">Résultat mensuel selon le taux de charge</div>
+    <div class="table-wrap"><table class="compact"><thead><tr><th>Scénario</th>${r.sensibilite.charges.map((x) => `<th class="r">${x} %</th>`).join("")}</tr></thead><tbody>
+      ${r.sensibilite.lignes.map((l) => `<tr><td>${esc(l.nom)}<span class="sub">${fmt(l.margeKm, 2)} MAD/km</span></td>${l.resultats.map((x) => `<td class="r num ${x < 0 ? "neg" : "pos"}">${fmt(x / 1000, 1)} k</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <p class="hint">En milliers de MAD par mois. La marge au kilomètre est une marge directe (avant charges fixes), retours à vide compris. Simulation indicative : elle ne remplace pas l'avis de votre banque ou de votre comptable.</p></div>` });
+  if (encore) return ouvrirSimulateur();
+}

@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1566,6 +1566,48 @@ test("prévision de trésorerie : dépenses attendues des voyages en cours et re
   N.S.commandes = [{ id: "o9", statut: "livre", factureId: "f9" }]; N.S.voyages[0].commandeId = "o9";
   assert.ok(!N.previsionsTresorerie(90, { depart: "2026-11-12", solde: 0 }).jours.some((x) => x.items.some((i) => i.type === "recette_prevue")), "voyage déjà facturé : sa recette vient de la facture");
   N.S.params.delaiCarteCarburant = 0; assert.strictEqual(N.previsionsTresorerie(90, { depart: "2026-11-12", solde: 0 }).jours.find((x) => x.date === "2026-11-18").sorties, 15500);
+});
+
+/* ---------- D6 : simulateur d'investissement ---------- */
+test("crédit : mensualité constante, intérêts dégressifs, capital entièrement remboursé ; taux zéro", () => {
+  const c = N.tableauCredit(900000, 6, 60);
+  proche(c.mensualite, (900000 * 0.005) / (1 - Math.pow(1.005, -60))); assert.ok(Math.abs(c.mensualite - 17399.52) < 0.01);
+  assert.strictEqual(c.lignes.length, 60); proche(c.lignes[0].interet, 4500); proche(c.lignes[0].capital, c.mensualite - 4500); assert.ok(c.lignes[59].reste < 1e-6);
+  proche(c.lignes.reduce((s, l) => s + l.capital, 0), 900000); proche(c.total_interets, c.mensualite * 60 - 900000); assert.ok(c.lignes[1].interet < c.lignes[0].interet);
+  const z = N.tableauCredit(120000, 0, 12); assert.strictEqual(z.mensualite, 10000); assert.strictEqual(z.total_interets, 0);
+  assert.strictEqual(N.tableauCredit(0, 5, 12).mensualite, 0); assert.strictEqual(N.tableauCredit(1000, 5, 0).lignes.length, 0);
+});
+
+test("simulateur : charge fixe ajoutée, taux de charge d'équilibre, délai de retour, trésorerie sur 36 mois", () => {
+  const base = { prix: 1200000, annexes_mensuel: 3000, km_mois: 10000, taux_charge: 80, corridors: [{ nom: "Agadir → Perpignan", pct: 75, margeKm: 4 }, { nom: "Casablanca → Lyon", pct: 25, margeKm: 8 }] };
+  const c = N.simulerInvestissement({ ...base, mode: "comptant", duree_amort_ans: 5, valeur_residuelle: 300000 });
+  assert.strictEqual(c.marge_km, 5); assert.strictEqual(c.amortissement_mensuel, 15000); assert.strictEqual(c.fixe_mensuel, 18000); assert.strictEqual(c.marge_mensuelle, 40000); assert.strictEqual(c.resultat_mensuel, 22000);
+  assert.strictEqual(c.seuil_charge, 36); assert.strictEqual(c.atteignable, true);
+  assert.strictEqual(c.tresorerie.length, 37); assert.strictEqual(c.tresorerie[0].cumul, -1200000); assert.strictEqual(c.tresorerie[1].flux, 37000, "comptant : l'amortissement n'est pas une sortie d'argent");
+  assert.strictEqual(c.retour_mois, 33); assert.strictEqual(c.impact_36, -1200000 + 36 * 37000); assert.strictEqual(c.point_bas, -1200000);
+  const k = N.simulerInvestissement({ ...base, mode: "credit", apport: 300000, taux: 6, duree_mois: 60 });
+  assert.ok(Math.abs(k.mensualite - 17399.52) < 0.01); proche(k.fixe_mensuel, k.mensualite + 3000); assert.strictEqual(k.tresorerie[0].cumul, -300000); proche(k.tresorerie[1].flux, 40000 - k.mensualite - 3000);
+  assert.strictEqual(k.retour_mois, Math.ceil(300000 / (37000 - k.mensualite))); assert.strictEqual(k.tableau_credit.length, 60); proche(k.seuil_charge, (k.fixe_mensuel / 50000) * 100);
+  const l = N.simulerInvestissement({ ...base, mode: "leasing", loyer: 22000, duree_mois: 24 });
+  assert.strictEqual(l.fixe_mensuel, 25000); assert.strictEqual(l.retour_mois, 0, "aucune mise de départ et résultat positif dès le premier mois"); assert.strictEqual(l.tresorerie[24].flux, 15000); assert.strictEqual(l.tresorerie[25].flux, 37000, "après la fin du contrat");
+  const perdant = N.simulerInvestissement({ ...base, mode: "leasing", loyer: 60000 }); assert.strictEqual(perdant.atteignable, false); assert.ok(perdant.seuil_charge > 100); assert.strictEqual(perdant.retour_mois, null); assert.ok(perdant.impact_36 < 0);
+  assert.strictEqual(N.simulerInvestissement({ ...base, mode: "comptant", corridors: [] }).seuil_charge, null);
+});
+
+test("simulateur : tableau de sensibilité (taux de charge × corridors)", () => {
+  const s = N.simulerInvestissement({ prix: 600000, mode: "leasing", loyer: 17000, annexes_mensuel: 3000, km_mois: 10000, taux_charge: 80, corridors: [{ nom: "A", pct: 50, margeKm: 2 }, { nom: "B", pct: 50, margeKm: 6 }] }).sensibilite;
+  assert.deepStrictEqual([...s.charges], [50, 60, 70, 80, 90, 100]); assert.deepStrictEqual([...s.lignes.map((l) => l.nom)], ["Répartition prévue", "100 % A", "100 % B"]);
+  assert.deepStrictEqual([...s.lignes[0].resultats], [0, 4000, 8000, 12000, 16000, 20000]); assert.deepStrictEqual([...s.lignes[1].resultats], [-10000, -8000, -6000, -4000, -2000, 0]); assert.strictEqual(s.lignes[2].resultats[5], 40000);
+});
+
+test("simulateur : s'appuie sur la marge au kilomètre réellement observée par corridor", () => {
+  etatPnl();
+  const o = N.corridorsObserves(365, "2026-11-30"), ap = o.corridors.find((c) => c.nom === "Agadir → Perpignan");
+  assert.strictEqual(ap.nb, 3); assert.strictEqual(ap.km, 8000); proche(ap.margeKm, (50000 - 16500 + 30000 - 9000 + 30000) / 8000); proche(ap.kmMoyen, 8000 / 3);
+  const p = N.pnlPeriode("2025-11-30", "2026-11-30"); proche(o.flotte.margeKm, p.marge_brute / p.km); proche(o.flotte.kmMoisParCamion, p.km / p.mois / 2);
+  const s = N.simulerInvestissement({ prix: 800000, mode: "leasing", loyer: 15000, km_mois: 9000, taux_charge: 85, corridors: o.corridors.slice(0, 2).map((c, i) => ({ nom: c.nom, pct: i ? 30 : 70, margeKm: c.margeKm })) });
+  proche(s.marge_km, o.corridors[0].margeKm * 0.7 + o.corridors[1].margeKm * 0.3); assert.ok(s.seuil_charge > 0);
+  N.S.voyages = []; N.S.commandes = []; assert.strictEqual(N.corridorsObserves(365, "2026-11-30").corridors.length, 0);
 });
 
 (async () => {

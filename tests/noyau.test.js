@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1463,6 +1463,109 @@ test("rappels de dépense : transitaire après la douane, facture de traversée 
   v.invitesIgnorees = ["jalon:douane_import"]; assert.deepStrictEqual([...cles()], ["jalon:embarque_retour"]);
   const w = N.S.voyages[2]; w.jalons = [{ type: "douane_export", date: "x" }]; w.douaneMad = 900; assert.strictEqual(N.invitesCout(w).length, 0, "frais de douane déjà saisis globalement : pas de rappel");
   assert.strictEqual(N.invitesCout({ statut: "annule", jalons: [{ type: "douane_export" }] }).length, 0);
+});
+
+/* ---------- D4 : compte de résultat de l'entreprise ---------- */
+const etatPnl = () => {
+  N.S.params.tauxEUR = 10;
+  N.S.clients = [{ id: "k1", nom: "Primeurs du Sud", delai: 30 }, { id: "k2", nom: "Froid Express", delai: 45 }];
+  N.S.camions = [{ id: "c1", immat: "A", coutsFixes: { leasing_mensuel: 12000, assurance_mensuel: 1000 } }, { id: "c2", immat: "B", fixeMensuel: 5000 }];
+  N.S.chauffeurs = [{ id: "h1", nom: "Youssef" }, { id: "h2", nom: "Karim" }];
+  N.S.chargesGenerales = [{ id: "g1", libelle: "Loyer", montant_mensuel: 6000, categorie: "loyer", cle_allocation: "km" }, { id: "g2", libelle: "Comptable", montant_mensuel: 1000, categorie: "comptable", cle_allocation: "equal" }];
+  N.S.interventions = [{ id: "i1", camionId: "c1", date: "2026-10-15", cout: 2500 }, { id: "i2", camionId: "c1", date: "2026-08-01", cout: 999 }];
+  N.S.voyages = [
+    { id: "v1", ref: "V1", clientId: "k1", camionId: "c1", chauffeurId: "h1", origine: "Agadir", destination: "Perpignan", dateDepart: "2026-10-01", dateRetourPrevue: "2026-10-10", prix: 5000, devise: "EUR", kmAller: 3000, kmRetourVide: 1000, carburantMad: 15000, peagesMad: 500, lignesCout: [{ id: "l1", type: "amendes", montant: 100, devise: "EUR", source: "saisie", date: "2026-10-05" }] },
+    { id: "v2", ref: "V2", clientId: "k2", camionId: "c2", chauffeurId: "h2", origine: "Agadir", destination: "Perpignan", dateDepart: "2026-10-12", dateRetourPrevue: "2026-10-20", prix: 30000, devise: "MAD", kmAller: 2000, carburantMad: 9000, lignesCout: [] },
+    { id: "v3", ref: "V3", clientId: "k1", camionId: "c2", chauffeurId: "h1", origine: "Casablanca", destination: "Lyon", dateDepart: "2026-10-22", dateRetourPrevue: "2026-10-30", prix: 40000, devise: "MAD", kmAller: 2000, carburantMad: 12000, lignesCout: [] },
+    { id: "v4", ref: "V4", clientId: "k1", camionId: "c1", dateDepart: "2026-10-15", statut: "annule", prix: 99999, devise: "MAD", lignesCout: [] },
+    { id: "v5", ref: "V5", clientId: "k2", camionId: "c1", chauffeurId: "h1", origine: "Agadir", destination: "Perpignan", dateDepart: "2026-11-03", dateRetourPrevue: "2026-11-10", prix: 30000, devise: "MAD", kmAller: 2000, lignesCout: [] },
+  ];
+  N.S.trajets = [{ id: "t1", distance: 500, calcul: { coutTotal: 2000 } }];
+  N.S.commandes = [{ id: "o1", ref: "C1", clientId: "k2", camionId: "c2", origine: "Tanger", destination: "Casablanca", statut: "livre", dateChargement: "2026-10-08", prix: 6000, devise: "MAD", trajetId: "t1", autres: 500 }, { id: "o2", statut: "devis", dateChargement: "2026-10-09", prix: 7000, devise: "MAD" }];
+  N.S.factures = []; N.S.echeances = []; N.S.entreprise = {};
+};
+
+test("compte de résultat : chiffre d'affaires, coûts directs par type, charges de structure de la période, marge nette, euros", () => {
+  etatPnl();
+  const p = N.pnlPeriode("2026-10-01", "2026-10-31"), mois = 31 / 30.4375;
+  assert.strictEqual(p.nb, 4, "3 voyages et 1 commande : ni l'annulé, ni le devis, ni novembre");
+  assert.strictEqual(p.revenue, 50000 + 30000 + 40000 + 6000);
+  assert.strictEqual(JSON.stringify(p.couts_directs_par_type), JSON.stringify({ amendes: 1000, peage_ma: 500, carburant: 36000, commandes: 2500 }));
+  assert.strictEqual(p.couts_directs, 40000); assert.strictEqual(p.marge_brute, 86000);
+  const f = p.couts_fixes_alloues_par_categorie; proche(f.leasing, 12000 * mois); proche(f.assurance, 1000 * mois); proche(f.global, 5000 * mois); assert.strictEqual(f.entretien, 2500); assert.strictEqual(f.amortissement, 0);
+  proche(p.charges_generales_allouees_par_categorie.loyer, 6000 * mois); proche(p.charges_generales_allouees_par_categorie.comptable, 1000 * mois);
+  proche(p.structure, 25000 * mois + 2500); proche(p.marge_nette, 86000 - 25000 * mois - 2500); proche(p.pct_marge, (p.marge_nette / 126000) * 100);
+  proche(p.eur.revenue, 12600); proche(p.eur.marge_nette, p.marge_nette / 10);
+  // même résultat que la page Rentabilité (deux calculs indépendants)
+  const r = N.rentabilite({ debut: "2026-10-01", fin: "2026-10-31" }); proche(r.totaux.ca, p.revenue); proche(r.totaux.marge, p.marge_nette); proche(r.totaux.variable, p.couts_directs);
+  // la part de structure qu'aucun voyage ne porte (camions à l'arrêt) est donnée à part : rien ne disparaît
+  proche(p.lignes.reduce((s, l) => s + l.structure, 0) + p.non_alloue, p.structure); assert.ok(p.non_alloue > 0);
+  assert.strictEqual(N.pnlPeriode("2030-01-01", "2030-01-31").revenue, 0);
+});
+
+test("compte de résultat : regroupements par client, corridor, camion, chauffeur, mois — cohérents entre eux et jusqu'au voyage", () => {
+  etatPnl();
+  const p = N.pnlPeriode("2026-10-01", "2026-11-30");
+  for (const k of ["par_client", "par_corridor", "par_camion", "par_chauffeur", "par_mois"]) {
+    proche(p[k].reduce((s, x) => s + x.revenue, 0), p.revenue, k); proche(p[k].reduce((s, x) => s + x.marge_directe, 0), p.marge_brute, k);
+    assert.strictEqual(p[k].reduce((s, x) => s + x.nb, 0), p.nb, k); assert.deepStrictEqual([...p[k].flatMap((x) => [...x.ids])].sort(), [...p.lignes.map((l) => l.id)].sort(), k + " : chaque activité apparaît une fois");
+  }
+  const k1 = p.par_client.find((x) => x.cle === "k1"); assert.strictEqual(k1.nom, "Primeurs du Sud"); assert.strictEqual(k1.revenue, 90000); assert.deepStrictEqual([...k1.ids].sort(), ["v1", "v3"]);
+  const vs = k1.ids.map((id) => N.margeVoyage(id)); proche(k1.marge_directe, vs.reduce((s, m) => s + m.marge_directe, 0)); proche(k1.marge_nette, vs.reduce((s, m) => s + m.marge_nette, 0)); proche(k1.pct_marge, (k1.marge_nette / 90000) * 100);
+  assert.deepStrictEqual([...p.par_corridor.map((x) => x.nom)].sort(), ["Agadir → Perpignan", "Casablanca → Lyon", "Tanger → Casablanca"]);
+  assert.deepStrictEqual([...p.par_mois.map((x) => x.cle)], ["2026-10", "2026-11"]); assert.strictEqual(p.par_chauffeur.find((x) => x.cle === "").nom, "Sans chauffeur");
+  // croisement client × corridor × camion × chauffeur
+  const cube = N.pivotPnl(p.lignes, ["client", "corridor", "camion", "chauffeur"]);
+  proche(cube.reduce((s, x) => s + x.revenue, 0), p.revenue); assert.strictEqual(cube.length, 5);
+  const x = cube.find((c) => c.cle === "k1|Agadir → Perpignan|c1|h1"); assert.strictEqual(x.nom, "Primeurs du Sud · Agadir → Perpignan · A · Youssef"); assert.deepStrictEqual([...x.ids], ["v1"]);
+  const cc = N.pivotPnl(p.lignes, ["client", "corridor"]); assert.strictEqual(cc.find((c) => c.cle === "k2|Agadir → Perpignan").nb, 2); assert.ok(cc[0].revenue >= cc[1].revenue, "trié par chiffre d'affaires");
+});
+
+test("tendance sur 12 mois : un point par mois, charges de structure du mois entier", () => {
+  etatPnl();
+  const t = N.tendancePnl(12, "2026-11-12");
+  assert.strictEqual(t.length, 12); assert.strictEqual(t[0].mois, "2025-12"); assert.strictEqual(t[11].mois, "2026-11"); assert.strictEqual(t[10].revenue, 126000); assert.strictEqual(t[11].revenue, 30000);
+  proche(t[10].marge_nette, N.pnlPeriode("2026-10-01", "2026-10-31").marge_nette); assert.strictEqual(t[5].revenue, 0); assert.ok(t[5].marge_nette < 0, "un mois sans activité porte quand même ses charges");
+  proche(t[11].structure, 25000 * (30 / 30.4375));
+});
+
+/* ---------- D5 : prévision de trésorerie ---------- */
+test("prévision de trésorerie : factures à leur échéance, échéances récurrentes, solde jour par jour, jour de passage en négatif", () => {
+  etatPnl(); N.S.voyages = []; N.S.commandes = [];
+  N.S.entreprise = { tresorerie: { solde: 20000 } };
+  N.S.factures = [
+    { id: "f1", numero: "F-1", clientId: "k1", echeance: "2026-11-20", devise: "MAD", tva: 20, statut: "emise", lignes: [{ montant: 10000 }] },
+    { id: "f2", numero: "F-2", clientId: "k2", echeance: "2026-12-05", devise: "EUR", tva: 0, statut: "emise", lignes: [{ montant: 3000 }] },
+    { id: "f3", numero: "F-3", clientId: "k1", echeance: "2026-11-01", devise: "MAD", tva: 0, statut: "emise", lignes: [{ montant: 4000 }] }, // en retard
+    { id: "f4", numero: "F-4", echeance: "2026-11-25", devise: "MAD", tva: 0, statut: "payee", lignes: [{ montant: 99999 }] },
+    { id: "f5", numero: "F-5", echeance: "2027-06-01", devise: "MAD", tva: 0, statut: "emise", lignes: [{ montant: 77777 }] }, // hors horizon
+  ];
+  N.S.echeances = [{ id: "e1", libelle: "Salaires", type: "salaire", montant: 30000, devise: "MAD", date: "2026-10-28", recurs: { frequence: "mensuel" } }, { id: "e2", libelle: "TVA T4", type: "taxe_tva", montant: 18000, devise: "MAD", date: "2027-01-20" }, { id: "e3", libelle: "Leasing", type: "credit_leasing", montant: 1200, devise: "EUR", date: "2026-11-15", recurs: { frequence: "mensuel" } }];
+  const p = N.previsionsTresorerie(90, { depart: "2026-11-12" });
+  assert.strictEqual(p.jours.length, 90); assert.strictEqual(p.jours[0].date, "2026-11-12"); assert.strictEqual(p.fin, "2027-02-09"); assert.strictEqual(p.solde_initial, 20000); assert.strictEqual(p.solde_renseigne, true);
+  const j = (d) => p.jours.find((x) => x.date === d);
+  assert.strictEqual(j("2026-11-12").solde, 24000); assert.strictEqual(j("2026-11-12").items[0].retard, true, "facture en retard : attendue dès aujourd'hui, signalée");
+  assert.strictEqual(j("2026-11-15").solde, 12000); assert.strictEqual(j("2026-11-20").solde, 24000, "TTC"); assert.strictEqual(j("2026-11-28").solde, -6000); assert.strictEqual(j("2026-12-05").solde, 24000, "3 000 € convertis");
+  assert.strictEqual(p.negatif, "2026-11-28"); assert.strictEqual(j("2027-01-20").items[0].libelle, "TVA T4");
+  proche(p.total_entrees, 4000 + 12000 + 30000); proche(p.total_sorties, 30000 * 3 + 12000 * 3 + 18000); proche(p.solde_final, 20000 + p.total_entrees - p.total_sorties);
+  assert.strictEqual(p.min.solde, p.solde_final); assert.strictEqual(p.min.date, "2027-01-28"); proche(p.eur.solde_final, p.solde_final / 10);
+  let s = 20000; for (const x of p.jours) { s += x.entrees - x.sorties; proche(x.solde, s); proche(x.items.reduce((a, i) => a + i.montant, 0), x.entrees - x.sorties); }
+  assert.strictEqual(N.previsionsTresorerie(30, { depart: "2026-11-12", solde: 0 }).jours.length, 30);
+  N.S.entreprise = {}; assert.strictEqual(N.previsionsTresorerie(10, { depart: "2026-11-12" }).solde_renseigne, false);
+});
+
+test("prévision de trésorerie : dépenses attendues des voyages en cours et recette à facturer", () => {
+  etatPnl(); N.S.interventions = []; N.S.commandes = [];
+  N.S.voyages = [{ id: "v1", ref: "V1", clientId: "k2", camionId: "c1", statut: "en_cours", dateDepart: "2026-11-08", dateRetourPrevue: "2026-11-18", prix: 5000, devise: "EUR", carburantMad: 15000, peagesMad: 500, douaneMad: 900,
+    traversees: [{ sens: "aller", ligne: "tmed-alg", fret: 300, date: "2026-11-09" }, { sens: "retour", ligne: "alg-tmed", fret: 280, dateFacturation: "2026-12-31" }],
+    lignesCout: [{ id: "l1", type: "douane_frais", montant: 850, devise: "MAD", source: "saisie", date: "2026-11-08" }] },
+    { id: "v2", ref: "V2", statut: "termine", dateDepart: "2026-10-01", dateRetourPrevue: "2026-10-10", prix: 30000, devise: "MAD", carburantMad: 9000, lignesCout: [] }];
+  const p = N.previsionsTresorerie(90, { depart: "2026-11-12", solde: 0 }), tous = p.jours.flatMap((x) => x.items.map((i) => [x.date, i.type, Math.round(i.montant)]));
+  assert.strictEqual(JSON.stringify(tous), JSON.stringify([["2026-11-18", "depense_prevue", -500], ["2026-12-03", "depense_prevue", -15000], ["2026-12-09", "depense_prevue", -3000], ["2026-12-31", "depense_prevue", -2800], ["2027-01-02", "recette_prevue", 50000]]),
+    "péage à la fin du voyage, carburant 15 jours après, traversée aller 30 jours après, retour à sa date de facturation, recette au retour + 45 jours ; la douane déjà enregistrée et le voyage terminé ne comptent pas");
+  N.S.commandes = [{ id: "o9", statut: "livre", factureId: "f9" }]; N.S.voyages[0].commandeId = "o9";
+  assert.ok(!N.previsionsTresorerie(90, { depart: "2026-11-12", solde: 0 }).jours.some((x) => x.items.some((i) => i.type === "recette_prevue")), "voyage déjà facturé : sa recette vient de la facture");
+  N.S.params.delaiCarteCarburant = 0; assert.strictEqual(N.previsionsTresorerie(90, { depart: "2026-11-12", solde: 0 }).jours.find((x) => x.date === "2026-11-18").sorties, 15500);
 });
 
 (async () => {

@@ -22,6 +22,15 @@
 - **Amendes** : comptées dans le voyage que le chauffeur faisait à la date de l'infraction.
 - Non fait : import des factures d'armateur en CSV (aucun format connu à ce jour — la facture se saisit en un geste depuis le rappel).
 
+### D4 — Résultat de l'entreprise en direct (page « Direction »)
+- Chiffre d'affaires, marge directe, charges de structure et marge nette de la période, **en MAD et en EUR**.
+- **Tableau croisé** client × corridor × camion × chauffeur × mois, en un geste, avec accès au voyage.
+- Tendance sur 12 mois ; « où part l'argent » par poste ; la part de charges qu'aucun voyage ne porte (camions à l'arrêt) est affichée, pas cachée.
+
+### D5 — Trésorerie à 90 jours
+- Solde jour par jour : factures à leur échéance (les retards sont signalés), échéances récurrentes développées, dépenses encore estimées et recette des voyages en cours.
+- Zone rouge et date du passage sous zéro ; un jour touché sur la courbe montre ce qui tombe ce jour-là.
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

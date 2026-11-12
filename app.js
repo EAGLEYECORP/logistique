@@ -159,6 +159,7 @@ const ONGLETS = [
   ["carburant", "Gasoil", "fuel", "Flotte"],
   ["clients", "Clients", "building", "Gestion"],
   ["factures", "Factures", "receipt", "Gestion"],
+  ["direction", "Direction", "gauge", "Gestion"],
   ["rentabilite", "Rentabilité", "gauge", "Gestion"],
   ["nomenclature", "Codes SH", "search", "Outils"],
   ["parametres", "Réglages", "settings", "Outils"],

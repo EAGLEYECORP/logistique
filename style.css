@@ -680,3 +680,24 @@ body.sans-finances .fin { display: none !important; }
 .marge-pastille svg .zero { stroke: currentColor; stroke-width: 1; stroke-dasharray: 2 2; opacity: .45; }
 .lignes-cout .row { margin-top: 8px; }
 @media (max-width: 600px) { details.dossier summary:has(.marge-pastille) { grid-template-columns: 1fr; } details.dossier summary:has(.marge-pastille) > .row { justify-content: flex-start; flex-wrap: wrap; } }
+
+/* page Direction */
+.kpi .v.pos, .num.pos { color: var(--ok); }
+.kpis.compact { margin-bottom: 8px; }
+.chart svg .axe { stroke: var(--border); stroke-width: 1; }
+.chart svg .barre { fill: color-mix(in srgb, var(--primary) 30%, transparent); }
+.chart svg .courbe { fill: none; stroke: var(--ok); stroke-width: 2; stroke-linejoin: round; }
+.chart svg .courbe.neg { stroke: var(--warn); }
+.chart svg .pt { fill: var(--ok); } .chart svg .pt.neg { fill: var(--danger); }
+.chart svg .lib { font-size: 10px; fill: var(--muted); }
+.chart svg .zone-neg { fill: color-mix(in srgb, var(--danger) 12%, transparent); }
+.chart svg .jour { fill: transparent; cursor: pointer; } .chart svg .jour:hover { fill: color-mix(in srgb, var(--text) 6%, transparent); }
+.legende { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .78rem; color: var(--muted); margin-top: 6px; }
+.legende i { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+.l-barre { background: color-mix(in srgb, var(--primary) 30%, transparent); } .l-courbe { background: var(--ok); height: 3px !important; }
+.l-direct, .jauge i.direct { background: var(--primary); } .l-fixe, .jauge i.fixe { background: var(--warn); } .l-general, .jauge i.general { background: var(--muted); }
+.poste { display: grid; grid-template-columns: minmax(110px, 1.1fr) 2fr auto; gap: 10px; align-items: center; padding: 5px 0; font-size: .9rem; }
+.jauge { height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--text) 6%, transparent); overflow: hidden; } .jauge i { display: block; height: 100%; border-radius: 4px; }
+tr.cliquable { cursor: pointer; } tr.cliquable.actif td { background: color-mix(in srgb, var(--primary) 7%, transparent); } tr.detail td { padding-top: 4px; }
+.alerte-treso { display: flex; gap: 8px; align-items: flex-start; color: var(--danger); margin: 4px 0 10px; }
+.segmented.multi { flex-wrap: wrap; margin-bottom: 10px; }

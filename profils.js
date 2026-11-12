@@ -12,7 +12,7 @@ const ROLES = {
   exploitation: { lib: "Exploitation", detail: "Suivi, voyages, flotte, chauffeurs, douane — sans les prix ni les marges", finances: false,
     onglets: ["tableau", "commandes", "direct", "voyages", "gps", "itineraires", "douane", "international", "peages", "camions", "chauffeurs", "tachy", "carburant", "nomenclature"] },
   commercial: { lib: "Commercial", detail: "Commandes, clients, factures, voyages et suivi", finances: true, onglets: ["tableau", "commandes", "clients", "factures", "direct", "voyages", "nomenclature"] },
-  comptabilite: { lib: "Comptabilité", detail: "Factures, clients, rentabilité, gasoil, péages", finances: true, onglets: ["tableau", "factures", "clients", "rentabilite", "commandes", "voyages", "carburant", "peages"] },
+  comptabilite: { lib: "Comptabilité", detail: "Factures, clients, rentabilité, gasoil, péages", finances: true, onglets: ["tableau", "factures", "clients", "direction", "rentabilite", "commandes", "voyages", "carburant", "peages"] },
 };
 const ONGLETS_TOUS = ONGLETS.map((o) => o.slice());
 const roleLire = () => { try { const r = JSON.parse(localStorage.getItem(CLE_ROLE) || "{}"); return { role: ROLES[r.role] ? r.role : "direction", verrou: r.verrou || null }; } catch { return { role: "direction", verrou: null }; } };

@@ -6,6 +6,8 @@ const path = require("path");
 const { creer, normaliser } = require("../serveur/relais.js");
 const { creerCoffre, chargerCoffre, estChiffre } = require("../serveur/coffre.js");
 const { planPurge } = require("../serveur/purge-photos.js");
+const A = require("../serveur/auth.js");
+const { creerMulti } = require("../serveur/multi.js");
 
 const tests = [];
 const test = (n, f) => tests.push([n, f]);
@@ -279,6 +281,7 @@ test("relais chiffré : rien de lisible sur le disque, tout revient au redémarr
     assert.strictEqual((await s.appel("/api/alertes/historique", { jeton: "lit" })).json.alertes[0].texte, "Alerte confidentielle 111-A-1");
     const pos = (await s.appel("/api/trace?id=BAL-SECRET&depuis=" + (t - 3600), { jeton: "lit" })).json; assert.ok(JSON.stringify(pos).includes("35.7"), "positions relues : " + JSON.stringify(pos).slice(0, 120));
     await s.arreter();
+    s = await demarrer(d, { coffre: chargerCoffre(d, env).coffre }); assert.strictEqual((await s.appel("/api/alertes/historique", { jeton: "lit" })).json.alertes.length, 1, "deuxième redémarrage : l'historique est toujours lisible"); await s.arreter();
     // mauvaise clé : le relais démarre, ne montre rien, ne plante pas
     s = await demarrer(d, { coffre: chargerCoffre(d, { CHIFFRER_DONNEES: "true", CLE_DONNEES: "mauvaise-phrase-secrete" }).coffre });
     assert.strictEqual((await s.appel("/sante")).code, 200); assert.strictEqual((await s.appel("/api/sync", { jeton: "lit" })).json.blob, ""); assert.strictEqual((await fetch(s.base + `/suivi/${c.json.id}/donnees`)).status, 404);
@@ -325,6 +328,257 @@ test("purge des photos : marquées après N mois, supprimées après le délai d
     const journal = fs.readFileSync(path.join(d, "purge.log"), "utf8").trim().split("\n").map((x) => JSON.parse(x)); assert.deepStrictEqual(journal.map((x) => [x.id, x.action]), [["photo-ancienne", "marquer"], ["photo-ancienne", "supprimer"]]);
     await s.arreter();
     assert.strictEqual(creer({ jetonEcriture: "a", jetonLecture: "b" }).purgerPhotos(), null, "sans PURGE_PHOTOS_MOIS : rien");
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test("authentification : mots de passe, TOTP (vecteurs RFC 6238), rotation des sessions et vol de jeton, blocages", () => {
+  const h = A.hacherMotDePasse("un mot de passe solide"); assert.ok(h.startsWith("scrypt$15$8$1$")); assert.strictEqual(A.verifierMotDePasse("un mot de passe solide", h), true); assert.strictEqual(A.verifierMotDePasse("autre chose", h), false); assert.strictEqual(A.verifierMotDePasse("x", null), false);
+  assert.notStrictEqual(A.hacherMotDePasse("même"), A.hacherMotDePasse("même"), "sel aléatoire");
+  const secret = A.base32(Buffer.from("12345678901234567890")); assert.strictEqual(secret, "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+  assert.strictEqual(A.totp(secret, 59000), "287082"); assert.strictEqual(A.totp(secret, 1111111109000), "081804"); assert.strictEqual(A.totp(secret, 1234567890000), "005924");
+  assert.strictEqual(A.verifierTotp(secret, "287082", 59000), 1); assert.strictEqual(A.verifierTotp(secret, "287082", 59000 + 30000), 1, "un pas de tolérance"); assert.strictEqual(A.verifierTotp(secret, "287082", 59000 + 90000), null);
+  assert.strictEqual(A.verifierTotp(secret, "287082", 59000, 1), null, "code déjà utilisé refusé"); assert.strictEqual(A.verifierTotp(secret, "abc", 59000), null); assert.ok(A.uriTotp(secret, "a@b.example").startsWith("otpauth://totp/Logistique%20Fret:a%40b.example?secret=GEZ"));
+  let t = 1e12; const table = {}, S = A.creerSessions(table, { maintenant: () => t });
+  const s1 = S.ouvrir("u1"); assert.strictEqual(S.lire(s1.acces).u, "u1"); assert.strictEqual(S.lire(s1.renouvellement), null, "un jeton de renouvellement n'ouvre pas l'accès"); assert.ok(Object.keys(table).every((k) => /^[0-9a-f]{64}$/.test(k)), "seules les empreintes sont gardées");
+  const r = S.renouveler(s1.renouvellement); assert.strictEqual(r.u, "u1"); assert.strictEqual(S.lire(s1.acces), null, "l'ancien accès cesse"); assert.ok(S.lire(r.acces));
+  assert.strictEqual(S.renouveler(s1.renouvellement).erreur, "reutilise"); assert.strictEqual(S.lire(r.acces), null, "réutilisation d'un jeton déjà consommé : toute la famille est révoquée");
+  const s2 = S.ouvrir("u2"), s3 = S.ouvrir("u2"); S.revoquerCompte("u2", s3.famille); assert.strictEqual(S.lire(s2.acces), null); assert.ok(S.lire(s3.acces));
+  t += 13 * 3600000; assert.strictEqual(S.lire(s3.acces), null, "accès expiré après 12 h"); const r3 = S.renouveler(s3.renouvellement); assert.ok(r3.acces, "renouvellement valable 30 jours");
+  t += 31 * 86400000; assert.ok(["expire", "inconnu"].includes(S.renouveler(r3.renouvellement).erreur), "renouvellement expiré après 30 jours");
+  const L = A.creerLimites({ maintenant: () => t }), c = {};
+  for (let i = 0; i < 4; i++) L.echec(c); assert.strictEqual(L.bloqueJusqua(c), 0); L.echec(c); assert.strictEqual(L.bloqueJusqua(c), t + 15 * 60000);
+  t += 16 * 60000; for (let i = 0; i < 5; i++) L.echec(c); t += 16 * 60000; for (let i = 0; i < 5; i++) L.echec(c); assert.strictEqual(L.bloqueJusqua(c), t + 3600000, "3e blocage : 1 h");
+  L.succes(c); assert.strictEqual(L.bloqueJusqua(c), 0); for (let i = 0; i < 10; i++) assert.ok(L.essaiIp("1.2.3.4")); assert.strictEqual(L.essaiIp("1.2.3.4"), false, "11e essai de la minute refusé"); assert.ok(L.essaiIp("5.6.7.8"));
+  assert.strictEqual(A.prefixeReseau("::ffff:41.250.12.7"), "41.250"); assert.strictEqual(A.prefixeReseau("2a01:cb00:1:2::1"), "2a01:cb00");
+});
+
+/** Relais multi-utilisateur de test, horloge réglable. */
+async function demarrerMulti(dossier = null, opts = {}) {
+  const horloge = { t: Date.now() }, alertes = [], mails = [];
+  const multi = creerMulti({ dossier, version: "test", jetonLecture: "lit", maintenant: () => horloge.t, cookieSecurise: false, noterAlerte: (a) => alertes.push(a), smtp: opts.smtp || null, courriel_: async (cfg, m) => { mails.push(m); return { ok: true }; }, ...opts });
+  const s = await demarrer(dossier, { multi, ...(opts.coffre ? { coffre: opts.coffre } : {}) }); let n = 0;
+  const appel = async (chemin, { jeton = "", methode = "GET", corps, entetes = {}, ip } = {}) => { const r = await fetch(s.base + chemin, { method: methode, headers: { ...(jeton ? { authorization: `Bearer ${jeton}` } : {}), "content-type": "application/json", "x-forwarded-for": ip || `10.0.${Math.floor(n / 200)}.${(n++ % 200) + 1}`, ...entetes }, body: corps === undefined ? undefined : JSON.stringify(corps) }); const t = await r.text(); let json = null; try { json = JSON.parse(t); } catch { /* texte */ } return { code: r.status, json, texte: t, entetes: r.headers }; };
+  const connexion = async (email, motDePasse, code, ip) => (await appel("/api/auth/login", { methode: "POST", corps: { email, motDePasse, code }, ip })).json;
+  return { ...s, multi, horloge, alertes, mails, appel, connexion };
+}
+const SEMENCE = () => ({ params: { tauxEUR: 10.8, fraisGenerauxMois: 5000 }, entreprise: { nom: "Atlas Fret", tresorerie: { solde: 60000 } },
+  camions: [{ id: "c1", immat: "111-A-1", fixeMensuel: 9000 }, { id: "c2", immat: "222-B-2" }], chauffeurs: [{ id: "h1", nom: "Youssef", perDiemJournalier: 30 }, { id: "h2", nom: "Karim" }],
+  clients: [{ id: "k1", nom: "Primeurs du Sud", delai: 30 }], factures: [{ id: "f1", numero: "F-1", clientId: "k1", lignes: [{ montant: 1000 }] }], dossiers: [{ id: "d1", ref: "DUM-1", transitaireId: "COMPTE-TR" }, { id: "d2", ref: "DUM-2" }],
+  voyages: [{ id: "v1", ref: "V-1", chauffeurId: "h1", camionId: "c1", statut: "en_cours", origine: "Agadir", destination: "Perpignan", prix: 4000, devise: "EUR", lignesCout: [{ id: "l1", type: "carburant", montant: 9000 }], traversees: [{ sens: "aller", fret: 320, ref: "DFDS-1" }], jalons: [] },
+    { id: "v2", ref: "V-2", chauffeurId: "h2", camionId: "c2", statut: "prevu", origine: "Casablanca", destination: "Lyon", prix: 3500, devise: "EUR", lignesCout: [], jalons: [] }] });
+
+test("multi-utilisateur : premier compte (jeton du relais), double authentification obligatoire du chef, connexion, session, données importées", async () => {
+  const s = await demarrerMulti();
+  try {
+    assert.deepStrictEqual((await s.appel("/api/auth/etat")).json, { multi: true, initialise: false, version: "test", reinitialisationParEmail: false });
+    const ini = { nom: "Hassan", email: "Direction@Atlas.example", motDePasse: "mot de passe du chef", donnees: SEMENCE() };
+    assert.strictEqual((await s.appel("/api/auth/initialiser", { methode: "POST", corps: ini })).code, 401, "n'importe qui ne peut pas s'approprier un relais neuf");
+    const r = await s.appel("/api/auth/initialiser", { methode: "POST", corps: ini, jeton: "lit" }); assert.strictEqual(r.code, 201); assert.strictEqual(r.json.importes, 12); assert.ok(/^[A-Z2-7]{4}(-[A-Z2-7]{4}){5}$/.test(r.json.codeRecuperation));
+    assert.strictEqual((await s.appel("/api/auth/initialiser", { methode: "POST", corps: ini, jeton: "lit" })).code, 409);
+    assert.strictEqual((await s.appel("/api/donnees")).code, 401, "sans session : rien");
+    let c = await s.connexion("direction@atlas.example", "mot de passe du chef"); assert.ok(c.acces); assert.strictEqual(c.exige2FA, true); assert.strictEqual(c.utilisateur.role, "chef_entreprise");
+    assert.strictEqual((await s.appel("/api/donnees", { jeton: c.acces })).json.code, "2fa_requise", "chef sans double authentification : seulement le réglage de son compte");
+    const i = (await s.appel("/api/auth/2fa/initier", { methode: "POST", jeton: c.acces, corps: {} })).json; assert.ok(i.uri.includes(i.secret));
+    assert.strictEqual((await s.appel("/api/auth/2fa/activer", { methode: "POST", jeton: c.acces, corps: { code: "000000" } })).code, 400);
+    assert.strictEqual((await s.appel("/api/auth/2fa/activer", { methode: "POST", jeton: c.acces, corps: { code: A.totp(i.secret, s.horloge.t) } })).code, 200);
+    assert.strictEqual((await s.appel("/api/auth/login", { methode: "POST", corps: { email: "direction@atlas.example", motDePasse: "mot de passe du chef" } })).json.exige, "code");
+    s.horloge.t += 31000; const code = A.totp(i.secret, s.horloge.t);
+    c = await s.connexion("direction@atlas.example", "mot de passe du chef", code); assert.ok(c.acces); assert.strictEqual(c.exige2FA, false);
+    assert.strictEqual((await s.appel("/api/auth/login", { methode: "POST", corps: { email: "direction@atlas.example", motDePasse: "mot de passe du chef", code } })).code, 401, "le même code ne sert pas deux fois");
+    const d = (await s.appel("/api/donnees", { jeton: c.acces })).json; assert.strictEqual(d.collections.voyages.length, 2); assert.strictEqual(d.collections.voyages[0].prix, 4000); assert.strictEqual(d.collections.reglages.find((x) => x.id === "entreprise").tresorerie.solde, 60000); assert.strictEqual(d.collections.voyages[0]._v, 1);
+    assert.ok((await s.appel("/api/journal", { jeton: c.acces })).json.journal.some((x) => x.action === "initialisation"));
+    assert.strictEqual((await s.appel("/api/auth/me", { jeton: c.acces })).json.utilisateur.deuxFA, true);
+  } finally { await s.arreter(); }
+});
+
+/** Relais prêt : chef connecté (2FA), comptes de chaque rôle créés. */
+async function equipe(dossier = null, opts = {}) {
+  const s = await demarrerMulti(dossier, opts);
+  await s.appel("/api/auth/initialiser", { methode: "POST", jeton: "lit", corps: { nom: "Hassan", email: "chef@atlas.example", motDePasse: "mot de passe du chef", donnees: SEMENCE() } });
+  let chef = await s.connexion("chef@atlas.example", "mot de passe du chef"); const i = (await s.appel("/api/auth/2fa/initier", { methode: "POST", jeton: chef.acces, corps: {} })).json;
+  await s.appel("/api/auth/2fa/activer", { methode: "POST", jeton: chef.acces, corps: { code: A.totp(i.secret, s.horloge.t) } }); s.horloge.t += 31000;
+  chef = await s.connexion("chef@atlas.example", "mot de passe du chef", A.totp(i.secret, s.horloge.t));
+  const comptes = {};
+  for (const [role, plus] of [["exploitant", { office: "allemagne" }], ["dispatcher", { office: "maroc" }], ["commercial", {}], ["comptable", {}], ["chauffeur", { chauffeurId: "h1" }], ["transitaire", {}]]) {
+    const r = await s.appel("/api/utilisateurs", { methode: "POST", jeton: chef.acces, corps: { nom: role, email: `${role}@atlas.example`, role, motDePasse: `mot de passe ${role}`, ...plus } });
+    assert.strictEqual(r.code, 201, JSON.stringify(r.json)); comptes[role] = r.json.utilisateur;
+  }
+  // le dossier d1 est confié au transitaire (son identifiant n'est connu qu'après la création du compte)
+  const d1 = (await s.appel("/api/records/dossiers/d1", { jeton: chef.acces })).json.enregistrement;
+  await s.appel("/api/records/dossiers/d1", { methode: "PUT", jeton: chef.acces, corps: { ...d1, transitaireId: comptes.transitaire.id }, entetes: { "if-match": String(d1._v) } });
+  const jetons = { chef: chef.acces }; for (const role of Object.keys(comptes)) jetons[role] = (await s.connexion(`${role}@atlas.example`, `mot de passe ${role}`)).acces;
+  return { ...s, comptes, jetons, secretChef: i.secret };
+}
+
+test("multi-utilisateur : droits appliqués par le serveur, appel direct à l'API (pas un menu caché)", async () => {
+  const s = await equipe();
+  try {
+    const J = s.jetons, get = (q, j) => s.appel(q, { jeton: j });
+    assert.strictEqual((await get("/api/records/factures", J.dispatcher)).code, 403, "répartiteur → factures : 403");
+    const vd = (await get("/api/records/voyages", J.dispatcher)).json.enregistrements; assert.strictEqual(vd.length, 2); assert.ok(vd.every((v) => !("prix" in v) && !("lignesCout" in v) && !("fret" in (v.traversees?.[0] || {}))));
+    const vc = (await get("/api/records/voyages", J.commercial)).json.enregistrements; assert.ok(vc.every((v) => !("lignesCout" in v)), "commercial : voyages sans dépenses ni marges");
+    const vch = (await get("/api/records/voyages", J.chauffeur)).json.enregistrements; assert.deepStrictEqual(vch.map((v) => v.id), ["v1"], "chauffeur : ses voyages seulement");
+    assert.strictEqual((await get("/api/records/voyages/v2", J.chauffeur)).code, 404); assert.deepStrictEqual((await get("/api/records/camions", J.chauffeur)).json.enregistrements.map((c) => c.id), ["c1"]);
+    assert.deepStrictEqual((await get("/api/records/dossiers", J.transitaire)).json.enregistrements.map((d) => d.ref), ["DUM-1"], "transitaire : ses dossiers seulement"); assert.strictEqual((await get("/api/records/clients", J.transitaire)).code, 403);
+    assert.strictEqual((await s.appel("/api/records/voyages/v1", { methode: "DELETE", jeton: J.comptable, entetes: { "if-match": "1" } })).code, 403, "comptable → suppression d'un voyage : 403");
+    const reg = (await get("/api/donnees", J.dispatcher)).json.collections; assert.ok(!("factures" in reg)); assert.ok(!("tresorerie" in reg.reglages.find((x) => x.id === "entreprise")));
+    assert.strictEqual((await get("/api/utilisateurs", J.exploitant)).code, 403); assert.strictEqual((await get("/api/journal", J.dispatcher)).code, 403);
+    // le répartiteur modifie un voyage sans voir les prix : les prix restent intacts
+    const v1 = (await get("/api/records/voyages/v1", J.dispatcher)).json.enregistrement;
+    const w = await s.appel("/api/records/voyages/v1", { methode: "PUT", jeton: J.dispatcher, corps: { ...v1, destination: "Lyon" }, entetes: { "if-match": String(v1._v) } }); assert.strictEqual(w.code, 200);
+    const vu = (await get("/api/records/voyages/v1", J.chef)).json.enregistrement; assert.strictEqual(vu.destination, "Lyon"); assert.strictEqual(vu.prix, 4000); assert.strictEqual(vu.lignesCout.length, 1); assert.strictEqual(vu.traversees[0].fret, 320);
+    // le comptable ajoute une dépense mais ne peut pas changer la destination ; le chauffeur marque une étape de SON voyage
+    const w2 = await s.appel("/api/records/voyages/v1", { methode: "PUT", jeton: J.comptable, corps: { ...vu, destination: "Paris", lignesCout: [...vu.lignesCout, { id: "l2", type: "amendes", montant: 100 }] }, entetes: { "if-match": String(vu._v) } });
+    assert.strictEqual(w2.json.enregistrement.destination, "Lyon"); assert.strictEqual(w2.json.enregistrement.lignesCout.length, 2);
+    const vh = (await get("/api/records/voyages/v1", J.chauffeur)).json.enregistrement;
+    assert.strictEqual((await s.appel("/api/records/voyages/v1", { methode: "PUT", jeton: J.chauffeur, corps: { ...vh, jalons: [{ type: "depart", date: "2026-11-12T06:00:00Z" }], destination: "Ailleurs" }, entetes: { "if-match": String(vh._v) } })).json.enregistrement.destination, "Lyon");
+    const v2 = (await get("/api/records/voyages/v2", J.chef)).json.enregistrement; assert.strictEqual((await s.appel("/api/records/voyages/v2", { methode: "PUT", jeton: J.chauffeur, corps: { ...v2, jalons: [{ type: "depart" }] }, entetes: { "if-match": String(v2._v) } })).code, 403, "voyage d'un autre chauffeur");
+    assert.strictEqual((await s.appel("/api/records/factures/f9", { methode: "PUT", jeton: J.dispatcher, corps: { id: "f9" } })).code, 403);
+    // suivi en direct : une session d'un rôle de suivi vaut le jeton de lecture ; pas celle d'un chauffeur
+    assert.strictEqual((await get("/api/derniere", J.dispatcher)).code, 200); assert.strictEqual((await get("/api/derniere", J.chauffeur)).code, 401); assert.strictEqual((await s.appel("/api/derniere?token=lit")).code, 200, "l'ancien jeton marche toujours (applications installées)");
+    // chaque refus est tracé
+    const refus = (await get("/api/journal?action=refus", J.chef)).json.journal; assert.ok(refus.length >= 3); assert.ok(refus.some((x) => x.nom === "dispatcher" && x.col === "factures"));
+  } finally { await s.arreter(); }
+});
+
+test("multi-utilisateur : modifications concurrentes (409 avec l'état actuel), If-Match obligatoire, verrou de 30 s, suppression douce, changements depuis un instant", async () => {
+  const s = await equipe();
+  try {
+    const J = s.jetons, put = (j, rec, v, plus = {}) => s.appel(`/api/records/voyages/${rec.id}`, { methode: "PUT", jeton: j, corps: rec, entetes: { "if-match": String(v), ...plus } });
+    const a = (await s.appel("/api/records/voyages/v2", { jeton: J.chef })).json.enregistrement, b = (await s.appel("/api/records/voyages/v2", { jeton: J.exploitant })).json.enregistrement;
+    const seq0 = (await s.appel("/api/changes?since=0", { jeton: J.exploitant })).json.seq;
+    assert.strictEqual((await put(J.chef, { ...a, destination: "Marseille" }, a._v)).code, 200);
+    const c = await put(J.exploitant, { ...b, destination: "Toulouse" }, b._v); assert.strictEqual(c.code, 409); assert.strictEqual(c.json.actuel.destination, "Marseille"); assert.strictEqual(c.json.par, "Hassan");
+    assert.strictEqual((await s.appel("/api/records/voyages/v2", { methode: "PUT", jeton: J.exploitant, corps: b })).code, 428, "If-Match obligatoire");
+    assert.strictEqual((await put(J.exploitant, { ...c.json.actuel, destination: "Toulouse" }, c.json.actuel._v)).code, 200, "fusion : on repart de l'état actuel");
+    assert.strictEqual((await put(J.chef, { ...a, statut: "en_cours" }, "*")).code, 200, "écraser : choix explicite");
+    const inchange = await put(J.chef, { ...(await s.appel("/api/records/voyages/v2", { jeton: J.chef })).json.enregistrement }, "*"); assert.strictEqual(inchange.json.inchange, true, "rien de changé : pas de nouvelle version");
+    // verrou sur une opération sensible
+    assert.strictEqual((await s.appel("/api/verrous", { methode: "POST", jeton: J.dispatcher, corps: { col: "voyages", id: "v2", raison: "livraison" } })).code, 200);
+    const cur = (await s.appel("/api/records/voyages/v2", { jeton: J.chef })).json.enregistrement;
+    const bloque = await put(J.chef, { ...cur, notes: "x" }, cur._v); assert.strictEqual(bloque.code, 423); assert.ok(/dispatcher est en train de modifier/.test(bloque.json.erreur));
+    assert.strictEqual((await s.appel("/api/verrous", { methode: "POST", jeton: J.chef, corps: { col: "voyages", id: "v2" } })).code, 423);
+    assert.strictEqual((await put(J.chef, { ...cur, notes: "forcé" }, cur._v, { "x-forcer": "1" })).code, 200, "on peut passer outre, en connaissance de cause");
+    s.horloge.t += 31000; const cur2 = (await s.appel("/api/records/voyages/v2", { jeton: J.chef })).json.enregistrement; assert.strictEqual((await put(J.chef, { ...cur2, notes: "après" }, cur2._v)).code, 200, "verrou expiré après 30 s");
+    assert.strictEqual((await s.appel("/api/records/voyages/v2", { methode: "DELETE", jeton: J.comptable })).code, 403);
+    assert.strictEqual((await s.appel("/api/records/voyages/v2", { methode: "DELETE", jeton: J.exploitant, entetes: { "if-match": "*" } })).code, 200);
+    assert.strictEqual((await s.appel("/api/records/voyages/v2", { jeton: J.chef })).code, 404, "supprimé pour tous");
+    const ch = (await s.appel(`/api/changes?since=${seq0}`, { jeton: J.dispatcher })).json; assert.ok(ch.changements.some((x) => x.id === "v2" && x.supprime)); assert.ok(ch.seq > seq0);
+    assert.strictEqual((await s.appel(`/api/changes?since=${ch.seq}`, { jeton: J.dispatcher })).json.changements.length, 0);
+    assert.ok((await s.appel(`/api/changes?since=0`, { jeton: J.dispatcher })).json.changements.filter((x) => x.enregistrement).every((x) => !("prix" in x.enregistrement)), "les changements aussi sont filtrés");
+    const j = (await s.appel("/api/journal?collection=voyages", { jeton: J.chef })).json.journal; assert.ok(["creation", "modification", "suppression", "conflit"].every((a) => j.some((x) => x.action === a) || a === "creation"));
+    const mod = j.find((x) => x.action === "modification" && x.diff?.destination); assert.ok(Array.isArray(mod.diff.destination) && mod.diff.destination.length === 2, "avant / après");
+    const csv = await s.appel("/api/journal?format=csv&collection=voyages", { jeton: J.chef }); assert.ok(/^\ufeff?date;utilisateur;action;collection;enregistrement;details/.test(csv.texte)); assert.ok(/suppression/.test(csv.texte));
+  } finally { await s.arreter(); }
+});
+
+test("multi-utilisateur : mises à jour en direct (SSE) en moins d'une seconde, aux seuls rôles concernés", async () => {
+  const s = await equipe(); const http = require("http");
+  try {
+    const flux = (jeton) => new Promise((ok) => { const evts = []; const req = http.get(s.base + "/api/sse", { headers: { authorization: `Bearer ${jeton}` } }, (res) => { res.setEncoding("utf8"); let t = ""; res.on("data", (c) => { t += c; let i; while ((i = t.indexOf("\n\n")) >= 0) { const bloc = t.slice(0, i); t = t.slice(i + 2); const ev = bloc.match(/^event: (.*)$/m)?.[1], d = bloc.match(/^data: (.*)$/m)?.[1]; if (ev) evts.push({ ev, d: JSON.parse(d), t: Date.now() }); } }); ok({ evts, fermer: () => req.destroy(), code: res.statusCode }); }); });
+    const exp = await flux(s.jetons.exploitant), disp = await flux(s.jetons.dispatcher), tr = await flux(s.jetons.transitaire);
+    assert.strictEqual(exp.code, 200); await new Promise((r) => setTimeout(r, 100)); assert.ok(exp.evts.some((e) => e.ev === "bonjour"));
+    const v = (await s.appel("/api/records/voyages/v1", { jeton: s.jetons.chef })).json.enregistrement, t0 = Date.now();
+    await s.appel("/api/records/voyages/v1", { methode: "PUT", jeton: s.jetons.chef, corps: { ...v, notes: "en direct" }, entetes: { "if-match": String(v._v) } });
+    await new Promise((r) => setTimeout(r, 300));
+    const e = exp.evts.find((x) => x.ev === "change"); assert.ok(e, "changement reçu"); assert.strictEqual(e.d.col, "voyages"); assert.strictEqual(e.d.id, "v1"); assert.strictEqual(e.d.par, "Hassan"); assert.ok(e.t - t0 < 1000, `${e.t - t0} ms`);
+    assert.ok(disp.evts.some((x) => x.ev === "change")); assert.ok(tr.evts.some((x) => x.ev === "change"), "le transitaire voit les voyages qui lui sont confiés");
+    const f = (await s.appel("/api/records/factures/f1", { jeton: s.jetons.chef })).json.enregistrement; await s.appel("/api/records/factures/f1", { methode: "PUT", jeton: s.jetons.chef, corps: { ...f, numero: "F-1b" }, entetes: { "if-match": String(f._v) } });
+    await s.appel("/api/verrous", { methode: "POST", jeton: s.jetons.dispatcher, corps: { col: "voyages", id: "v1", raison: "livraison" } });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.ok(exp.evts.some((x) => x.ev === "change" && x.d.col === "factures")); assert.ok(!disp.evts.some((x) => x.ev === "change" && x.d.col === "factures"), "le répartiteur n'est pas prévenu des factures");
+    assert.ok(exp.evts.some((x) => x.ev === "verrou" && x.d.nom === "dispatcher"), "« X est en train de modifier » diffusé");
+    exp.fermer(); disp.fermer(); tr.fermer(); await new Promise((r) => setTimeout(r, 100)); assert.strictEqual(s.multi.clientsSse.size, 0, "flux fermés retirés");
+    assert.strictEqual((await s.appel("/api/sse")).code, 401);
+  } finally { await s.arreter(); }
+});
+
+test("multi-utilisateur : comptes (création, rôle, clôture, réouverture), mot de passe changé = autres sessions coupées, blocage, réseau inhabituel, renouvellement", async () => {
+  const s = await equipe();
+  try {
+    const J = s.jetons, liste = (await s.appel("/api/utilisateurs", { jeton: J.chef })).json.utilisateurs; assert.strictEqual(liste.length, 7); assert.ok(liste.every((u) => !("hash" in u) && !("totp" in u)), "aucun secret renvoyé");
+    assert.strictEqual((await s.appel("/api/utilisateurs", { methode: "POST", jeton: J.chef, corps: { nom: "x", email: "dispatcher@atlas.example", role: "dispatcher", motDePasse: "douze caracteres" } })).code, 409);
+    assert.strictEqual((await s.appel("/api/utilisateurs", { methode: "POST", jeton: J.chef, corps: { nom: "x", email: "y@atlas.example", role: "dispatcher", motDePasse: "court" } })).code, 400);
+    const id = s.comptes.dispatcher.id;
+    // changement de rôle : sessions coupées, nouveaux droits à la reconnexion
+    assert.strictEqual((await s.appel(`/api/utilisateurs/${id}`, { methode: "PUT", jeton: J.chef, corps: { role: "exploitant" } })).json.utilisateur.role, "exploitant");
+    assert.strictEqual((await s.appel("/api/donnees", { jeton: J.dispatcher })).code, 401);
+    let t = (await s.connexion("dispatcher@atlas.example", "mot de passe dispatcher")).acces; assert.strictEqual((await s.appel("/api/records/voyages/v1", { jeton: t })).json.enregistrement.prix, 4000);
+    // clôture puis réouverture
+    await s.appel(`/api/utilisateurs/${id}`, { methode: "PUT", jeton: J.chef, corps: { cloture: true } });
+    assert.strictEqual((await s.appel("/api/donnees", { jeton: t })).code, 401); assert.strictEqual((await s.appel("/api/auth/login", { methode: "POST", corps: { email: "dispatcher@atlas.example", motDePasse: "mot de passe dispatcher" } })).code, 401);
+    await s.appel(`/api/utilisateurs/${id}`, { methode: "PUT", jeton: J.chef, corps: { cloture: false } }); assert.ok((await s.connexion("dispatcher@atlas.example", "mot de passe dispatcher")).acces);
+    assert.strictEqual((await s.appel(`/api/utilisateurs/${(await s.appel("/api/auth/me", { jeton: J.chef })).json.utilisateur.id}`, { methode: "PUT", jeton: J.chef, corps: { role: "dispatcher" } })).code, 409, "il reste toujours un chef actif");
+    // mot de passe changé : les autres sessions tombent, celle-ci reste
+    const autre = (await s.connexion("comptable@atlas.example", "mot de passe comptable")).acces;
+    assert.strictEqual((await s.appel("/api/auth/mot-de-passe", { methode: "POST", jeton: J.comptable, corps: { ancien: "faux", nouveau: "nouveau mot de passe" } })).code, 401);
+    assert.strictEqual((await s.appel("/api/auth/mot-de-passe", { methode: "POST", jeton: J.comptable, corps: { ancien: "mot de passe comptable", nouveau: "nouveau mot de passe" } })).code, 200);
+    assert.strictEqual((await s.appel("/api/auth/me", { jeton: autre })).code, 401); assert.strictEqual((await s.appel("/api/auth/me", { jeton: J.comptable })).code, 200);
+    // blocage après 5 échecs
+    for (let i = 0; i < 5; i++) assert.strictEqual((await s.appel("/api/auth/login", { methode: "POST", corps: { email: "commercial@atlas.example", motDePasse: "faux faux faux" } })).code, 401);
+    const b = await s.appel("/api/auth/login", { methode: "POST", corps: { email: "commercial@atlas.example", motDePasse: "mot de passe commercial" } }); assert.strictEqual(b.code, 423, "bloqué même avec le bon mot de passe");
+    s.horloge.t += 16 * 60000; assert.ok((await s.connexion("commercial@atlas.example", "mot de passe commercial")).acces);
+    for (let i = 0; i < 10; i++) await s.appel("/api/auth/login", { methode: "POST", ip: "203.0.113.9", corps: { email: "personne@atlas.example", motDePasse: "x" } });
+    assert.strictEqual((await s.appel("/api/auth/login", { methode: "POST", ip: "203.0.113.9", corps: { email: "personne@atlas.example", motDePasse: "x" } })).code, 429);
+    // réseau inhabituel : le chef est alerté
+    const alertesTr = async () => (await s.appel("/api/alertes/historique", { jeton: J.chef })).json.alertes.filter((a) => /transitaire/.test(a.texte)).length;
+    await s.connexion("transitaire@atlas.example", "mot de passe transitaire", undefined, "41.250.1.1"); const n1 = await alertesTr(); assert.strictEqual(n1, 1, "premier passage par ce réseau : alerte");
+    await s.connexion("transitaire@atlas.example", "mot de passe transitaire", undefined, "41.250.7.7"); assert.strictEqual(await alertesTr(), n1, "même réseau (41.250.x) : pas de nouvelle alerte");
+    await s.connexion("transitaire@atlas.example", "mot de passe transitaire", undefined, "185.10.4.4");
+    assert.ok((await s.appel("/api/alertes/historique", { jeton: J.chef })).json.alertes.some((a) => /transitaire depuis un réseau inhabituel \(185\.10\.x\)/.test(a.texte)), "alerte dans l'historique du relais (visible sur tous les appareils)");
+    // renouvellement de session par l'API, puis déconnexion
+    const c = await s.connexion("exploitant@atlas.example", "mot de passe exploitant"); const r = await s.appel("/api/auth/refresh", { methode: "POST", corps: { renouvellement: c.renouvellement } });
+    assert.strictEqual(r.code, 200); assert.ok(r.json.acces !== c.acces); assert.strictEqual((await s.appel("/api/auth/me", { jeton: c.acces })).code, 401);
+    assert.strictEqual((await s.appel("/api/auth/refresh", { methode: "POST", corps: { renouvellement: c.renouvellement } })).code, 401); assert.strictEqual((await s.appel("/api/auth/me", { jeton: r.json.acces })).code, 401, "jeton réutilisé : la famille est révoquée");
+    const c2 = await s.connexion("exploitant@atlas.example", "mot de passe exploitant"); await s.appel("/api/auth/logout", { methode: "POST", jeton: c2.acces, corps: {} }); assert.strictEqual((await s.appel("/api/auth/me", { jeton: c2.acces })).code, 401);
+    assert.ok((await s.appel("/api/journal?action=echec_connexion", { jeton: J.chef })).json.journal.length >= 5);
+  } finally { await s.arreter(); }
+});
+
+test("multi-utilisateur : cookie de session (HttpOnly, SameSite) et protection intersite, application servie par le relais, rien d'autre", async () => {
+  const s = await equipe();
+  try {
+    const r = await s.appel("/api/auth/login", { methode: "POST", corps: { email: "exploitant@atlas.example", motDePasse: "mot de passe exploitant" } });
+    const ck = r.entetes.getSetCookie(); assert.ok(ck.some((c) => /^lf_acces=.+HttpOnly; SameSite=Strict/.test(c))); assert.ok(ck.some((c) => /^lf_renouv=.+Path=\/api\/auth/.test(c)));
+    const cookie = ck.map((c) => c.split(";")[0]).join("; ");
+    assert.strictEqual((await s.appel("/api/donnees", { entetes: { cookie } })).code, 200, "lecture avec le cookie");
+    const v = (await s.appel("/api/records/voyages/v1", { entetes: { cookie } })).json.enregistrement;
+    assert.strictEqual((await s.appel("/api/records/voyages/v1", { methode: "PUT", corps: v, entetes: { cookie, "if-match": String(v._v) } })).code, 403, "écriture avec cookie sans en-tête X-LF : refusée (requête intersite)");
+    assert.strictEqual((await s.appel("/api/records/voyages/v1", { methode: "PUT", corps: { ...v, notes: "ok" }, entetes: { cookie, "if-match": String(v._v), "x-lf": "1" } })).code, 200);
+    const page = await s.appel("/"); assert.strictEqual(page.code, 200); assert.ok(page.texte.includes("<html")); assert.ok(/text\/html/.test(page.entetes.get("content-type")));
+    assert.strictEqual((await s.appel("/app.js")).code, 200); assert.strictEqual((await s.appel("/vendor/leaflet/leaflet.js")).code, 200);
+    const sw = await s.appel("/sw.js"); assert.ok(!sw.texte.includes("__VERSION__") && /relais-test-[0-9a-f]{8}/.test(sw.texte), "version du cache renseignée");
+    for (const interdit of ["/serveur/relais.js", "/package.json", "/tests/relais.test.js", "/../etc/passwd", "/.git/config", "/serveur/donnees/comptes.json"]) assert.ok([401, 404].includes((await s.appel(interdit)).code), interdit);
+  } finally { await s.arreter(); }
+});
+
+test("multi-utilisateur : tout survit à un redémarrage (chiffré au repos), réinitialisation par e-mail, clé de récupération du chef", async () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "relais-multi-")), coffre = chargerCoffre(d, { CHIFFRER_DONNEES: "true", CLE_DONNEES: "phrase secrete du relais multi" }).coffre, smtp = { hote: "smtp.exemple.org", de: "relais@atlas.example" };
+  try {
+    let s = await demarrerMulti(d, { coffre, smtp });
+    const code = (await s.appel("/api/auth/initialiser", { methode: "POST", jeton: "lit", corps: { nom: "Hassan", email: "chef@atlas.example", motDePasse: "mot de passe du chef", donnees: SEMENCE() } })).json.codeRecuperation;
+    let chef = await s.connexion("chef@atlas.example", "mot de passe du chef"); const sec = (await s.appel("/api/auth/2fa/initier", { methode: "POST", jeton: chef.acces, corps: {} })).json.secret;
+    await s.appel("/api/auth/2fa/activer", { methode: "POST", jeton: chef.acces, corps: { code: A.totp(sec, s.horloge.t) } });
+    await s.appel("/api/utilisateurs", { methode: "POST", jeton: chef.acces, corps: { nom: "Samira", email: "samira@atlas.example", role: "exploitant", office: "allemagne", motDePasse: "mot de passe samira" } });
+    const sam = await s.connexion("samira@atlas.example", "mot de passe samira"); const v = (await s.appel("/api/records/voyages/v1", { jeton: sam.acces })).json.enregistrement;
+    await s.appel("/api/records/voyages/v1", { methode: "PUT", jeton: sam.acces, corps: { ...v, notes: "note confidentielle Francfort" }, entetes: { "if-match": String(v._v) } });
+    await new Promise((r) => setTimeout(r, 300)); await s.arreter();
+    for (const f of ["comptes.json", "sessions.json", "audit.jsonl", "base/voyages.json"]) { const b = fs.readFileSync(path.join(d, f)).toString("latin1"); for (const mot of ["samira@atlas", "Francfort", "Primeurs", "scrypt$"]) assert.ok(!b.includes(mot), `${f} : « ${mot} » en clair`); }
+    s = await demarrerMulti(d, { coffre, smtp });
+    assert.strictEqual((await s.appel("/api/records/voyages/v1", { jeton: sam.acces })).json.enregistrement.notes, "note confidentielle Francfort", "session, compte et données conservés");
+    // mot de passe oublié : e-mail avec un lien d'une heure, à usage unique
+    assert.strictEqual((await s.appel("/api/auth/reinitialiser", { methode: "POST", corps: { email: "inconnu@atlas.example" } })).code, 200, "même réponse pour une adresse inconnue");
+    await s.appel("/api/auth/reinitialiser", { methode: "POST", corps: { email: "samira@atlas.example" } }); assert.strictEqual(s.mails.length, 1); const lien = s.mails[0].texte.match(/#reinitialiser=([\w-]+)/)[1];
+    assert.strictEqual((await s.appel("/api/auth/reinitialiser/confirmer", { methode: "POST", corps: { jeton: lien, motDePasse: "nouveau mot de passe samira" } })).code, 200);
+    assert.strictEqual((await s.appel("/api/auth/reinitialiser/confirmer", { methode: "POST", corps: { jeton: lien, motDePasse: "encore un autre mot" } })).code, 400, "lien à usage unique");
+    assert.strictEqual((await s.appel("/api/auth/me", { jeton: sam.acces })).code, 401, "anciennes sessions coupées"); assert.ok((await s.connexion("samira@atlas.example", "nouveau mot de passe samira")).acces);
+    // le chef a tout perdu (mot de passe et téléphone) : la clé de récupération
+    assert.strictEqual((await s.appel("/api/auth/recuperation", { methode: "POST", corps: { code: "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF", motDePasse: "nouveau mot de passe chef" } })).code, 401);
+    const rec = await s.appel("/api/auth/recuperation", { methode: "POST", corps: { code: code.toLowerCase().replace(/-/g, " "), motDePasse: "nouveau mot de passe chef" } }); assert.strictEqual(rec.code, 200); assert.notStrictEqual(rec.json.codeRecuperation, code);
+    chef = await s.connexion("chef@atlas.example", "nouveau mot de passe chef"); assert.strictEqual(chef.exige2FA, true, "double authentification à refaire");
+    assert.strictEqual((await s.appel("/api/auth/recuperation", { methode: "POST", corps: { code, motDePasse: "encore un autre mot" } })).code, 401, "l'ancienne clé ne sert plus");
+    const j = s.multi.lireAudit().map((x) => x.action); for (const a of ["initialisation", "compte_cree", "connexion", "modification", "reinitialisation_demandee", "mot_de_passe_reinitialise", "echec_recuperation", "recuperation"]) assert.ok(j.includes(a), a);
+    await s.arreter();
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
 

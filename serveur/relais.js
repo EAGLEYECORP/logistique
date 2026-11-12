@@ -11,11 +11,13 @@ const path = require("path");
 const crypto = require("crypto");
 const { charger } = require("./moteur.js");
 const { envoyerCourriel, adresseValide, motEntete } = require("./courriel.js");
-const { creerCoffre, chargerCoffre } = require("./coffre.js");
+const { creerCoffre, chargerCoffre, ecrireAtomique } = require("./coffre.js");
 const { planPurge, appliquerPurge } = require("./purge-photos.js");
+const { creerMulti } = require("./multi.js");
+const { peutSuivre } = require("../comptes.js");
 const { page } = require("./page-client.js");
 
-const VERSION = "1.7.0";
+const VERSION = "2.0.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -37,7 +39,7 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null, ...(temp !== null ? { temp } : {}) };
 }
 
-function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel, coffre = creerCoffre(null), journalAcces = false, purgePhotosMois = 0 } = {}) {
+function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel, coffre = creerCoffre(null), journalAcces = false, purgePhotosMois = 0, multi = null } = {}) {
   if (!jetonEcriture || !jetonLecture) throw new Error("JETON_ECRITURE et JETON_LECTURE sont obligatoires.");
   const historique = new Map(); // id -> [positions triées]
   const noms = new Map();
@@ -177,11 +179,12 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
   }
   /* ---------- historique des alertes (7 jours) : un appareil revenu en ligne récupère ce qu'il a manqué ---------- */
   const histoAlertes = [], fichierAlertes = () => path.join(dossier, "alertes.jsonl");
-  if (dossier) { try { const limite = Date.now() - 7 * 86400000; for (const l of fs.readFileSync(fichierAlertes(), "utf8").split("\n")) { if (!l) continue; try { const a = JSON.parse(coffre.delire(l)); if (a.t >= limite) histoAlertes.push(a); } catch { /* ligne abîmée */ } } coffre.ecrire(fichierAlertes(), histoAlertes.map((a) => coffre.ligne(JSON.stringify(a))).join("\n") + (histoAlertes.length ? "\n" : "")); } catch { /* aucun historique */ } }
+  if (dossier) { try { const limite = Date.now() - 7 * 86400000; for (const l of fs.readFileSync(fichierAlertes(), "utf8").split("\n")) { if (!l) continue; try { const a = JSON.parse(coffre.delire(l)); if (a.t >= limite) histoAlertes.push(a); } catch { /* ligne abîmée */ } } ecrireAtomique(fichierAlertes(), histoAlertes.map((a) => coffre.ligne(JSON.stringify(a))).join("\n") + (histoAlertes.length ? "\n" : "")); } catch { /* aucun historique */ } }
   function noterAlerte(a) {
     histoAlertes.push(a); const limite = Date.now() - 7 * 86400000; while (histoAlertes.length && (histoAlertes[0].t < limite || histoAlertes.length > 5000)) histoAlertes.shift();
     if (dossier) { try { fs.appendFileSync(fichierAlertes(), coffre.ligne(JSON.stringify(a)) + "\n", { mode: 0o600 }); } catch { /* garde en mémoire */ } }
   }
+  if (multi) multi.brancherAlertes((a) => { noterAlerte({ t: Date.now(), texte: a.texte, niveau: a.niveau, cle: a.cle, envoyes: [] }); diffuserAlerte(a).catch?.(() => {}); });
   /* ---------- journal d'accès (option JOURNAL_ACCES) : qui a lu quoi, adresse tronquée, 30 jours ---------- */
   const fichierAcces = (t) => path.join(dossier, `acces-${new Date(t).toISOString().slice(0, 10)}.jsonl`);
   const ipTronquee = (ip) => (ip.includes(":") && !/^::ffff:/.test(ip) ? ip.split(":").slice(0, 3).join(":") + "::" : ip.replace(/^::ffff:/, "").replace(/\.\d+$/, ".0"));
@@ -248,8 +251,10 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
         res.writeHead(200, entetes({ "Content-Type": "text/html; charset=utf-8", ...ENTETES_PUBLICS })); return res.end(page(lang));
       }
 
+      // --- mode multi-utilisateur : comptes, données par enregistrement, application servie par le relais ---
+      if (multi && await multi.traiter(req, res, url, p, ip, entetes, !!jetonLecture && egal(jetonDe(req, url), jetonLecture))) return;
       const jeton = jetonDe(req, url);
-      const peutEcrire = egal(jeton, jetonEcriture), peutLire = peutEcrire ? false : egal(jeton, jetonLecture);
+      const peutEcrire = egal(jeton, jetonEcriture), peutLire = peutEcrire ? false : egal(jeton, jetonLecture) || (!!multi && peutSuivre(multi.utilisateurDe(req))); // une session d'un rôle de suivi vaut le jeton de lecture
       if (journalAcces && p.startsWith("/api/")) res.on("finish", () => noterAcces(req, res, p, ip, peutLire ? "lecture" : peutEcrire ? "ecriture" : "aucun"));
 
       // --- réception ---
@@ -404,7 +409,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
       return json(res, 404, { erreur: "Introuvable." });
     } catch (e) { return json(res, 500, { erreur: "Erreur du serveur." }); }
   });
-  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif, purgerPhotos, photos };
+  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif, purgerPhotos, photos, multi };
 }
 
 module.exports = { creer, normaliser, VERSION, creerCoffre, chargerCoffre };
@@ -430,8 +435,9 @@ if (require.main === module) {
   if (nouvelle) console.log(`  ⚠ Chiffrement des données activé : phrase secrète créée dans ${fichierCle}. SAUVEGARDEZ-LA AILLEURS : sans elle, les données sont perdues.`);
   const smtp = e.SMTP_HOTE && e.SMTP_DE ? { hote: e.SMTP_HOTE, port: Number(e.SMTP_PORT || 0) || undefined, securite: e.SMTP_SECURITE || undefined, utilisateur: e.SMTP_UTILISATEUR || "", motDePasse: e.SMTP_MOT_DE_PASSE || "", de: e.SMTP_DE } : null;
   const ntfyHotes = String(e.NTFY_HOTES || "ntfy.sh").split(",").map((x) => x.trim()).filter(Boolean);
-  const purgePhotosMois = Number(e.PURGE_PHOTOS_MOIS || 0);
-  const { serveur, tick, purgerPhotos } = creer({ ...jetons, dossier, coffre, purgePhotosMois, journalAcces: String(e.JOURNAL_ACCES || "").toLowerCase() === "true", retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
+  const purgePhotosMois = Number(e.PURGE_PHOTOS_MOIS || 0), estMulti = String(e.MULTI_UTILISATEUR || "").toLowerCase() === "true";
+  const multi = estMulti ? creerMulti({ dossier, coffre, version: VERSION, jetonLecture: jetons.jetonLecture, smtp, cookieSecurise: String(e.COOKIE_NON_SECURISE || "").toLowerCase() !== "true", retentionAuditJours: Number(e.RETENTION_AUDIT_JOURS || 730), urlPublique: e.URL_PUBLIQUE || "" }) : null;
+  const { serveur, tick, purgerPhotos } = creer({ ...jetons, dossier, coffre, purgePhotosMois, multi, journalAcces: String(e.JOURNAL_ACCES || "").toLowerCase() === "true", retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
   setInterval(() => { tick().catch(() => { /* réessayé à la minute suivante */ }); }, 60000); // notifications programmées
   if (purgePhotosMois > 0) { const purge = () => { const b = purgerPhotos(); if (b && (b.marquees || b.supprimees)) console.log(`Purge des photos : ${b.marquees} marquée(s), ${b.supprimees} supprimée(s)`); }; setTimeout(purge, 60000); setInterval(purge, 86400000); }
   const port = Number(e.PORT || 8787);
@@ -441,6 +447,7 @@ if (require.main === module) {
     console.log(`  Jeton de lecture (application)      : ${jetons.jetonLecture}`);
     if (Object.keys(canaux).length) console.log(`  Alertes transmises à : ${Object.keys(canaux).join(", ")}`);
     console.log(`  Données au repos : ${coffre.actif ? "chiffrées (AES-256-GCM)" : "en clair (CHIFFRER_DONNEES=true pour chiffrer)"}${String(e.JOURNAL_ACCES || "").toLowerCase() === "true" ? " · journal d'accès actif (30 jours)" : ""}`);
+    if (multi) console.log(`  Multi-utilisateur : application servie sur ce port, ${multi.comptes().length ? `${multi.comptes().length} compte(s)` : "aucun compte : ouvrez l'adresse du relais pour créer le premier (jeton de lecture demandé)"}`);
     console.log(`  Notifications programmées : ntfy (${ntfyHotes.join(", ")})${smtp ? `, e-mail (${smtp.hote})` : ""}${canaux.whatsapp ? ", WhatsApp" : ""}`);
     console.log(`  Réception : POST /api/positions · GET /osmand · POST /traccar    Lecture : /api/derniere · /api/trace`);
   });

@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -2008,6 +2008,61 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   assert.strictEqual(c.traduireTexte("Anomalies"), "حالات شاذة"); assert.strictEqual(c.traduireTexte("  Marge nette "), "  الهامش الصافي ");
   assert.strictEqual(c.traduireTexte("Anomalies · 3"), "حالات شاذة · 3", "libellé suivi d'un compte"); assert.strictEqual(c.traduireTexte("Programmées · 24 h · 2"), "المبرمجة · 24 h · 2");
   assert.strictEqual(c.traduireTexte("Texte inconnu · 3"), "Texte inconnu · 3");
+});
+
+/* ---------- D13 : droits par rôle (comptes.js, appliqués par le relais) ---------- */
+const VOY = () => ({ id: "v1", ref: "V-1", chauffeurId: "h1", transitaireId: "u-tr", camionId: "c1", statut: "en_cours", origine: "Agadir", destination: "Perpignan", prix: 4000, devise: "EUR",
+  lignesCout: [{ id: "l1", type: "carburant", montant: 9000 }], marge: { directe: 20000 }, carburantMad: 9000, jalons: [{ type: "depart", date: "x" }], traversees: [{ sens: "aller", ligne: "tmed-alg", fret: 320, baf: 2, ref: "DFDS-1", date: "2026-11-20" }], _v: 3, _seq: 9 });
+const U = (role, plus = {}) => ({ id: "u-" + role, nom: role, role, ...plus });
+
+test("droits : matrice des rôles — qui lit, voit les prix, écrit, supprime", () => {
+  const dr = (role, col) => N.droitsSur(U(role), col);
+  assert.strictEqual(dr("chef_entreprise", "factures").suppression, true); assert.ok(N.COLLECTIONS_SERVEUR.every((c) => dr("chef_entreprise", c)));
+  assert.strictEqual(dr("dispatcher", "factures"), null, "le répartiteur n'a aucun accès aux factures"); assert.strictEqual(dr("dispatcher", "voyages").finances, false); assert.strictEqual(dr("dispatcher", "voyages").ecriture, true);
+  assert.strictEqual(dr("exploitant", "voyages").finances, true); assert.strictEqual(dr("exploitant", "factures").ecriture, false);
+  assert.strictEqual(dr("commercial", "voyages").ecriture, false); assert.strictEqual(dr("commercial", "factures").ecriture, true); assert.strictEqual(dr("commercial", "factures").suppression, false);
+  assert.deepStrictEqual([...dr("comptable", "voyages").ecriture], ["lignesCout", "marge", "factureId"]); assert.strictEqual(dr("comptable", "voyages").suppression, false);
+  assert.strictEqual(dr("chauffeur", "voyages").lecture, "propre"); assert.strictEqual(dr("chauffeur", "factures"), null); assert.strictEqual(dr("transitaire", "dossiers").lecture, "propre"); assert.strictEqual(dr("transitaire", "clients"), null);
+  assert.strictEqual(N.droitsSur({ ...U("chef_entreprise"), cloture: true }, "voyages"), null, "compte clôturé : plus rien");
+  assert.strictEqual(N.estChef(U("chef_entreprise")), true); assert.strictEqual(N.estChef(U("exploitant")), false); assert.strictEqual(N.peutSuivre(U("dispatcher")), true); assert.strictEqual(N.peutSuivre(U("chauffeur")), false);
+  assert.strictEqual(N.ROLES_COMPTES.length, 7); assert.ok(N.ROLES_COMPTES.every(([k]) => N.PROFIL_DU_ROLE[k]));
+});
+
+test("droits : prix et marges retirés pour qui ne doit pas les voir, jusque dans les traversées et les réglages", () => {
+  const v = VOY(), d = N.filtrerEnregistrement("voyages", v, U("dispatcher"));
+  for (const k of ["prix", "lignesCout", "marge", "carburantMad"]) assert.ok(!(k in d), k);
+  assert.strictEqual(d.destination, "Perpignan"); assert.strictEqual(d.traversees[0].ref, "DFDS-1"); assert.ok(!("fret" in d.traversees[0]) && !("baf" in d.traversees[0])); assert.strictEqual(v.traversees[0].fret, 320, "l'original n'est pas modifié");
+  assert.strictEqual(N.filtrerEnregistrement("voyages", v, U("exploitant")).prix, 4000); assert.strictEqual(N.filtrerEnregistrement("factures", { id: "f" }, U("dispatcher")), null);
+  const e = N.filtrerEnregistrement("reglages", { id: "entreprise", nom: "Atlas", tresorerie: { solde: 1 } }, U("dispatcher")); assert.strictEqual(e.nom, "Atlas"); assert.ok(!("tresorerie" in e));
+  assert.ok(!("fixeMensuel" in N.filtrerEnregistrement("camions", { id: "c1", immat: "A", fixeMensuel: 9000 }, U("commercial"))));
+});
+
+test("droits : une écriture ne peut ni effacer les prix qu'on ne voit pas, ni toucher un champ interdit, ni sortir de son périmètre", () => {
+  const v = VOY();
+  // le répartiteur renvoie le voyage tel qu'il le voit (sans prix) en changeant la destination : les prix sont conservés
+  const vue = N.filtrerEnregistrement("voyages", v, U("dispatcher")); vue.destination = "Lyon"; vue.traversees[0].ref = "DFDS-2";
+  let r = N.appliquerEcriture("voyages", v, vue, U("dispatcher")); assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.enregistrement.destination, "Lyon"); assert.strictEqual(r.enregistrement.prix, 4000); assert.strictEqual(r.enregistrement.lignesCout.length, 1); assert.strictEqual(r.enregistrement.traversees[0].fret, 320); assert.strictEqual(r.enregistrement.traversees[0].ref, "DFDS-2");
+  assert.ok(!("_v" in r.enregistrement), "champs techniques ignorés");
+  r = N.appliquerEcriture("voyages", v, { ...vue, prix: 1 }, U("dispatcher")); assert.strictEqual(r.enregistrement.prix, 4000, "ni modifier un prix qu'il ne voit pas");
+  // comptable : seulement les dépenses
+  r = N.appliquerEcriture("voyages", v, { ...v, destination: "Paris", lignesCout: [...v.lignesCout, { id: "l2", type: "amendes", montant: 100 }] }, U("comptable"));
+  assert.strictEqual(r.enregistrement.destination, "Perpignan"); assert.strictEqual(r.enregistrement.lignesCout.length, 2);
+  assert.strictEqual(N.appliquerEcriture("voyages", null, { id: "v9" }, U("comptable")).ok, false, "écriture partielle : pas de création");
+  // chauffeur : son voyage seulement, ses champs seulement, sans pouvoir se l'attribuer
+  const ch = U("chauffeur", { chauffeurId: "h1" });
+  r = N.appliquerEcriture("voyages", v, { ...v, jalons: [...v.jalons, { type: "douane_export", date: "y" }], prix: 1, chauffeurId: "h1" }, ch); assert.strictEqual(r.ok, true); assert.strictEqual(r.enregistrement.jalons.length, 2); assert.strictEqual(r.enregistrement.prix, 4000);
+  assert.strictEqual(N.appliquerEcriture("voyages", { ...v, chauffeurId: "h2" }, v, ch).ok, false, "voyage d'un autre");
+  assert.strictEqual(N.appliquerEcriture("factures", null, { id: "f" }, U("dispatcher")).ok, false); assert.strictEqual(N.appliquerEcriture("voyages", v, v, U("transitaire")).ok, false);
+  assert.strictEqual(N.appliquerEcriture("reglages", null, { id: "pirate" }, U("chef_entreprise")).ok, false);
+  // suppression et périmètre
+  assert.strictEqual(N.peutSupprimer("voyages", v, U("comptable")), false); assert.strictEqual(N.peutSupprimer("voyages", v, U("dispatcher")), true);
+  assert.strictEqual(N.peutVoir("voyages", v, ch), true); assert.strictEqual(N.peutVoir("voyages", { ...v, chauffeurId: "h2" }, ch), false); assert.strictEqual(N.peutVoir("voyages", v, U("chauffeur")), false, "compte chauffeur non relié à une fiche : rien");
+  assert.strictEqual(N.peutVoir("camions", { id: "c1" }, ch, { camionsDuChauffeur: ["c1"] }), true); assert.strictEqual(N.peutVoir("camions", { id: "c2" }, ch, { camionsDuChauffeur: ["c1"] }), false);
+  assert.strictEqual(N.peutVoir("dossiers", { id: "d", transitaireId: "u-transitaire" }, U("transitaire")), true); assert.strictEqual(N.peutVoir("dossiers", { id: "d", transitaireId: "x" }, U("transitaire")), false);
+  // journal : différences
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(N.diffEnregistrement({ a: 1, b: 2, _v: 1 }, { a: 1, b: 3, c: 4, _v: 2 }))), { b: [2, 3], c: [null, 4] });
+  assert.strictEqual(N.motDePasseValide("court"), false); assert.strictEqual(N.motDePasseValide("douze-caract"), true); assert.strictEqual(N.emailCompteValide("a@b.example"), true); assert.strictEqual(N.emailCompteValide("a@b"), false);
 });
 
 (async () => {

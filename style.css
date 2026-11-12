@@ -701,3 +701,15 @@ body.sans-finances .fin { display: none !important; }
 tr.cliquable { cursor: pointer; } tr.cliquable.actif td { background: color-mix(in srgb, var(--primary) 7%, transparent); } tr.detail td { padding-top: 4px; }
 .alerte-treso { display: flex; gap: 8px; align-items: flex-start; color: var(--danger); margin: 4px 0 10px; }
 .segmented.multi { flex-wrap: wrap; margin-bottom: 10px; }
+
+/* opérations : une carte par camion */
+.ops-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.ops-carte { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ops-carte.alerte { border-left-color: var(--danger); }
+.ops-carte.bureau-maroc { border-left-color: var(--ok); } .ops-carte.bureau-allemagne { border-left-color: var(--primary); } .ops-carte.alerte { border-left-color: var(--danger); }
+.ops-carte header { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .ops-carte header strong { margin-right: auto; font-size: 1.02rem; }
+.ops-carte footer { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-top: 2px; }
+.ops-carte .row { flex-wrap: wrap; gap: 6px; margin-top: 4px; } .ops-carte .sub .i { width: 13px; height: 13px; vertical-align: -2px; }
+.l-bureau-maroc { background: var(--ok); } .l-bureau-allemagne { background: var(--primary); }
+.histo { list-style: none; margin: 6px 0 0; padding: 0; font-size: .86rem; } .histo li { padding: 6px 0; border-top: 1px solid var(--border); } .histo li .sub { display: block; }
+details.historique > summary { cursor: pointer; list-style: none; } details.historique > summary::-webkit-details-marker { display: none; }

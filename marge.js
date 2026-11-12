@@ -25,9 +25,9 @@ function blocLignesCout(v) {
   const l = [...(v.lignesCout || [])].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   return `<div class="section-title">Dépenses enregistrées · ${l.length}</div>
     ${blocInvites(v)}<div class="lignes-cout" data-lignes="${v.id}">${l.map((x) => `<div class="trav"><div><strong>${esc(libTypeCout(x.type))}${x.sens ? ` (${esc(x.sens)})` : ""}</strong><span class="sub">${[x.date && dateFr(x.date), libSourceCout(x.source), x.ref, x.libelle].filter(Boolean).map(esc).join(" · ")}</span></div>
-      <div class="r"><strong class="num">${fmt(x.montant, x.devise === "EUR" ? 2 : 0)} ${esc(x.devise)}</strong>${iconBtn("ligne-supprimer", "trash", "Supprimer cette dépense", `${v.id}|${x.id}`, true)}</div></div>`).join("")}
+      <div class="r"><strong class="num">${fmt(x.montant, x.devise === "EUR" ? 2 : 0)} ${esc(x.devise)}</strong>${typeof boutonPhotos === "function" ? boutonPhotos(`ligne:${x.id}`, `Reçu — ${libTypeCout(x.type)} ${v.ref || ""}`) : ""}${iconBtn("ligne-modifier", "edit", "Modifier cette dépense", `${v.id}|${x.id}`)}${iconBtn("ligne-supprimer", "trash", "Supprimer cette dépense", `${v.id}|${x.id}`, true)}</div></div>`).join("")}
       <div class="row">${btn("ligne-ajouter", "Ajouter une dépense", { id: v.id, icone: "plus", cls: "btn sm" })}</div>
-      <p class="hint">Une dépense enregistrée remplace l'estimation du même type (carburant, péages, traversée…) : la marge suit ce qui est réellement payé.</p></div>`;
+      <p class="hint">Une dépense enregistrée remplace l'estimation du même type (carburant, péages, traversée…) : la marge suit ce qui est réellement payé.</p></div>${typeof blocHistorique === "function" ? blocHistorique(v) : ""}`;
 }
 const TYPES_SAISIE = TYPES_COUT.filter((t) => t[2]).map(([k, l]) => [k, l]);
 const champsLigneCout = (v) => [
@@ -47,6 +47,16 @@ VUES.voyages.agir = async function (act, id, btnEl) {
     if (!f) return;
     try { ajouterLigneCout(v, { type: f.type, montant: f.montant, devise: f.devise, date: f.date, ref: f.ref, sens: f.type === "traversee" ? f.sens : "", source: f.type === "traversee" ? "facture_armateur" : "saisie" }); } catch (e) { return toast(e.message, "danger"); }
     voyagesOuverts.add(v.id); recalculerMargeVoyage(v.id); sauver(); toast("Dépense ajoutée"); rafraichir(); return;
+  }
+  if (act === "ligne-modifier") {
+    const [vid, lid] = id.split("|"), v = parId(S.voyages, vid), l = v && (v.lignesCout || []).find((x) => x.id === lid); if (!l) return;
+    const f = await formulaire(`${libTypeCout(l.type)} — ${v.ref}`, [
+      { name: "montant", label: "Montant", type: "number", min: 0, value: l.montant, required: true }, { name: "devise", label: "Devise", type: "select", options: [["MAD", "MAD"], ["EUR", "EUR"]], value: l.devise },
+      { name: "date", label: "Date", type: "date", value: (l.date || "").slice(0, 10) }, { name: "ref", label: "Référence (facture, reçu)", value: l.ref || "" },
+    ], { aide: `Source : ${esc(libSourceCout(l.source))}${l.libelle ? " · " + esc(l.libelle) : ""}.${String(l.cle || "").startsWith("auto:") ? " Dépense calculée : elle sera recalculée si les dates ou le tarif changent." : ""} La modification est consignée dans l'historique du voyage.` });
+    if (!f) return;
+    Object.assign(l, { montant: num(f.montant), devise: f.devise, date: f.date || l.date, ref: f.ref || undefined });
+    voyagesOuverts.add(v.id); recalculerMargeVoyage(v.id); sauver(); toast("Dépense modifiée"); rafraichir(); return;
   }
   if (act === "ligne-supprimer") {
     const [vid, lid] = id.split("|"), v = parId(S.voyages, vid); if (!v) return;

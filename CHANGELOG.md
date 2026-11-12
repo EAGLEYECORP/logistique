@@ -40,6 +40,18 @@
 - Alerte au-delà de 15 % d'écart sur 7 jours (seuil réglable), avec la **cause probable** : hausse brutale (fuite, vol, dépense exceptionnelle) ou progressive (usure, dérive), prix du gasoil, nouveau corridor, retours à vide.
 - Visible dans les alertes, sur la page Direction et sur l'accueil du chef d'entreprise (profil Direction) : chiffre d'affaires, marges, charges du mois, trésorerie et point bas à 90 jours.
 
+### D8 — Conseils d'exploitation
+- **Prix plancher du fret de retour** d'un voyage livré sans retour : « en dessous de X €, cet aller-retour perd de l'argent ».
+- **Camion à l'arrêt** depuis plus de 24 h : ses corridors les plus rentables sont proposés.
+- **Traversée à réserver**, **chauffeur qui ne peut pas légalement faire le voyage** (heures de conduite, carte conducteur, Schengen), **repos hebdomadaire hors cabine** à prévoir avec son coût.
+
+### D10 — Deux accueils, actions directes, historique
+- Page **Opérations** : une carte par camion (état, voyage, prochaine étape, arrivée estimée, alertes, marge en direct, bureau responsable).
+- **Accueil de l'exploitant** (profil Exploitation) : conseils et flotte d'abord ; **accueil du chef d'entreprise** (profil Direction) : résultat, trésorerie, anomalies.
+- Chaque alerte est **à un geste de l'action** : appeler ou écrire au chauffeur sur WhatsApp, écrire au client, ouvrir le voyage.
+- Chaque dépense se modifie, porte la photo de son reçu, et tout changement d'un voyage (étape, statut, prix, dates, dépense) est consigné dans son **historique** avec l'auteur, l'avant et l'après.
+- La recherche (⌘K) trouve aussi les voyages, les dépenses et les échéances. Non fait : recherche dans le texte des photos (elle exigerait un service payant).
+
 ## 3.7.0 — La carte est là avant toute connexion GPS
 
 - La page **Carte** (ex-« Suivi en direct ») s'affiche tout de suite, sans identifiants GPS : corridor Maroc → Espagne → France → Allemagne, zones (ports, frontière, dépôts), et **chaque camion à sa dernière position connue** d'après les traces importées. Un encadré dit ce qui manque (source, balise de chaque camion, première position) ; « Connecter mes balises » ouvre les réglages.

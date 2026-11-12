@@ -10,7 +10,7 @@ const CLE_ROLE = "logistique-role";
 const ROLES = {
   direction: { lib: "Direction", detail: "Tout voir et tout régler", onglets: null, finances: true },
   exploitation: { lib: "Exploitation", detail: "Suivi, voyages, flotte, chauffeurs, douane — sans les prix ni les marges", finances: false,
-    onglets: ["tableau", "commandes", "direct", "voyages", "gps", "itineraires", "douane", "international", "peages", "camions", "chauffeurs", "tachy", "carburant", "nomenclature"] },
+    onglets: ["tableau", "operations", "commandes", "direct", "voyages", "gps", "itineraires", "douane", "international", "peages", "camions", "chauffeurs", "tachy", "carburant", "nomenclature"] },
   commercial: { lib: "Commercial", detail: "Commandes, clients, factures, voyages et suivi", finances: true, onglets: ["tableau", "commandes", "clients", "factures", "direct", "voyages", "nomenclature"] },
   comptabilite: { lib: "Comptabilité", detail: "Factures, clients, rentabilité, gasoil, péages", finances: true, onglets: ["tableau", "factures", "clients", "direction", "rentabilite", "commandes", "voyages", "carburant", "peages"] },
 };

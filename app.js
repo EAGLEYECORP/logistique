@@ -146,6 +146,7 @@ let ongletActif = "tableau";
 const ONGLETS = [
   ["tableau", "Accueil", "home", ""],
   ["commandes", "Commandes", "box", "Exploitation"],
+  ["operations", "Opérations", "flag", "Exploitation"],
   ["direct", "Carte", "radar", "Exploitation"],
   ["voyages", "Voyages", "ship", "Exploitation"],
   ["gps", "Traces GPS", "pin", "Exploitation"],
@@ -293,7 +294,7 @@ const VERBE_CAT = { docs: "Ouvrir", repos: "Voir", factures: "Relancer", command
 function carteATraiter(al) {
   const urgentes = al.filter((a) => a.niveau === "danger"), surveiller = al.filter((a) => a.niveau !== "danger");
   const ligne = (a) => `<li><span class="ico ${a.niveau}">${ic(ICONES_CAT[a.cat] || "flag")}</span><div class="t">${esc(a.texte)}</div>${
-    a.cat === "sauvegarde" ? btn("export-direct", "Exporter", { cls: "btn ghost sm" }) : btn("aller", VERBE_CAT[a.cat] || "Voir", { id: a.onglet, cls: "btn ghost sm" })}</li>`;
+    typeof boutonsAlerte === "function" ? boutonsAlerte(a) : ""}${a.cat === "sauvegarde" ? btn("export-direct", "Exporter", { cls: "btn ghost sm" }) : btn("aller", VERBE_CAT[a.cat] || "Voir", { id: a.onglet, cls: "btn ghost sm" })}</li>`;
   const visibles = alertesDepliees ? surveiller : surveiller.slice(0, 4);
   return `<div class="card"><div class="card-head"><h2>À traiter${al.length ? ` · ${al.length}` : ""}</h2></div>
     ${!al.length ? vide("check", "Rien à signaler", "Entretiens, papiers, repos et factures sont à jour.") : `
@@ -1061,6 +1062,11 @@ function indexRecherche() {
   S.dossiers.forEach((d) => add("douane", "file", `${d.ref} · ${d.client}`, `${d.marchandise || ""} ${d.codeSH ? "· SH " + d.codeSH : ""}`));
   S.trajets.forEach((t) => add("itineraires", "route", `${t.depart} → ${t.arrivee}`, `${dateFr(t.date)} · ${nomChauffeur(t.chauffeurId)}`));
   S.codes.forEach((c) => add("nomenclature", "search", c.code, c.designation));
+  S.voyages.forEach((v) => {
+    add("voyages", "ship", `${v.ref || "Voyage"} · ${v.clientId ? nomClient(v.clientId) : ""}`, `${v.origine || ""} ⇄ ${v.destination || ""} · ${dateFr(v.dateDepart)} · ${STATUTS_VOYAGE.find(([k]) => k === v.statut)?.[1] || ""}`);
+    (v.lignesCout || []).forEach((l) => add("voyages", "receipt", `${libTypeCout(l.type)} ${fmt(l.montant, l.devise === "EUR" ? 2 : 0)} ${l.devise} · ${v.ref || ""}`, [l.date && dateFr(l.date), libSourceCout(l.source), l.ref, l.libelle].filter(Boolean).join(" · ")));
+  });
+  (S.echeances || []).forEach((e) => add("rentabilite", "calendar", e.libelle || "Échéance", `${fmt(e.montant)} ${e.devise || "MAD"} · ${dateFr(e.date)}`));
   return r;
 }
 function ouvrirRecherche() {

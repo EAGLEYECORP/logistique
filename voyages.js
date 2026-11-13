@@ -164,9 +164,10 @@ function carteVoyage(v) {
     <div class="body">
       <div class="section-title" style="margin-top:4px">Traversée du détroit (Tanger Med ⇄ Algeciras)</div>
       ${blocTraversee(v, "aller")}${blocTraversee(v, "retour")}
+      ${typeof blocPorts === "function" ? blocPorts(v) : ""}
       ${ctl.length ? `<div class="section-title">À régler avant le départ</div><ul class="ctl">${ctl.map((x) => `<li class="${niveauCtl[x.niveau]}">${ic(x.niveau === "danger" ? "alert" : "clock")}<span>${esc(x.texte)}</span></li>`).join("")}</ul>` : v.statut === "prevu" ? `<p class="hint" style="color:var(--ok)">${ic("check")} Aucun point bloquant détecté.</p>` : ""}
       ${interd.length ? `<p class="hint">Départ un ${new Date(dateD + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long" })} : interdictions de circuler possibles (${interd.map((i) => i.pays).join(", ")}) — voir le tableau en bas de page.</p>` : ""}
-      ${blocEta(v)}${typeof blocAttentesPort === "function" ? blocAttentesPort(v) : ""}${blocFroid(v)}${blocPreuve(v)}
+      ${typeof blocFacturation === "function" ? blocFacturation(v) : ""}${blocEta(v)}${typeof blocAttentesPort === "function" ? blocAttentesPort(v) : ""}${blocFroid(v)}${blocPreuve(v)}
       <div class="fin"><div class="section-title">Coût et marge</div>
       <div class="table-wrap"><table class="plain"><tbody>
         ${v.kmPays && peagesEuropeVoyage(v).manquants.length ? `<tr><td colspan="2" class="sub">Péages d'Europe : tarif au km non renseigné pour ${peagesEuropeVoyage(v).manquants.join(", ")} (Réglages → calculs) — ces pays ne sont pas comptés.</td></tr>` : ""}

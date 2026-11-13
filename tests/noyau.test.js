@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1563,7 +1563,7 @@ test("prévision de trésorerie : dépenses attendues des voyages en cours et re
   const p = N.previsionsTresorerie(90, { depart: "2026-11-12", solde: 0 }), tous = p.jours.flatMap((x) => x.items.map((i) => [x.date, i.type, Math.round(i.montant)]));
   assert.strictEqual(JSON.stringify(tous), JSON.stringify([["2026-11-18", "depense_prevue", -500], ["2026-12-03", "depense_prevue", -15000], ["2026-12-09", "depense_prevue", -3000], ["2026-12-31", "depense_prevue", -2800], ["2027-01-02", "recette_prevue", 50000]]),
     "péage à la fin du voyage, carburant 15 jours après, traversée aller 30 jours après, retour à sa date de facturation, recette au retour + 45 jours ; la douane déjà enregistrée et le voyage terminé ne comptent pas");
-  N.S.commandes = [{ id: "o9", statut: "livre", factureId: "f9" }]; N.S.voyages[0].commandeId = "o9";
+  N.S.commandes = [{ id: "o9", statut: "livre", factureId: "f9" }]; N.S.factures = [{ id: "f9", numero: "FAC-9", statut: "payee", lignes: [] }]; N.S.voyages[0].commandeId = "o9";
   assert.ok(!N.previsionsTresorerie(90, { depart: "2026-11-12", solde: 0 }).jours.some((x) => x.items.some((i) => i.type === "recette_prevue")), "voyage déjà facturé : sa recette vient de la facture");
   N.S.params.delaiCarteCarburant = 0; assert.strictEqual(N.previsionsTresorerie(90, { depart: "2026-11-12", solde: 0 }).jours.find((x) => x.date === "2026-11-18").sorties, 15500);
 });
@@ -1972,7 +1972,7 @@ test("rappels après une étape (facture à émettre), annulation et report d'un
   const w = { depuis: Date.parse("2026-11-23T08:00:00Z"), jusqua: Date.parse("2026-11-30T00:00:00Z"), maintenant: Date.parse("2026-11-23T08:00:00Z") };
   let p = N.planNotifications(w); const f = p.find((x) => x.type === "post");
   assert.strictEqual(f.audience, "comptabilite"); assert.strictEqual(f.canal, "email"); assert.strictEqual(new Date(f.quand).toISOString(), "2026-11-24T07:40:00.000Z"); assert.ok(/facture à émettre/.test(f.texte));
-  N.S.commandes = [{ id: "o1", factureId: "f1" }]; v.commandeId = "o1"; assert.ok(!N.planNotifications(w).some((x) => x.type === "post"), "déjà facturé : pas de rappel"); v.commandeId = "";
+  N.S.commandes = [{ id: "o1", factureId: "f1" }]; N.S.factures = [{ id: "f1", numero: "FAC-1", statut: "emise", lignes: [] }]; v.commandeId = "o1"; assert.ok(!N.planNotifications(w).some((x) => x.type === "post"), "déjà facturé : pas de rappel"); v.commandeId = "";
   N.S.notifsEtat.reports[f.id] = 2 * 3600000; p = N.planNotifications(w); assert.strictEqual(p.find((x) => x.id === f.id).quand, f.quand + 2 * 3600000); assert.strictEqual(p.find((x) => x.id === f.id).reporte, true);
   N.S.notifsEtat.annulees[f.id] = "2026-11-23T09:00:00Z"; assert.ok(!N.planNotifications(w).some((x) => x.id === f.id));
 });
@@ -2131,6 +2131,86 @@ test("programme du chauffeur : voyages et absences des 7 prochains jours, prêt 
   assert.ok(/• Congé du 23\/11\/2026 au 27\/11\/2026/.test(t)); assert.ok(t.endsWith("— Atlas Fret")); assert.ok(/Aucun voyage prévu/.test(N.programmeChauffeur(N.S.chauffeurs[2], "2026-11-20")));
 });
 
+/* ---------- voyage fait → facture ---------- */
+const etatFac = () => {
+  N.S.params.tauxEUR = 10; N.S.params.tvaDefaut = 0; N.S.params.delaiPaiement = 30;
+  N.S.clients = [{ id: "k1", nom: "Primeurs du Sud", delai: 45 }, { id: "k2", nom: "Froid Express" }];
+  N.S.factures = []; N.S.commandes = [{ id: "o1", ref: "C-1", factureId: "" }];
+  N.S.voyages = [
+    { id: "v1", ref: "V-1", clientId: "k1", statut: "en_cours", origine: "Agadir", destination: "Perpignan", marchandise: "Tomates", cmr: "CMR-77", prix: 4000, devise: "EUR", kmRetourCharge: 1900, jalons: [{ type: "livre", date: "2026-11-05T09:00:00Z" }] },
+    { id: "v2", ref: "V-2", clientId: "k1", statut: "termine", origine: "Casablanca", destination: "Lyon", prix: 3000, devise: "EUR", dateDepart: "2026-10-20", dateRetourPrevue: "2026-10-30", jalons: [] },
+    { id: "v3", ref: "V-3", clientId: "k2", statut: "en_cours", prix: 30000, devise: "MAD", jalons: [{ type: "depart", date: "2026-11-10T06:00:00Z" }] },
+    { id: "v4", ref: "V-4", statut: "annule", prix: 1, jalons: [{ type: "livre", date: "2026-11-01" }] },
+    { id: "v5", ref: "V-5", clientId: "k2", commandeId: "o1", statut: "termine", dateRetourPrevue: "2026-11-02", prix: 5000, devise: "MAD", jalons: [] },
+  ];
+};
+test("voyages à facturer : faits (livrés ou terminés), pas encore facturés, du plus ancien au plus récent ; alerte", () => {
+  etatFac(); assert.strictEqual(N.voyageFaitLe(N.S.voyages[0]), "2026-11-05"); assert.strictEqual(N.voyageFaitLe(N.S.voyages[1]), "2026-10-30"); assert.strictEqual(N.voyageFaitLe(N.S.voyages[2]), ""); assert.strictEqual(N.voyageFaitLe(N.S.voyages[3]), "");
+  const l = N.voyagesAFacturer("2026-11-13"); assert.deepStrictEqual([...l.map((x) => [x.voyage.id, x.depuis])], [["v2", 14], ["v1", 8], ["v5", 11]].sort((a, b) => b[1] - a[1]));
+  N.S.factures = [{ id: "f9", numero: "FAC-9", clientId: "k2", lignes: [] }]; N.S.commandes[0].factureId = "f9";
+  assert.strictEqual(N.factureDuVoyage(N.S.voyages[4]).numero, "FAC-9", "facturé par sa commande liée"); assert.ok(!N.voyagesAFacturer("2026-11-13").some((x) => x.voyage.id === "v5"));
+  const a = N.alertes().filter((x) => /pas encore facturé/.test(x.texte)); assert.ok(a.length >= 2); assert.ok(a.every((x) => x.cat === "factures" && x.onglet === "voyages"));
+});
+test("facturer un voyage : facture créée et reliée (numéro, échéance du client, devise, ligne détaillée) ; double facturation refusée", () => {
+  etatFac(); const v = N.S.voyages[0];
+  const f = N.creerFactureVoyages([v], { date: "2026-11-13" });
+  assert.strictEqual(f.numero, N.prochainNumero("FAC", [], "numero")); assert.strictEqual(f.clientId, "k1"); assert.strictEqual(f.devise, "EUR"); assert.strictEqual(f.echeance, "2026-12-28", "délai du client : 45 jours"); assert.strictEqual(f.tva, 0);
+  assert.strictEqual(f.lignes[0].montant, 4000); assert.strictEqual(f.lignes[0].designation, "Transport international Agadir → Perpignan et retour — Tomates · voyage V-1 · CMR CMR-77");
+  assert.strictEqual(v.factureId, f.id); assert.deepStrictEqual([...f.voyageIds], ["v1"]); assert.strictEqual(N.factureDuVoyage(v), f); assert.strictEqual(N.totauxFacture(f).ttc, 4000);
+  assert.throws(() => N.creerFactureVoyages([v]), /déjà facturé/); assert.throws(() => N.creerFactureVoyages([{ id: "x", ref: "X" }]), /n'a pas de client/); assert.throws(() => N.creerFactureVoyages([N.S.voyages[1], N.S.voyages[2]]), /même client/);
+  // un voyage de plus sur la même facture ; conversion si la devise diffère
+  const g = N.creerFactureVoyages([N.S.voyages[2]]); N.S.voyages.push({ id: "v6", ref: "V-6", clientId: "k2", prix: 100, devise: "EUR", jalons: [] });
+  N.rattacherVoyageFacture(N.S.voyages[5], g); assert.strictEqual(g.lignes.length, 2); assert.strictEqual(g.lignes[1].montant, 1000, "100 € convertis en MAD"); assert.strictEqual(N.factureDuVoyage(N.S.voyages[5]), g);
+  assert.throws(() => N.rattacherVoyageFacture(N.S.voyages[1], g), /autre client/); assert.throws(() => N.rattacherVoyageFacture(N.S.voyages[5], g), /déjà facturé/);
+  // facture supprimée : le voyage redevient à facturer
+  N.S.factures = N.S.factures.filter((x) => x.id !== f.id); assert.strictEqual(N.factureDuVoyage(v), null);
+  // la trésorerie ne compte plus la recette d'un voyage facturé (elle vient de la facture)
+  N.S.voyages[2].statut = "en_cours"; N.S.voyages[2].dateDepart = "2026-11-10"; N.S.voyages[2].dateRetourPrevue = "2026-11-20"; N.S.voyages[2].lignesCout = [];
+  assert.ok(!N.previsionsTresorerie(90, { depart: "2026-11-13", solde: 0 }).jours.some((j) => j.items.some((i) => i.type === "recette_prevue" && i.ref === "v3")));
+});
+/* ---------- passage des ports étape par étape ---------- */
+const etatPorts = () => {
+  N.S.chauffeurs = [{ id: "h1", nom: "Youssef", sejours: [] }];
+  N.S.voyages = [{ id: "v1", ref: "V-1", chauffeurId: "h1", statut: "en_cours", tempMin: 2, tempMax: 6, jalons: [{ type: "depart", date: "2026-11-12T05:00:00.000Z" }], traversees: [{ sens: "aller", ligne: "tmed-alg", statut: "reservee" }, { sens: "retour", ligne: "alg-tmed", statut: "a_reserver" }] }];
+};
+test("ports : quatre passages (aller et retour), étapes détaillées, contrôles sanitaires seulement pour le frais", () => {
+  etatPorts(); const v = N.S.voyages[0];
+  assert.deepStrictEqual([...N.portsDuSens("aller").map((p) => p.id)], ["tmed_export", "alg_entree"]); assert.deepStrictEqual([...N.portsDuSens("retour").map((p) => p.id)], ["alg_sortie", "tmed_import"]);
+  for (const [id, p] of Object.entries(N.PORTS_PASSAGE)) for (const e of p.etapes) { assert.ok(e.id && e.lib && e.detail && Array.isArray(e.docs), `${id}/${e.id}`); if (e.jalon) assert.ok(N.JALONS_VOYAGE.some(([k]) => k === e.jalon), e.jalon); }
+  assert.strictEqual(new Set(Object.values(N.PORTS_PASSAGE).flatMap((p) => p.etapes.map((e) => e.id))).size, Object.values(N.PORTS_PASSAGE).reduce((n, p) => n + p.etapes.length, 0), "identifiants uniques");
+  assert.ok(N.etapesApplicables(v, "alg_entree").some((e) => e.id === "alg_pcf"), "frais : contrôle sanitaire à Algeciras"); assert.ok(!N.etapesApplicables({ ...v, tempMin: undefined, tempMax: undefined }, "alg_entree").some((e) => e.id === "alg_pcf"), "sec : pas de contrôle sanitaire");
+});
+test("ports : une étape faite pose l'étape du voyage, la traversée, le scanner, la sortie du port et le séjour Schengen ; annulation propre", () => {
+  etatPorts(); const v = N.S.voyages[0], h = N.S.chauffeurs[0];
+  let fx = N.marquerEtapePort(v, "tme_parc", { date: "2026-11-12T09:00:00.000Z", ref: "DFDS-778" }); assert.ok(v.jalons.some((j) => j.type === "port_tmed" && j.source === "port")); assert.ok(fx[0].includes("Entrée port Tanger Med"));
+  N.marquerEtapePort(v, "tme_douane", { date: "2026-11-12T10:00:00.000Z", ref: "TIR XK 1234" });
+  N.marquerEtapePort(v, "tme_scanner", { date: "2026-11-12T10:40:00.000Z", inspection: true }); assert.strictEqual(v.scanRouge.tmed_export, true);
+  let r = N.resumePort(v, "tmed_export", Date.parse("2026-11-12T11:00:00.000Z")); assert.strictEqual(r.faites, 3); assert.strictEqual(r.enCours, true); assert.strictEqual(r.dureeMs, 2 * 3600000); assert.strictEqual(r.prochaine.id, "tme_portnet");
+  for (const id of ["tme_portnet", "tme_sanitaire", "tme_police", "tme_tmpa"]) N.marquerEtapePort(v, id, { date: "2026-11-12T11:00:00.000Z" });
+  fx = N.marquerEtapePort(v, "tme_embarquement", { date: "2026-11-12T12:15:00.000Z", ref: "Ciudad de Tanger" });
+  assert.ok(v.jalons.some((j) => j.type === "embarque_aller")); assert.strictEqual(v.traversees[0].statut, "effectuee"); assert.strictEqual(v.traversees[0].date, "2026-11-12"); assert.ok(fx.includes("traversée effectuée"));
+  r = N.resumePort(v, "tmed_export"); assert.strictEqual(r.fini, true); assert.strictEqual(r.dureeMs, 3.25 * 3600000);
+  assert.strictEqual(N.attentesVoyage(v).find((a) => a.portId === "tmed_export").dureeMs, 3.25 * 3600000, "l'attente mesurée au port vient des étapes"); assert.strictEqual(N.attentesVoyage(v)[0].scanRouge, true);
+  // Algeciras : débarquement (étape du voyage), police (séjour Schengen ouvert), sortie (attente d'Algeciras mesurée)
+  N.marquerEtapePort(v, "alg_debarquement", { date: "2026-11-12T14:00:00.000Z" }); fx = N.marquerEtapePort(v, "alg_police", { date: "2026-11-12T14:20:00.000Z" });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(h.sejours)), [{ entree: "2026-11-12", voyageId: "v1" }]); assert.ok(fx.some((x) => /séjour Schengen de Youssef ouvert/.test(x)));
+  N.marquerEtapePort(v, "alg_sortie", { date: "2026-11-12T19:30:00.000Z" }); assert.strictEqual(v.sortiesPort.alg_entry, "2026-11-12T19:30:00.000Z"); assert.strictEqual(N.attentesVoyage(v).find((a) => a.portId === "alg_entry").dureeMs, 5.5 * 3600000);
+  // retour : police d'Algeciras ferme le séjour
+  N.marquerEtapePort(v, "ras_police", { date: "2026-11-20T08:00:00.000Z" }); assert.strictEqual(h.sejours[0].sortie, "2026-11-20");
+  // annuler : les effets posés par l'étape disparaissent, pas ceux qui venaient d'ailleurs
+  assert.strictEqual(N.annulerEtapePort(v, "ras_police"), true); assert.ok(!("sortie" in h.sejours[0]));
+  assert.strictEqual(N.annulerEtapePort(v, "alg_police"), true); assert.strictEqual(h.sejours.length, 0);
+  assert.strictEqual(N.annulerEtapePort(v, "tme_scanner"), true); assert.ok(!v.scanRouge.tmed_export);
+  assert.strictEqual(N.annulerEtapePort(v, "tme_parc"), true); assert.ok(!v.jalons.some((j) => j.type === "port_tmed")); assert.ok(v.jalons.some((j) => j.type === "depart"), "le départ (posé ailleurs) reste");
+  assert.strictEqual(N.annulerEtapePort(v, "tmi_police"), false); assert.throws(() => N.marquerEtapePort(v, "inconnue"), /inconnue/);
+});
+test("ports : une étape déjà posée par le GPS compte comme faite ; références notées réunies pour le dossier", () => {
+  etatPorts(); const v = N.S.voyages[0]; v.jalons.push({ type: "port_tmed", date: "2026-11-12T09:05:00.000Z", source: "gps" });
+  const s = N.etatEtapePort(v, N.etapePort("tme_parc")); assert.strictEqual(s.fait, true); assert.strictEqual(s.source, "gps");
+  N.marquerEtapePort(v, "tme_parc", { date: "2026-11-12T09:05:00.000Z", ref: "DFDS-1" }); assert.strictEqual(v.jalons.filter((j) => j.type === "port_tmed").length, 1, "pas de doublon");
+  N.marquerEtapePort(v, "tme_portnet", { ref: "DUM 301-2026-000123" }); N.marquerEtapePort(v, "tmi_douane", { ref: "DUM import 45" });
+  assert.deepStrictEqual([...N.referencesPortuaires(v).map((x) => `${x.lib}=${x.ref}`)], ["N° de réservation=DFDS-1", "N° DUM=DUM 301-2026-000123", "N° DUM import=DUM import 45"]);
+});
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

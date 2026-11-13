@@ -90,7 +90,7 @@ function previsionsTresorerie(jours = 90, { depart = today(), solde } = {}) {
   for (const v of S.voyages) {
     if (!["prevu", "en_cours"].includes(v.statut)) continue;
     const finV = finVoyage(v) || depart, m = margeVoyage(v), cmd = v.commandeId && parId(S.commandes, v.commandeId);
-    if (m.revenu > 0 && !cmd?.factureId) { const cl = parId(S.clients, v.clientId); mv(ajouterJours(finV, num(cl?.delai, S.params.delaiPaiement)), m.revenu, "recette_prevue", `Voyage ${v.ref || ""} à facturer${cl ? " — " + cl.nom : ""}`, v.id); }
+    if (m.revenu > 0 && !factureDuVoyage(v)) { const cl = parId(S.clients, v.clientId); mv(ajouterJours(finV, num(cl?.delai, S.params.delaiPaiement)), m.revenu, "recette_prevue", `Voyage ${v.ref || ""} à facturer${cl ? " — " + cl.nom : ""}`, v.id); }
     for (const l of m.couts_directs) {
       if (!l.projete) continue;
       const t = l.type === "traversee" ? (v.traversees || []).find((x) => x.sens === l.sens) : null;

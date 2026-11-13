@@ -213,7 +213,7 @@ function planNotifications({ depuis = Date.now(), jusqua = Date.now() + 7 * 8640
       const lots = [["pre", fait === null && v.statut !== "termine" ? prevues[r.jalon] : null, r.pre_notifications || []], ["post", fait, r.post_notifications || []]];
       for (const [type, base, liste] of lots) liste.forEach((p, i) => {
         const q = quandRappel(base, p); if (q === null) return;
-        if (p.siNonFacture && (v.commandeId && parId(S.commandes, v.commandeId)?.factureId || v.factureId)) return;
+        if (p.siNonFacture && factureDuVoyage(v)) return;
         const id0 = `${v.id}:${r.jalon}:${type}:${i}`, quand = q + num(reports[id0]);
         if (annulees[id0] || quand < depuis || quand > jusqua || quand < maintenant - 5 * 60000) return;
         const d = destinataireNotif(p.audience, p.canal, v); if (d.manque) { manques.push({ id: id0, quand, texte: d.manque }); return; }

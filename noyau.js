@@ -306,6 +306,7 @@ function alertes() {
     const e = etatFacture(f);
     if (e.code === "retard") ajouter("danger", "factures", `Facture ${f.numero} (${nomClient(f.clientId)}) — ${e.texte}, ${fmtDevise(totauxFacture(f).ttc, f.devise)}`, "factures", `fac:${f.id}`);
   }
+  for (const { voyage: v, depuis } of voyagesAFacturer()) if (depuis >= 1) ajouter(depuis > 7 ? "danger" : "warn", "voyages", `Voyage ${v.ref || ""}${v.clientId ? " (" + nomClient(v.clientId) + ")" : ""} fait depuis ${depuis} j : pas encore facturé`, "factures", `voy:${v.id}:facturer`);
   for (const c of S.commandes) {
     if (c.statut === "livre" && !c.factureId) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`, "commandes", `cmd:${c.id}:facturer`);
     const jc = joursAvant(c.dateChargement);
@@ -679,6 +680,56 @@ function etatFacture(f) {
   const j = joursAvant(f.echeance);
   if (j !== null && j < 0) return { code: "retard", niveau: "danger", texte: `en retard de ${-j} j` };
   return { code: "attente", niveau: "warn", texte: j === null ? "En attente" : j === 0 ? "Échéance aujourd'hui" : `Échéance dans ${j} j` };
+}
+
+/* ---------- voyage ↔ facture : chaque voyage fait doit être facturé ---------- */
+/** Facture d'un voyage : la sienne (factureId), celle qui le cite (voyageIds), ou celle de sa commande liée. null si aucune. */
+function factureDuVoyage(v) {
+  if (!v) return null;
+  const directe = v.factureId && parId(S.factures, v.factureId); if (directe) return directe;
+  const citee = S.factures.find((f) => (f.voyageIds || []).includes(v.id)); if (citee) return citee;
+  const cmd = v.commandeId && parId(S.commandes, v.commandeId);
+  return (cmd?.factureId && parId(S.factures, cmd.factureId)) || null;
+}
+/** Le voyage est-il fait (livré ou terminé) ? Renvoie la date (ISO) de livraison ou de fin, sinon "". */
+function voyageFaitLe(v) {
+  if (!v || v.statut === "annule") return "";
+  const l = (v.jalons || []).find((j) => j.type === "livre") || (v.jalons || []).find((j) => j.type === "retour");
+  if (l) return String(l.date).slice(0, 10);
+  return v.statut === "termine" ? (v.dateRetourPrevue || v.dateDepart || "") : "";
+}
+/** Voyages faits et pas encore facturés : [{ voyage, depuis (jours) }], les plus anciens d'abord. */
+function voyagesAFacturer(auj = today()) {
+  return S.voyages.map((v) => ({ voyage: v, le: voyageFaitLe(v) })).filter((x) => x.le && !factureDuVoyage(x.voyage)).map((x) => ({ voyage: x.voyage, depuis: Math.max(0, joursEntre(x.le, auj)) })).sort((a, b) => b.depuis - a.depuis);
+}
+/** Libellé de la ligne de facture d'un voyage : trajet, aller-retour, marchandise, référence, CMR, références du client. */
+function designationVoyage(v) {
+  const ar = num(v.kmRetourCharge) > 0 ? " et retour" : "";
+  return `Transport international ${v.origine || "?"} → ${v.destination || "?"}${ar}${v.marchandise ? " — " + v.marchandise : ""} · voyage ${v.ref || ""}${v.cmr ? " · CMR " + v.cmr : ""}${v.refClient ? " · réf. " + v.refClient : ""}`;
+}
+/**
+ * Crée la facture d'un voyage (ou de plusieurs voyages du même client) et relie les deux. Montant : prix du voyage, dans sa devise.
+ * opts : { numero, date, tva, designation, montant }. Lève une erreur si un voyage est déjà facturé, sans client, ou de clients différents.
+ */
+function creerFactureVoyages(voyages, opts = {}) {
+  if (!voyages.length) throw new Error("Aucun voyage à facturer.");
+  const c0 = voyages[0].clientId;
+  if (!c0) throw new Error(`Le voyage ${voyages[0].ref || ""} n'a pas de client : choisissez-le d'abord.`);
+  for (const v of voyages) { if (factureDuVoyage(v)) throw new Error(`Le voyage ${v.ref} est déjà facturé (${factureDuVoyage(v).numero}).`); if (v.clientId !== c0) throw new Error("Une facture regroupe des voyages d'un même client."); }
+  const devise = voyages[0].devise || "MAD", client = parId(S.clients, c0), date = opts.date || today();
+  const f = { id: uid(), numero: opts.numero || prochainNumero("FAC", S.factures, "numero"), clientId: c0, voyageIds: voyages.map((v) => v.id), date,
+    echeance: dateISO(Date.parse(date + "T00:00:00Z") + (client?.delai ?? S.params.delaiPaiement) * 86400000), devise, tva: opts.tva ?? S.params.tvaDefaut, statut: "emise",
+    lignes: voyages.map((v, i) => ({ designation: (i === 0 && opts.designation) || designationVoyage(v), montant: i === 0 && opts.montant !== undefined ? num(opts.montant) : (v.devise || "MAD") === devise ? num(v.prix) : versMAD(v.prix, v.devise) })) };
+  S.factures.push(f); for (const v of voyages) v.factureId = f.id;
+  return f;
+}
+/** Relie un voyage à une facture existante (du même client), en ajoutant sa ligne si demandé. */
+function rattacherVoyageFacture(v, f, { ajouterLigne = true } = {}) {
+  if (factureDuVoyage(v)) throw new Error(`Le voyage ${v.ref} est déjà facturé (${factureDuVoyage(v).numero}).`);
+  if (v.clientId && f.clientId && v.clientId !== f.clientId) throw new Error("Cette facture est celle d'un autre client.");
+  f.voyageIds = [...new Set([...(f.voyageIds || []), v.id])]; v.factureId = f.id;
+  if (ajouterLigne) (f.lignes ||= []).push({ designation: designationVoyage(v), montant: (v.devise || "MAD") === (f.devise || "MAD") ? num(v.prix) : versMAD(v.prix, v.devise) });
+  return f;
 }
 
 /** Encours clients en MAD (factures non payées) et part en retard. */

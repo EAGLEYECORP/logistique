@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.2.0 — Passage des ports étape par étape, chaque voyage relié à sa facture
+
+- **Passage des ports** sur chaque voyage — aller : Tanger Med (parc de régulation, PortNet et DUM, douane, contrôle sanitaire export pour le frais, scanner, police, droits de port, embarquement) puis Algeciras (débarquement, police des frontières et EES, douane espagnole, poste de contrôle sanitaire pour le frais, sortie du port) ; retour : Algeciras (douane de sortie, police, embarquement) puis Tanger Med (débarquement, police, scanner, DUM import, contrôles, mainlevée). Pour chaque étape : ce qui s'y passe, les documents à présenter, la référence à noter (DUM, TIR/T1, MRN, CHED…), l'heure, le temps passé au port.
+- « Fait » sur une étape pose aussi l'étape du voyage (attentes mesurées, arrivée estimée, notifications), la traversée effectuée, le passage au scanner (hors médiane), la sortie d'Algeciras et le **séjour Schengen** du chauffeur (ouvert à la police d'Algeciras, fermé au retour). Les étapes posées par le GPS comptent comme faites. Références reprises dans le dossier du voyage. Étapes de départ à confirmer avec votre transitaire (`data.js`, `PORTS_PASSAGE`).
+- **Chaque voyage fait est relié à une facture** : état sur la fiche (facture, montant, payée / à encaisser / en retard), « Facturer ce voyage » en un geste (numéro, échéance du client, désignation détaillée avec CMR), « Ajouter à une facture » existante du même client, voyages à facturer en tête de la page Factures, **alerte** dès le lendemain (urgente après 7 jours). Une facture supprimée remet ses voyages « à facturer » ; la trésorerie ne compte plus deux fois un voyage facturé.
+
 ## 4.1.0 — Planning des chauffeurs et des camions
 
 - **Page Planning** : disponibilités jour par jour (14 jours, 7 sur téléphone) — en voyage, congé, maladie, formation, repos, entretien, panne, visite technique, papiers expirés (permis, carte conducteur, visite médicale ; assurance et visite technique du camion), libre. Nombre de libres par jour, jours Schengen restants de chaque chauffeur, semaine suivante ou précédente, impression.

@@ -248,7 +248,7 @@ VUES.factures = {
       <thead><tr><th>Facture</th><th>Client</th><th>Date</th><th class="r">Montant TTC</th><th>Statut</th><th></th></tr></thead><tbody>
       ${liste.map((f) => {
         const t = totauxFacture(f); const e = etatFacture(f);
-        return `<tr><td><strong>${esc(f.numero)}</strong><span class="sub">${(f.lignes || []).length} ligne(s)</span></td>
+        return `<tr><td><strong>${esc(f.numero)}</strong><span class="sub">${(f.lignes || []).length} ligne(s)${S.voyages.filter((v) => factureDuVoyage(v) === f).map((v) => " · voyage " + esc(v.ref || "")).join("")}</span></td>
           <td>${esc(nomClient(f.clientId))}</td>
           <td>${dateFr(f.date)}<span class="sub">échéance ${dateFr(f.echeance)}</span></td>
           <td class="r num">${fmtDevise(t.ttc, f.devise)}<span class="sub">HT ${fmt(t.ht, 2)} · TVA ${fmt(f.tva)} %</span></td>
@@ -297,8 +297,9 @@ VUES.factures = {
       location.href = `mailto:${encodeURIComponent(c?.email || "")}?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(corps)}`;
     }
     if (act === "imprimer") imprimerFacture(f);
-    if (act === "suppr" && (await confirmer(`Supprimer ${f.numero} ?`, "Les commandes liées redeviennent « à facturer ». Pour une facture déjà envoyée, préférez un avoir."))) {
+    if (act === "suppr" && (await confirmer(`Supprimer ${f.numero} ?`, "Les commandes et voyages liés redeviennent « à facturer ». Pour une facture déjà envoyée, préférez un avoir."))) {
       S.commandes.forEach((c) => { if (c.factureId === id) c.factureId = null; });
+      S.voyages.forEach((v) => { if (v.factureId === id) delete v.factureId; });
       S.factures = S.factures.filter((x) => x.id !== id); sauver(); rafraichir();
     }
   },

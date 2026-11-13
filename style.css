@@ -775,3 +775,12 @@ li.fait .port-pt { background: var(--ok); border-color: var(--ok); color: #fff; 
 .port-txt .sub { display: block; } .port-docs { color: var(--text-2); }
 
 ul.ctl.papiers li.ok { color: var(--text-2); } ul.ctl.papiers li.ok .i { color: var(--ok); }
+
+/* accès par service */
+table.acces th[scope=row] { text-align: left; font-weight: 600; min-width: 150px; text-transform: none; letter-spacing: 0; font-size: .9rem; color: inherit; }
+table.acces td { vertical-align: top; }
+table.acces td input[type=checkbox] { width: 18px; height: 18px; }
+table.acces select { min-width: 175px; font-size: .85rem; padding: 4px 6px; }
+table.acces select.acces-change { border-color: var(--warn, #b45309); box-shadow: 0 0 0 1px var(--warn, #b45309); }
+table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
+@media (max-width: 720px) { .table-wrap:has(> table.acces) { overflow-x: auto; } table.acces th[scope=row] { min-width: 120px; } }

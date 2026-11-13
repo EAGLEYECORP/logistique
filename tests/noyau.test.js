@@ -2244,6 +2244,18 @@ test("prix du jour : taux de Bank Al-Maghrib appliqué, gazole marocain d'après
   N.S.pleins = []; N.S.voyages = []; N.appliquerPrixDuJour(null, "2026-11-13"); assert.strictEqual(N.S.params.prixGasoil, 12, "sans pleins récents : le prix précédent reste");
 });
 
+test("accès par service : niveaux par défaut, droits effectifs, « propre » conservé, chef jamais restreint", () => {
+  N.appliquerDroitsPersonnalises({});
+  assert.strictEqual(N.niveauDroit("dispatcher", "voyages"), "tout_sans_prix"); assert.strictEqual(N.niveauDroit("exploitant", "voyages"), "tout"); assert.strictEqual(N.niveauDroit("commercial", "factures"), "modification"); assert.strictEqual(N.niveauDroit("dispatcher", "factures"), "aucun"); assert.strictEqual(N.niveauDroit("comptable", "clients"), "lecture"); assert.strictEqual(N.niveauDroit("chauffeur", "voyages"), "modif_sans_prix");
+  const r = N.appliquerDroitsPersonnalises({ dispatcher: { factures: "lecture", voyages: "aucun" }, chauffeur: { voyages: "lecture_sans_prix" }, chef_entreprise: { factures: "aucun" }, comptable: { reglages: "aucun" }, pirate: { factures: "tout" } });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(r)), { dispatcher: { factures: "lecture", voyages: "aucun" }, chauffeur: { voyages: "lecture_sans_prix" } });
+  const d = N.droitsEffectifs("dispatcher"); assert.deepStrictEqual({ ...d.factures }, { lecture: "tout", finances: true, ecriture: false, suppression: false }); assert.strictEqual(d.voyages, null); assert.strictEqual(d.traces, null); assert.ok(d.camions.ecriture, "autres groupes inchangés");
+  assert.strictEqual(N.droitsEffectifs("chauffeur").voyages.lecture, "propre", "un chauffeur ne voit toujours que ses voyages");
+  assert.strictEqual(N.droitsEffectifs("chef_entreprise").factures.suppression, true);
+  assert.strictEqual(N.droitsSur({ role: "dispatcher" }, "factures").lecture, "tout"); assert.strictEqual(N.groupeDe("pleins"), "flotte");
+  N.appliquerDroitsPersonnalises({}); assert.strictEqual(N.droitsSur({ role: "dispatcher" }, "factures"), null);
+});
+
 test("taux par voyage : un voyage terminé ou facturé garde le taux de son jour ; les autres suivent le taux du jour", () => {
   etatPrix(); const [v1, v2] = N.S.voyages;
   assert.strictEqual(N.figerTauxVoyages(), 1); assert.strictEqual(v2.tauxEUR, 10.8); assert.ok(!v1.tauxEUR);

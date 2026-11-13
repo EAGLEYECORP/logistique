@@ -41,6 +41,27 @@ Règles communes (`comptes.js`, même fichier pour l'application et le relais) :
 - « ses voyages » : `voyage.chauffeurId` = fiche chauffeur du compte ; « confiés » : `transitaireId` = identifiant du compte ;
 - chaque refus est inscrit au journal.
 
+### Accès par service (réglés par le chef)
+
+Le tableau ci-dessus est le **défaut**. Page **Accès par service** (chef d'entreprise) : pour chaque rôle et chaque groupe de données — voyages (avec traces, attentes, notifications, zones, trajets, autorisations), commandes, factures, clients, flotte (camions, chauffeurs, pleins, entretien), charges (charges générales, échéances, dépenses à rattacher), douane (dossiers, codes SH), réglages (avec le routage des notifications) — choisir :
+
+| Niveau | Lire | Prix, coûts, marges | Modifier | Supprimer |
+|---|---|---|---|---|
+| Aucun accès | — | — | — | — |
+| Lecture, sans prix | ✔ | — | — | — |
+| Lecture | ✔ | ✔ | — | — |
+| Modification, sans prix | ✔ | — | ✔ | — |
+| Modification | ✔ | ✔ | ✔ | — |
+| Tout, sans prix | ✔ | — | ✔ | ✔ |
+| Tout | ✔ | ✔ | ✔ | ✔ |
+
+- appliqué par le serveur (`droitsEffectifs` dans `comptes.js`) à chaque lecture, écriture, flux en direct et chargement ;
+- s'applique **tout de suite** : les appareils connectés rechargent ce que leur rôle peut voir, le menu suit (une page sans aucun droit disparaît, un accès accordé la fait apparaître) ;
+- le chef d'entreprise n'est jamais restreint ; « ses voyages » / « dossiers confiés » restent la règle pour le chauffeur et le transitaire ; les réglages ne peuvent pas passer à « aucun accès » (l'application en a besoin) ;
+- chaque changement est inscrit au journal (`droits_modifies`, avant / après) ; réglage conservé dans `comptes.json`.
+
+Sans relais, sur un appareil seul : Réglages → Appareil → **Pages de chaque service** choisit les pages et l'affichage des prix de chaque profil — un tri de l'affichage protégé par le code du poste, pas un contrôle d'accès.
+
 ## 3. Authentification
 
 | Élément | Choix |
@@ -82,6 +103,7 @@ Chaque écriture (création, modification, suppression) avec l'auteur, la date e
 | `GET/PUT/DELETE /api/records/<collection>/<id>` | Un enregistrement (versions, verrous : `X-Forcer: 1`). |
 | `GET /api/changes?since=` · `GET /api/sse` | Rattrapage, temps réel. |
 | `POST /api/verrous` · `DELETE /api/verrous/<collection>/<id>` | Verrous de 30 s. |
+| `GET /api/droits`, `PUT /api/droits` `{ droits: { role: { groupe: niveau } } }` | Accès par service (chef). `{}` remet tout par défaut. |
 | `GET /api/journal?utilisateur=&collection=&action=&debut=&fin=&format=csv` | Journal (chef). |
 
 Les routes existantes (positions, liens client, notifications, synchronisation) acceptent toujours les jetons ; une session d'un rôle de suivi (chef, exploitant, répartiteur, commercial) vaut le jeton de lecture.

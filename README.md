@@ -31,7 +31,7 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Multi-utilisateur** | Comptes (chef d'entreprise, exploitant, répartiteur, commercial, comptable, chauffeur, transitaire), double authentification, modifications simultanées avec fusion, temps réel, journal 24 mois |
 | **Rentabilité** | Coût complet au kilomètre par camion (charges fixes comprises), marge par corridor et par client, prix de revient au km chargé, retours à combler, export CSV |
 | **Dossier de voyage** | Tout le voyage en un document (papiers, étapes GPS, traversées, preuve de livraison, trace, températures, photos) : PDF ou archive ZIP |
-| **Profils** | Sans relais : chaque poste ne montre que ses pages (tri de l'affichage protégé par un code). Avec le relais multi-utilisateur : le profil suit le rôle du compte et les droits sont appliqués par le serveur |
+| **Profils** | Sans relais : chaque poste ne montre que ses pages (tri de l'affichage protégé par un code). La direction choisit les pages et l'affichage des prix de chaque profil. Avec le relais multi-utilisateur : le profil suit le rôle du compte, les droits sont appliqués par le serveur et le chef règle les **accès par service** (aucun, lecture, modification, avec ou sans prix), appliqués aussitôt |
 | **Synchronisation** | Mêmes données **et mêmes photos** sur le bureau et les téléphones des chauffeurs par votre relais : chiffrées sur l'appareil, fusion par enregistrement, copies de sécurité (Réglages → Données) |
 | **Tachygraphe** | Import de la **carte conducteur (.ddd)** ou d'un CSV d'activités, dépassements des temps de conduite et de repos (CE 561/2006, version simplifiée), alertes |
 | **Chaîne du froid** | Température des balises, consigne par voyage, excursions, alerte et rapport (fiche voyage) |
@@ -154,7 +154,7 @@ Automatique et sans action de votre part.
 | `optimisation.js`, `journal.js`, `prevision.js` | Conseils et tableau des opérations ; historique des voyages ; attentes aux ports et arrivée estimée (testés) |
 | `planning.js`, `calendrier.js` | Disponibilités, conflits d'affectation, ressources libres, duplication, programme du chauffeur (testé) ; page Planning |
 | `jalons_notifications.js`, `comptes.js` | Routage et rédaction des notifications par étape ; rôles et droits partagés avec le relais (testés) |
-| `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Journal) |
+| `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Accès par service, Journal) |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |
 | `conformite.js` | WhatsApp / SMS, analyse du tachygraphe, chaîne du froid, balise du téléphone (testé) |
 | `terrain.js` | Balise de secours du téléphone et preuve de livraison |
@@ -179,7 +179,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 209 tests (180 application, 29 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 211 tests (181 application, 30 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

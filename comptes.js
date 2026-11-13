@@ -59,7 +59,50 @@ function droitsRole(role) {
   }
   return r;
 }
-const droitsSur = (utilisateur, col) => (utilisateur && !utilisateur.cloture ? droitsRole(utilisateur.role)[col] || null : null);
+/* ---------- droits par service, réglés par le chef d'entreprise (appliqués par le serveur) ---------- */
+const GROUPES_DROITS = [
+  ["voyages", "Voyages, traces, attentes, notifications", ["voyages", "traces", "attentesPort", "notificationsApp", "zones", "gares", "releves", "trajets", "autorisations"]],
+  ["commandes", "Commandes", ["commandes"]],
+  ["factures", "Factures", ["factures"]],
+  ["clients", "Clients", ["clients"]],
+  ["flotte", "Flotte : camions, chauffeurs, pleins, entretien", ["camions", "chauffeurs", "pleins", "interventions"]],
+  ["charges", "Charges, échéances, dépenses à rattacher", ["chargesGenerales", "echeances", "depensesAttente"]],
+  ["douane", "Douane et codes SH", ["dossiers", "codes"]],
+  ["reglages", "Réglages et routage des notifications", ["reglages", "routageJalons"]],
+];
+const NIVEAUX_DROITS = [["defaut", "Par défaut"], ["aucun", "Aucun accès"], ["lecture_sans_prix", "Lecture, sans prix"], ["lecture", "Lecture"], ["modif_sans_prix", "Modification, sans prix"], ["modification", "Modification"], ["tout_sans_prix", "Tout, sans prix"], ["tout", "Tout"]];
+const NIVEAU_VERS_DROIT = { aucun: null, lecture_sans_prix: [false, false, false], lecture: [true, false, false], modif_sans_prix: [false, true, false], modification: [true, true, false], tout_sans_prix: [false, true, true], tout: [true, true, true] };
+let DROITS_PERSO = {};
+const groupeDe = (col) => GROUPES_DROITS.find((g) => g[2].includes(col))?.[0] || null;
+/** Valide et applique les droits par service : { role: { groupe: niveau } }. Le chef d'entreprise n'est jamais restreint. Renvoie l'objet retenu. */
+function appliquerDroitsPersonnalises(o) {
+  const r = {};
+  for (const [role, g] of Object.entries(o || {})) {
+    if (role === "chef_entreprise" || !ROLES_COMPTES.some(([k]) => k === role) || !g || typeof g !== "object") continue;
+    for (const [groupe, niveau] of Object.entries(g)) if (GROUPES_DROITS.some(([k]) => k === groupe) && NIVEAUX_DROITS.some(([k]) => k === niveau) && niveau !== "defaut" && !(groupe === "reglages" && niveau === "aucun")) (r[role] ||= {})[groupe] = niveau; // l'application a besoin de lire ses réglages
+  }
+  DROITS_PERSO = r; return r;
+}
+/** Droits effectifs d'un rôle : ceux par défaut, modifiés par le réglage du chef. Un rôle limité à « ses » enregistrements (chauffeur, transitaire) le reste. */
+function droitsEffectifs(role, perso = DROITS_PERSO) {
+  const base = droitsRole(role), p = role === "chef_entreprise" ? null : perso?.[role];
+  if (!p) return base;
+  const r = { ...base };
+  for (const [groupe, niveau] of Object.entries(p)) for (const col of GROUPES_DROITS.find((g) => g[0] === groupe)?.[2] || []) {
+    const v = NIVEAU_VERS_DROIT[niveau]; if (v === undefined) continue;
+    r[col] = v === null ? null : { lecture: base[col]?.lecture === "propre" ? "propre" : "tout", finances: v[0], ecriture: v[1], suppression: v[2] };
+  }
+  return r;
+}
+/** Niveau affiché pour un rôle et un groupe : le réglage du chef, sinon celui qui correspond aux droits par défaut. */
+function niveauDroit(role, groupe, perso = DROITS_PERSO) {
+  if (perso?.[role]?.[groupe]) return perso[role][groupe];
+  const col = GROUPES_DROITS.find((g) => g[0] === groupe)?.[2][0], d = droitsRole(role)[col];
+  if (!d) return "aucun";
+  const e = d.ecriture === true, partiel = Array.isArray(d.ecriture);
+  return d.suppression ? (d.finances ? "tout" : "tout_sans_prix") : e || partiel ? (d.finances ? "modification" : "modif_sans_prix") : d.finances ? "lecture" : "lecture_sans_prix";
+}
+const droitsSur = (utilisateur, col) => (utilisateur && !utilisateur.cloture ? droitsEffectifs(utilisateur.role)[col] || null : null);
 /** Le rôle peut-il gérer les comptes et lire le journal ? */
 const estChef = (u) => !!u && !u.cloture && u.role === "chef_entreprise";
 /** Le rôle peut-il lire le suivi en direct (positions, liens client, notifications) ? */
@@ -136,4 +179,4 @@ function diffEnregistrement(avant, apres) {
 const motDePasseValide = (m) => typeof m === "string" && m.length >= 12 && m.length <= 200;
 const emailCompteValide = (e) => typeof e === "string" && /^[^\s@<>,;"]+@[^\s@<>,;"]+\.[a-z]{2,}$/i.test(e.trim()) && e.length <= 200;
 
-if (typeof module !== "undefined") module.exports = { COLLECTIONS_SERVEUR, REGLAGES_IDS, ROLES_COMPTES, PROFIL_DU_ROLE, CHAMPS_FINANCIERS, droitsRole, droitsSur, estChef, peutSuivre, estSien, peutVoir, filtrerEnregistrement, appliquerEcriture, peutSupprimer, diffEnregistrement, motDePasseValide, emailCompteValide };
+if (typeof module !== "undefined") module.exports = { GROUPES_DROITS, NIVEAUX_DROITS, appliquerDroitsPersonnalises, droitsEffectifs, niveauDroit, groupeDe, COLLECTIONS_SERVEUR, REGLAGES_IDS, ROLES_COMPTES, PROFIL_DU_ROLE, CHAMPS_FINANCIERS, droitsRole, droitsSur, estChef, peutSuivre, estSien, peutVoir, filtrerEnregistrement, appliquerEcriture, peutSupprimer, diffEnregistrement, motDePasseValide, emailCompteValide };

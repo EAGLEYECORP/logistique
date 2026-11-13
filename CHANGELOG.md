@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.4.0 — Accès limités par service
+
+- **Accès par service** (mode multi-utilisateur, page réservée au chef d'entreprise) : pour chaque rôle — exploitant, répartiteur, commercial, comptable, chauffeur, transitaire — et chaque groupe de données (voyages, commandes, factures, clients, flotte, charges, douane, réglages), choisir *défaut*, *aucun accès*, *lecture sans prix*, *lecture*, *modification sans prix*, *modification*, *tout sans prix* ou *tout*. **Appliqué par le serveur** : sans prix, les prix, coûts et marges ne sont pas envoyés ; sans accès, les données ne quittent pas le serveur et la page disparaît du menu ; un accès accordé fait apparaître la page.
+- Effet **immédiat** sur les appareils connectés (mise à jour en direct, sans reconnexion), changement inscrit au **Journal**, « Tout remettre par défaut ». Le chef d'entreprise garde toujours tous les droits ; un chauffeur ou un transitaire ne voit toujours que *ses* voyages et dossiers ; les réglages restent lisibles par tous (l'application en a besoin).
+- **Appareil seul** (sans relais) : Réglages → Appareil → « Pages de chaque service » — cocher les pages et l'affichage des prix de chaque profil (exploitation, commercial, comptabilité), toujours protégé par le code du poste.
+- Relais : route `GET/PUT /api/droits` (chef), réglage conservé dans `comptes.json` (chiffré au repos si activé).
+
 ## 4.3.0 — Prix du jour (taux EUR → MAD, gazole) et papiers expliqués
 
 - **Taux EUR → MAD du jour** : cours de référence de **Bank Al-Maghrib**, récupéré par le relais (repli : open.er-api.com, indiqué « indicatif »). Appliqué seul toutes les 6 heures ; un voyage **terminé ou facturé garde le taux de son jour** (ses marges ne bougent plus) ; les voyages en cours suivent le taux du jour.

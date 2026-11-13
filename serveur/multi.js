@@ -36,6 +36,7 @@ function creerMulti({ dossier = null, coffre = creerCoffre(null), racine = path.
   /* ---------- comptes et sessions ---------- */
   const etatComptes = lireJSON(dossier && fichier("comptes.json"), { comptes: [], recuperation: null, resets: {} });
   etatComptes.resets ||= {};
+  C.appliquerDroitsPersonnalises(etatComptes.droits || {}); // droits par service réglés par le chef
   const sauverComptes = () => ecrireJSON(dossier && fichier("comptes.json"), etatComptes);
   const tableSessions = lireJSON(dossier && fichier("sessions.json"), {});
   const sessions = A.creerSessions(tableSessions, { maintenant });
@@ -161,7 +162,7 @@ function creerMulti({ dossier = null, coffre = creerCoffre(null), racine = path.
   /** Traite une requête du mode multi-utilisateur ; renvoie vrai si elle a été traitée. */
   async function traiter(req, res, url, p, ip, entetes, jetonLectureOk) {
     if (!p.startsWith("/api/")) return servirStatique(req, res, p, entetes);
-    const m = p.match(/^\/api\/(auth|utilisateurs|donnees|records|changes|sse|verrous|journal)(?:\/(.*))?$/); if (!m) return false;
+    const m = p.match(/^\/api\/(auth|utilisateurs|donnees|records|changes|sse|verrous|journal|droits)(?:\/(.*))?$/); if (!m) return false;
     const [, zone, reste = ""] = m, t = maintenant(), j = (code, obj, extra) => (envoyer(res, code, obj, entetes, extra), true);
     let corps = {};
     if (["POST", "PUT", "DELETE"].includes(req.method)) { try { corps = await corpsJSON(req); } catch (e) { return j(e.code === 413 ? 413 : 400, { erreur: e.code === 413 ? "Corps trop volumineux." : "JSON invalide." }); } }
@@ -197,7 +198,7 @@ function creerMulti({ dossier = null, coffre = creerCoffre(null), racine = path.
         limites.succes(c); c.dernierAcces = t; c.reseaux = [reseau, ...(c.reseaux || []).filter((x) => x !== reseau)].slice(0, 5); sauverComptes();
         const s = sessions.ouvrir(c.id, A.prefixeReseau(ip)); sauverSessions();
         auditer({ u: c.id, nom: c.nom, action: "connexion", details: { reseau, nouveauReseau: nouveau } });
-        return j(200, { ok: true, acces: s.acces, renouvellement: s.renouvellement, expire: s.expireAcces, utilisateur: publicCompte(c), droits: C.droitsRole(c.role), exige2FA: exige2FA(c) }, { "Set-Cookie": cookiesSession(s) });
+        return j(200, { ok: true, acces: s.acces, renouvellement: s.renouvellement, expire: s.expireAcces, utilisateur: publicCompte(c), droits: C.droitsEffectifs(c.role), exige2FA: exige2FA(c) }, { "Set-Cookie": cookiesSession(s) });
       }
       if (reste === "refresh" && req.method === "POST") {
         const r = sessions.renouveler(corps.renouvellement || lireCookies(req).lf_renouv || "", A.prefixeReseau(ip)); sauverSessions();
@@ -243,7 +244,7 @@ function creerMulti({ dossier = null, coffre = creerCoffre(null), racine = path.
     if (viaCookie && !["GET", "HEAD"].includes(req.method) && req.headers["x-lf"] !== "1") return j(403, { erreur: "Requête refusée (en-tête X-LF manquant)." });
 
     if (zone === "auth") {
-      if (reste === "me" && req.method === "GET") return j(200, { utilisateur: publicCompte(u), droits: C.droitsRole(u.role), exige2FA: exige2FA(u), roles: C.ROLES_COMPTES });
+      if (reste === "me" && req.method === "GET") return j(200, { utilisateur: publicCompte(u), droits: C.droitsEffectifs(u.role), exige2FA: exige2FA(u), roles: C.ROLES_COMPTES });
       if (reste === "logout" && req.method === "POST") { sessions.fermer(jeton); sauverSessions(); auditer({ u: u.id, nom: u.nom, action: "deconnexion" }); return j(200, { ok: true }, { "Set-Cookie": effacerCookies() }); }
       if (reste === "mot-de-passe" && req.method === "POST") {
         if (!A.verifierMotDePasse(String(corps.ancien || ""), u.hash)) return j(401, { erreur: "Mot de passe actuel incorrect." });
@@ -299,7 +300,18 @@ function creerMulti({ dossier = null, coffre = creerCoffre(null), racine = path.
       }
       return j(404, { erreur: "Compte introuvable." });
     }
-    if (zone === "donnees" && req.method === "GET") return j(200, { seq, collections: vuePour(u), verrous: listeVerrous(), utilisateur: publicCompte(u), droits: C.droitsRole(u.role), utilisateurs: etatComptes.comptes.filter((c) => !c.cloture).map((c) => ({ id: c.id, nom: c.nom, role: c.role, office: c.office || null })) });
+    if (zone === "droits") {
+      if (!C.estChef(u)) return j(403, { erreur: "Réservé au chef d'entreprise." });
+      if (req.method === "GET") return j(200, { droits: etatComptes.droits || {}, groupes: C.GROUPES_DROITS, niveaux: C.NIVEAUX_DROITS, roles: C.ROLES_COMPTES, effectifs: Object.fromEntries(C.ROLES_COMPTES.map(([k]) => [k, Object.fromEntries(C.GROUPES_DROITS.map(([g]) => [g, C.niveauDroit(k, g)]))])) });
+      if (req.method === "PUT") {
+        const avant = etatComptes.droits || {}, retenu = C.appliquerDroitsPersonnalises(corps.droits || {});
+        etatComptes.droits = retenu; sauverComptes();
+        auditer({ u: u.id, nom: u.nom, action: "droits_modifies", col: "droits", diff: C.diffEnregistrement(avant, retenu) });
+        diffuser("droits", { par: u.nom }); // chaque appareil recharge ce que son rôle peut voir
+        return j(200, { ok: true, droits: retenu });
+      }
+    }
+    if (zone === "donnees" && req.method === "GET") return j(200, { seq, collections: vuePour(u), verrous: listeVerrous(), utilisateur: publicCompte(u), droits: C.droitsEffectifs(u.role), droitsService: (etatComptes.droits || {})[u.role] || {}, utilisateurs: etatComptes.comptes.filter((c) => !c.cloture).map((c) => ({ id: c.id, nom: c.nom, role: c.role, office: c.office || null })) });
     if (zone === "records") {
       const [col, id] = reste.split("/").map((x) => decodeURIComponent(x || ""));
       if (!C.COLLECTIONS_SERVEUR.includes(col)) return j(404, { erreur: "Collection inconnue." });

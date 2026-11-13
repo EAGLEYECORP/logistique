@@ -21,7 +21,12 @@ const ROLES = {
 const ONGLETS_TOUS = ONGLETS.map((o) => o.slice());
 const roleLire = () => { if (typeof roleMulti === "function" && roleMulti()) return { role: PROFIL_DU_ROLE[roleMulti()] || "exploitation", verrou: null, compte: true }; try { const r = JSON.parse(localStorage.getItem(CLE_ROLE) || "{}"); return { role: ROLES[r.role] ? r.role : "direction", verrou: r.verrou || null }; } catch { return { role: "direction", verrou: null }; } };
 const roleEcrire = (r) => { try { localStorage.setItem(CLE_ROLE, JSON.stringify(r)); } catch { /* ignoré */ } };
-const roleCourant = () => ROLES[roleLire().role];
+/** Profil courant ; sur un appareil seul, la direction peut changer les pages et l'affichage des prix de chaque profil (S.params.pagesProfils). */
+const roleCourant = () => {
+  const l = roleLire(), b = ROLES[l.role], p = !l.compte && !b.compte && l.role !== "direction" ? S.params?.pagesProfils?.[l.role] : null;
+  return p ? { ...b, onglets: Array.isArray(p.onglets) ? p.onglets : b.onglets, finances: typeof p.finances === "boolean" ? p.finances : b.finances } : b;
+};
+const PAGES_NON_REGLABLES = ["tableau", "parametres", "chauffeur", "utilisateurs", "acces", "journal"];
 const ongletPermis = (id) => { if (typeof comptesOngletPermis === "function") { const x = comptesOngletPermis(id); if (x !== undefined) return x; } const r = roleCourant(); return !r.onglets || r.onglets.includes(id) || id === "parametres" || id === "chauffeur"; };
 
 function roleAppliquer() {
@@ -72,6 +77,37 @@ enregistrerCarteReglages({
     roleEcrire({ role: choix, verrou }); roleAppliquer(); toast(`Profil ${ROLES[choix].lib} appliqué`); afficher(choix === "direction" ? "parametres" : "tableau");
     return true;
   },
+});
+/* ---------- pages de chaque profil (appareil seul, réglé par la direction) ---------- */
+const PROFILS_REGLABLES = () => Object.entries(ROLES).filter(([k, x]) => !x.compte && k !== "direction");
+function cartePagesProfils() {
+  if ((typeof multiActif === "function" && multiActif()) || roleLire().role !== "direction") return "";
+  const profils = PROFILS_REGLABLES(), pages = ONGLETS_TOUS.filter(([id]) => !PAGES_NON_REGLABLES.includes(id));
+  const voit = (k, id) => { const p = S.params.pagesProfils?.[k]; return (Array.isArray(p?.onglets) ? p.onglets : ROLES[k].onglets).includes(id); };
+  const prix = (k) => { const p = S.params.pagesProfils?.[k]; return typeof p?.finances === "boolean" ? p.finances : ROLES[k].finances; };
+  return `<div class="card" id="carte-pages-profils"><div class="card-head"><h2>Pages de chaque service</h2>${Object.keys(S.params.pagesProfils || {}).length ? badge("personnalisé", "warn") : badge("par défaut", "neutral")}</div>
+    <p class="hint" style="margin-top:0">Cochez ce que chaque service voit sur un poste réglé à son profil. L'Accueil et les Réglages restent toujours visibles.</p>
+    <form id="f-pages-profils"><div class="table-wrap"><table class="compact sans-cartes acces"><thead><tr><th>Page</th>${profils.map(([, x]) => `<th>${esc(x.lib)}</th>`).join("")}</tr></thead><tbody>
+      <tr><th scope="row">Prix, coûts et marges</th>${profils.map(([k]) => `<td><input type="checkbox" name="${k}__finances" ${prix(k) ? "checked" : ""} aria-label="${esc(ROLES[k].lib)} : prix"></td>`).join("")}</tr>
+      ${pages.map(([id, lib, , groupe]) => `<tr><th scope="row">${esc(lib)}${groupe ? `<span class="sub">${esc(groupe)}</span>` : ""}</th>${profils.map(([k]) => `<td><input type="checkbox" name="${k}__${id}" ${voit(k, id) ? "checked" : ""} aria-label="${esc(ROLES[k].lib)} : ${esc(lib)}"></td>`).join("")}</tr>`).join("")}
+    </tbody></table></div><div class="row" style="justify-content:flex-end;margin-top:10px">${btn("pages-profils-defaut", "Remettre par défaut", { cls: "btn ghost" })}<button class="btn">${ic("shield")}Enregistrer</button></div></form>
+    <p class="hint">Sur un appareil seul, c'est un tri de l'affichage protégé par le code du poste. Pour un vrai contrôle d'accès (données retirées par le serveur), utilisez le mode multi-utilisateur : page <strong>Accès par service</strong>.</p></div>`;
+}
+/** Lit le formulaire « pages de chaque service » : { profil: { onglets, finances } } (ne garde que ce qui diffère du défaut). */
+function lirePagesProfils(v) {
+  const r = {}, pages = ONGLETS_TOUS.map(([id]) => id).filter((id) => !PAGES_NON_REGLABLES.includes(id));
+  for (const [k] of PROFILS_REGLABLES()) {
+    const onglets = ["tableau", ...pages.filter((id) => v[`${k}__${id}`])], finances = !!v[`${k}__finances`];
+    const def = ROLES[k].onglets.filter((id) => pages.includes(id)), choix = onglets.filter((id) => pages.includes(id));
+    const memes = choix.length === def.length && def.every((id) => choix.includes(id));
+    if (!memes || finances !== ROLES[k].finances) r[k] = { onglets, finances };
+  }
+  return r;
+}
+enregistrerCarteReglages({
+  onglet: "appareil", ordre: 5, rendu: cartePagesProfils,
+  agir(act) { if (act !== "pages-profils-defaut") return false; delete S.params.pagesProfils; sauver(); roleAppliquer(); rafraichir(); toast("Pages remises par défaut"); return true; },
+  soumettre(fid, v) { if (fid !== "f-pages-profils") return false; const r = lirePagesProfils(v); if (Object.keys(r).length) S.params.pagesProfils = r; else delete S.params.pagesProfils; sauver(); roleAppliquer(); rafraichir(); toast("Pages de chaque service enregistrées"); return true; },
 });
 // En profil restreint, les Réglages ne montrent que le changement de profil.
 const rendreReglagesBase = VUES.parametres.rendu;

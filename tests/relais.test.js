@@ -442,6 +442,25 @@ test("multi-utilisateur : droits appliqués par le serveur, appel direct à l'AP
   } finally { await s.arreter(); }
 });
 
+test("multi-utilisateur : accès par service réglés par le chef (lecture sans prix, aucun accès), appliqués aussitôt par le serveur, tracés, remis par défaut", async () => {
+  const s = await equipe();
+  try {
+    const J = s.jetons, get = (q, j) => s.appel(q, { jeton: j }), put = (droits, j = J.chef) => s.appel("/api/droits", { methode: "PUT", jeton: j, corps: { droits } });
+    assert.strictEqual((await get("/api/droits", J.dispatcher)).code, 403); assert.strictEqual((await put({}, J.exploitant)).code, 403, "réservé au chef");
+    const d0 = (await get("/api/droits", J.chef)).json; assert.strictEqual(d0.effectifs.dispatcher.factures, "aucun"); assert.strictEqual(d0.effectifs.commercial.clients, "tout"); assert.strictEqual(d0.effectifs.dispatcher.voyages, "tout_sans_prix");
+    const r = await put({ dispatcher: { factures: "lecture_sans_prix", voyages: "lecture_sans_prix" }, commercial: { clients: "aucun" }, chef_entreprise: { factures: "aucun" }, comptable: { reglages: "aucun", inconnu: "tout" } });
+    assert.strictEqual(r.code, 200); assert.deepStrictEqual(r.json.droits, { dispatcher: { factures: "lecture_sans_prix", voyages: "lecture_sans_prix" }, commercial: { clients: "aucun" } }, "le chef n'est jamais restreint ; réglages toujours lisibles ; groupes inconnus écartés");
+    assert.strictEqual((await get("/api/records/factures", J.dispatcher)).code, 200, "accès accordé : sans reconnexion");
+    assert.strictEqual((await get("/api/records/clients", J.commercial)).code, 403, "accès retiré");
+    assert.strictEqual((await get("/api/records/factures", J.chef)).code, 200);
+    const v1 = (await get("/api/records/voyages/v1", J.dispatcher)).json.enregistrement; assert.ok(!("prix" in v1));
+    assert.strictEqual((await s.appel("/api/records/voyages/v1", { methode: "PUT", jeton: J.dispatcher, corps: { ...v1, destination: "Lyon" }, entetes: { "if-match": String(v1._v) } })).code, 403, "lecture seule : modification refusée");
+    const don = (await get("/api/donnees", J.dispatcher)).json; assert.deepStrictEqual(don.droitsService, { factures: "lecture_sans_prix", voyages: "lecture_sans_prix" }); assert.ok("factures" in don.collections);
+    assert.ok((await get("/api/journal?action=droits_modifies", J.chef)).json.journal.length === 1, "tracé au journal");
+    await put({}); assert.strictEqual((await get("/api/records/factures", J.dispatcher)).code, 403, "remis par défaut"); assert.strictEqual((await get("/api/records/clients", J.commercial)).code, 200);
+  } finally { await s.arreter(); }
+});
+
 test("multi-utilisateur : modifications concurrentes (409 avec l'état actuel), If-Match obligatoire, verrou de 30 s, suppression douce, changements depuis un instant", async () => {
   const s = await equipe();
   try {

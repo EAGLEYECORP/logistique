@@ -14,11 +14,19 @@ const multi = { actif: false, verifie: false, utilisateur: null, droits: {}, uti
 const multiActif = () => multi.actif && !!multi.utilisateur;
 const roleMulti = () => (multiActif() ? multi.utilisateur.role : null);
 const bureauUtilisateur = () => (multiActif() ? multi.utilisateur.office || "" : "");
-const ONGLETS_CHEF = ["utilisateurs", "journal"];
+const ONGLETS_CHEF = ["utilisateurs", "acces", "journal"];
+/** Page → groupe de droits (comptes.js) : une page dont le service n'a aucun droit disparaît du menu ; un accès accordé par le chef la fait apparaître. */
+const PAGE_GROUPE = { voyages: "voyages", planning: "voyages", direct: "voyages", operations: "voyages", gps: "voyages", itineraires: "voyages", international: "voyages", commandes: "commandes", factures: "factures", clients: "clients", camions: "flotte", chauffeurs: "flotte", carburant: "flotte", tachy: "flotte", douane: "douane", nomenclature: "douane" };
 /** Pages permises selon le compte (undefined = laisser profils.js décider). */
 function comptesOngletPermis(id) {
   if (!multiActif()) return ONGLETS_CHEF.includes(id) ? false : undefined;
   if (ONGLETS_CHEF.includes(id)) return multi.utilisateur.role === "chef_entreprise";
+  const g = PAGE_GROUPE[id];
+  if (g && multi.droits) {
+    const cols = GROUPES_DROITS.find((x) => x[0] === g)[2], voit = cols.some((c) => multi.droits[c]);
+    if (!voit) return false; // aucun droit : la page n'a rien à montrer
+    const n = multi.droitsService?.[g]; if (n && n !== "aucun") return true; // accès accordé par le chef d'entreprise
+  }
   return undefined;
 }
 
@@ -165,6 +173,9 @@ function ouvrirFlux() {
   es.addEventListener("bonjour", (e) => { multi.attente = 1000; const d = JSON.parse(e.data); majVerrous(d.verrous || []); if (d.seq > multi.seq) recupererChangements().catch(() => {}); indicateurMulti(); });
   es.addEventListener("change", (e) => { const d = JSON.parse(e.data); if (d.seq > multi.seq) recupererChangements(d.par === multi.utilisateur.nom ? "" : d.par).catch(() => {}); });
   es.addEventListener("verrou", (e) => { const d = JSON.parse(e.data); if (d.libere) multi.verrous.delete(d.cle); else multi.verrous.set(d.cle, d); decorerVerrous(); });
+  es.addEventListener("droits", async () => { // le chef a changé les accès par service : on recharge ce que ce rôle peut voir
+    try { await chargerDonnees(); if (typeof roleAppliquer === "function") roleAppliquer(); afficher(ongletActif); if (multi.utilisateur.role !== "chef_entreprise") toast("Vos accès ont été modifiés par le chef d'entreprise.", "warn"); } catch (e) { console.warn(e); }
+  });
   es.addEventListener("securite", (e) => toast(JSON.parse(e.data).texte, "warn"));
   es.addEventListener("deconnexion", () => { toast("Votre compte a été modifié : reconnectez-vous.", "warn"); multiDeconnecte(); });
   es.onerror = () => { es.close(); multi.source = null; indicateurMulti(); const a = multi.attente; multi.attente = Math.min(30000, a * 2); setTimeout(ouvrirFlux, a); };
@@ -287,7 +298,7 @@ function ecranPremierDemarrage(etat) {
 /* ---------- démarrage en mode multi-utilisateur ---------- */
 async function chargerDonnees() {
   const d = await api("GET", "/api/donnees");
-  multi.utilisateur = d.utilisateur; multi.droits = d.droits; multi.utilisateurs = d.utilisateurs || [];
+  multi.utilisateur = d.utilisateur; multi.droits = d.droits; multi.droitsService = d.droitsService || {}; multi.utilisateurs = d.utilisateurs || [];
   appliquerDonnees(d); majVerrous(d.verrous || []); sauverLocal();
 }
 async function apresConnexion() {
@@ -369,8 +380,43 @@ VUES.utilisateurs = {
     listeComptes = null; rafraichir();
   },
 };
+/* ---------- accès par service : le chef d'entreprise règle ce que chaque rôle voit et modifie ---------- */
+let droitsCharges = null;
+VUES.acces = {
+  titre: "Accès par service", sous: "Ce que chaque service voit et modifie — appliqué par le serveur",
+  actions: () => (multiActif() ? btn("acces-defaut", "Tout remettre par défaut", { cls: "btn ghost", icone: "x" }) : ""),
+  rendu() {
+    if (!multiActif()) return `<div class="card">${vide("shield", "Mode multi-utilisateur inactif", "Les accès par service sont appliqués par le relais en mode multi-utilisateur. Sur un appareil seul, réglez les pages de chaque profil dans Réglages → Appareil.")}</div>`;
+    if (!droitsCharges) { api("GET", "/api/droits").then((r) => { droitsCharges = r; rafraichir(); }).catch((e) => toast(e.message, "danger")); return `<div class="card"><p class="hint">Chargement…</p></div>`; }
+    const roles = droitsCharges.roles.filter(([k]) => k !== "chef_entreprise");
+    const cellule = (role, g) => {
+      const choisi = droitsCharges.droits[role]?.[g] || "defaut", effectif = droitsCharges.effectifs[role][g];
+      const lib = (k) => libDe(droitsCharges.niveaux, k), parDefaut = choisi === "defaut" ? effectif : niveauDroit(role, g, {});
+      return `<td><select name="${esc(role)}__${esc(g)}" data-niveau="${esc(choisi === "defaut" ? parDefaut : choisi)}" data-defaut="${esc(parDefaut)}" class="${choisi === "defaut" ? "" : "acces-change"}" aria-label="${esc(libDe(roles, role))} — ${esc(libDe(droitsCharges.groupes, g))}">
+        ${droitsCharges.niveaux.filter(([k]) => !(g === "reglages" && k === "aucun")).map(([k]) => `<option value="${k}" ${k === choisi ? "selected" : ""}>${esc(k === "defaut" ? `Défaut : ${lib(parDefaut).toLowerCase()}` : lib(k))}</option>`).join("")}</select></td>`;
+    };
+    return `<div class="card"><form id="f-acces"><div class="table-wrap"><table class="acces sans-cartes"><thead><tr><th>Données</th>${roles.map(([, l]) => `<th>${esc(l)}</th>`).join("")}</tr></thead><tbody>
+      ${droitsCharges.groupes.map(([g, l]) => `<tr><th scope="row">${esc(l)}</th>${roles.map(([k]) => cellule(k, g)).join("")}</tr>`).join("")}
+      </tbody></table></div><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn">${ic("shield")}Enregistrer les accès</button></div></form>
+      <p class="hint">Les cases encadrées s'écartent du défaut du rôle. <strong>Tout</strong> : lire, modifier et supprimer. <strong>Sans prix</strong> : les prix, coûts et marges ne sont pas envoyés à l'appareil. <strong>Aucun accès</strong> : les données ne quittent pas le serveur et la page disparaît du menu. Un chauffeur ou un transitaire ne voit toujours que <em>ses</em> voyages et dossiers. Le chef d'entreprise garde toujours tous les droits. Chaque changement est inscrit au Journal et s'applique aussitôt sur les appareils connectés.</p></div>`;
+  },
+  apres() { document.getElementById("f-acces")?.addEventListener("change", (e) => { const s = e.target; if (s.tagName !== "SELECT") return; s.classList.toggle("acces-change", s.value !== "defaut"); s.dataset.niveau = s.value === "defaut" ? s.dataset.defaut : s.value; }); },
+  async agir(act) {
+    if (act !== "acces-defaut") return;
+    if (!(await confirmer("Remettre tous les accès par défaut ?", "Chaque service retrouve les droits prévus pour son rôle.", "Remettre"))) return;
+    try { await api("PUT", "/api/droits", { droits: {} }); toast("Accès remis par défaut"); } catch (e) { return toast(e.message, "danger"); }
+    droitsCharges = null; rafraichir();
+  },
+  async soumettre(fid, v) {
+    if (fid !== "f-acces") return false;
+    const droits = {};
+    for (const [cle, niveau] of Object.entries(v)) { const [role, g] = cle.split("__"); if (niveau && niveau !== "defaut") (droits[role] ||= {})[g] = niveau; }
+    try { await api("PUT", "/api/droits", { droits }); toast("Accès enregistrés : ils s'appliquent tout de suite"); } catch (e) { toast(e.message, "danger"); return true; }
+    droitsCharges = null; rafraichir(); return true;
+  },
+};
 let filtreJournal = { utilisateur: "", collection: "", action: "", debut: "", fin: "" }, journalCharge = null;
-const LIB_ACTIONS = { creation: "Création", modification: "Modification", suppression: "Suppression", conflit: "Conflit", refus: "Refus", connexion: "Connexion", echec_connexion: "Échec de connexion", deconnexion: "Déconnexion", reseau_inhabituel: "Réseau inhabituel", compte_cree: "Compte créé", compte_modifie: "Compte modifié", mot_de_passe_change: "Mot de passe changé", mot_de_passe_reinitialise: "Mot de passe réinitialisé", reinitialisation_demandee: "Réinitialisation demandée", double_authentification_activee: "Double auth. activée", double_authentification_desactivee: "Double auth. désactivée", initialisation: "Initialisation", recuperation: "Récupération", echec_recuperation: "Échec de récupération", jeton_reutilise: "Jeton réutilisé" };
+const LIB_ACTIONS = { creation: "Création", modification: "Modification", suppression: "Suppression", conflit: "Conflit", refus: "Refus", connexion: "Connexion", echec_connexion: "Échec de connexion", deconnexion: "Déconnexion", reseau_inhabituel: "Réseau inhabituel", compte_cree: "Compte créé", compte_modifie: "Compte modifié", droits_modifies: "Accès modifiés", mot_de_passe_change: "Mot de passe changé", mot_de_passe_reinitialise: "Mot de passe réinitialisé", reinitialisation_demandee: "Réinitialisation demandée", double_authentification_activee: "Double auth. activée", double_authentification_desactivee: "Double auth. désactivée", initialisation: "Initialisation", recuperation: "Récupération", echec_recuperation: "Échec de récupération", jeton_reutilise: "Jeton réutilisé" };
 const requeteJournal = () => new URLSearchParams(Object.entries(filtreJournal).filter(([, v]) => v)).toString();
 const resumeDiff = (a) => (a.diff ? Object.entries(a.diff).slice(0, 4).map(([k, [x, y]]) => `${k} : ${JSON.stringify(x) ?? "—"} → ${JSON.stringify(y) ?? "—"}`).join(" · ") + (Object.keys(a.diff).length > 4 ? ` · +${Object.keys(a.diff).length - 4}` : "") : a.details ? JSON.stringify(a.details) : "");
 VUES.journal = {

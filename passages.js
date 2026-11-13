@@ -101,7 +101,8 @@ function evenementsPassage(v, maintenant = Date.now()) {
     }
   }
   // à préparer avant d'arriver
-  const prep = (id, date, titre, texte, faitDeja) => { if (date && !faitDeja) ev.push({ voyageId: v.id, ref, id: `${v.id}:${id}:preparer`, type: "preparer", categorie: "preparer", niveau: "info", date, titre: `${ref} · ${titre}`, texte }); };
+  const PORT_PREP = { ched: "alg_entree", ens: "alg_entree", export_ue: "alg_sortie", dum_import: "tmed_import" };
+  const prep = (id, date, titre, texte, faitDeja) => { if (date && !faitDeja) ev.push({ voyageId: v.id, ref, port: PORT_PREP[id], id: `${v.id}:${id}:preparer`, type: "preparer", categorie: "preparer", niveau: "info", date, titre: `${ref} · ${titre}`, texte }); };
   const fait = (id) => !!etatEtapePort(v, etapePort(id) || {}).fait, dateFait = (id) => (fait(id) ? etatEtapePort(v, etapePort(id)).date : null);
   const departAller = jalon("depart")?.date || dateFait("tme_parc");
   if (estFr) prep("ched", departAller, "CHED à déposer dans TRACES avant Algeciras", "Marchandise fraîche : l'importateur (ou son agent) doit déposer la partie I du CHED dans TRACES au moins un jour ouvrable avant l'arrivée au poste de contrôle frontalier d'Algeciras (4 h minimum si justifié). Sans elle, le PCF ne contrôle pas le lot et le camion attend.", !!v.etapesPort?.alg_pcf?.ref || fait("alg_pcf"));
@@ -124,7 +125,7 @@ function voyagesEnPassage(maintenant = Date.now()) {
       const i = ch.findIndex((x) => x.e.id === derniere.e.id), prochaine = ch.slice(i + 1).find((x) => !x.s.fait && !x.e.facultatif) || ch.find((x) => !x.s.fait && !x.e.facultatif);
       const depuisMin = (maintenant - Date.parse(derniere.s.date)) / 60000, seuil = prochaine ? seuilPassage(prochaine.e.id) : 0;
       const sautees = ch.slice(0, i).filter((x) => !x.s.fait && !x.e.facultatif).map((x) => x.e);
-      r.push({ v, sens, port: prochaine?.port || derniere.port, derniere, prochaine, suite: prochaine ? suiteDe(prochaine) : null, sautees, depuisMin, seuil, retard: seuil > 0 && depuisMin > seuil, faites: ch.filter((x) => x.s.fait).length, total: ch.length });
+      r.push({ v, sens, enMer: !!derniere.e.jalon?.startsWith("embarque") && prochaine?.port !== derniere.port, port: prochaine?.port || derniere.port, derniere, prochaine, suite: prochaine ? suiteDe(prochaine) : null, sautees, depuisMin, seuil, retard: seuil > 0 && depuisMin > seuil, faites: ch.filter((x) => x.s.fait).length, total: ch.length });
     }
   }
   return r.sort((a, b) => Number(b.retard) - Number(a.retard) || b.depuisMin - a.depuisMin);
@@ -166,4 +167,37 @@ function passagesANotifier(maintenant = Date.now()) {
   const depuis = new Date(maintenant - 12 * 3600000).toISOString(), r = [];
   for (const v of S.voyages) for (const ev of evenementsPassage(v, maintenant)) if (ev.date >= depuis && ev.date <= new Date(maintenant + 60000).toISOString() && !(v.notifsPassage || []).includes(ev.id)) r.push({ v, ev });
   return r;
+}
+
+/* ---------- vue par port : Tanger Med, Algeciras ---------- */
+const LIEUX_PASSAGE = { tmed: { lib: "Tanger Med", ports: ["tmed_export", "tmed_import"] }, alg: { lib: "Algeciras", ports: ["alg_entree", "alg_sortie"] } };
+const lieuDuPort = (port) => Object.keys(LIEUX_PASSAGE).find((k) => LIEUX_PASSAGE[k].ports.includes(port)) || "";
+const medianeMin = (l) => { const t = l.filter(Number.isFinite).sort((a, b) => a - b); if (!t.length) return null; const m = Math.floor(t.length / 2); return Math.round(t.length % 2 ? t[m] : (t[m - 1] + t[m]) / 2); };
+/** Durées passées (minutes) de vos voyages des `jours` derniers jours : par étape (depuis l'étape précédente du même port) et par port (de la première à la dernière étape), inspections écartées. */
+function dureesPassage({ maintenant = Date.now(), jours = 90 } = {}) {
+  const depuis = maintenant - jours * 86400000, etapes = {}, ports = {};
+  for (const v of S.voyages) {
+    if (v.statut === "annule") continue;
+    for (const port of Object.keys(PORTS_PASSAGE)) {
+      if (v.scanRouge?.[PORTS_PASSAGE[port].portAttente]) continue; // inspection physique : hors repères
+      const faites = etapesApplicables(v, port).map((e) => ({ e, s: etatEtapePort(v, e) })).filter((x) => x.s.fait && Number.isFinite(Date.parse(x.s.date)));
+      if (!faites.length || Date.parse(faites[0].s.date) < depuis) continue;
+      const ordre = faites.slice().sort((a, b) => Date.parse(a.s.date) - Date.parse(b.s.date));
+      for (let i = 1; i < ordre.length; i++) (etapes[ordre[i].e.id] ||= []).push((Date.parse(ordre[i].s.date) - Date.parse(ordre[i - 1].s.date)) / 60000);
+      const r = resumePort(v, port, maintenant); if (r.fini && r.dureeMs > 0) (ports[port] ||= []).push(r.dureeMs / 60000);
+    }
+  }
+  return { etapes: Object.fromEntries(Object.entries(etapes).map(([k, l]) => [k, { mediane: medianeMin(l), n: l.length }])), ports: Object.fromEntries(Object.entries(ports).map(([k, l]) => [k, { mediane: medianeMin(l), n: l.length }])) };
+}
+/**
+ * Ce qui se passe dans un port : { lib, dedans: [voyagesEnPassage…], sens: [{ port, lib, etapes: [{ e, attente: [voyages dont c'est la prochaine étape], mediane, n, repere }], mediane, n }], alertes, termines }.
+ */
+function vuePort(lieu, { maintenant = Date.now() } = {}) {
+  const L = LIEUX_PASSAGE[lieu]; if (!L) return null;
+  const dedans = voyagesEnPassage(maintenant).filter((x) => L.ports.includes(x.port)), d = dureesPassage({ maintenant });
+  const sens = L.ports.map((port) => ({ port, lib: PORTS_PASSAGE[port].lib, mediane: d.ports[port]?.mediane ?? null, n: d.ports[port]?.n || 0,
+    etapes: PORTS_PASSAGE[port].etapes.map((e) => ({ e, attente: dedans.filter((x) => x.prochaine?.e.id === e.id), mediane: d.etapes[e.id]?.mediane ?? null, n: d.etapes[e.id]?.n || 0, repere: seuilPassage(e.id) })) }));
+  const evts = centrePassages({ maintenant }).filter((e) => L.ports.includes(e.port));
+  const termines = S.voyages.flatMap((v) => L.ports.map((port) => ({ v, port, r: resumePort(v, port, maintenant) }))).filter((x) => x.r.fini && x.r.fin && maintenant - x.r.fin < 7 * 86400000).sort((a, b) => b.r.fin - a.r.fin).slice(0, 8);
+  return { lieu, lib: L.lib, dedans, sens, alertes: evts.filter((e) => e.categorie === "alerte"), evenements: evts, termines };
 }

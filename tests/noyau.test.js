@@ -2221,6 +2221,20 @@ test("passages : attente trop longue (repère réglable, puis urgente), inspecti
   assert.ok(!N.evenementsPassage(v, Date.parse("2026-11-15T10:00:00.000Z")).some((e) => e.type === "retard"), "plus de 48 h : données anciennes, pas d'alerte");
 });
 
+test("passages par port : Tanger Med et Algeciras, camions à chaque étape, temps habituels tirés de vos passages (inspections écartées)", () => {
+  etatPorts(); const v = N.S.voyages[0], t = (h) => Date.parse(`2026-11-12T${h}:00.000Z`);
+  const v0 = JSON.parse(JSON.stringify(v)); v0.id = "v0"; v0.ref = "V-0"; N.S.voyages.push(v0);
+  for (const [id, h] of [["tme_parc", "02:00"], ["tme_portnet", "02:30"], ["tme_douane", "03:30"], ["tme_sanitaire", "04:00"], ["tme_scanner", "04:20"], ["tme_police", "04:40"], ["tme_tmpa", "05:00"], ["tme_embarquement", "06:00"]]) N.marquerEtapePort(v0, id, { date: `2026-11-12T${h}:00.000Z` });
+  N.marquerEtapePort(v, "tme_parc", { date: "2026-11-12T09:00:00.000Z" }); N.marquerEtapePort(v, "tme_portnet", { date: "2026-11-12T09:40:00.000Z" });
+  const p = N.vuePort("tmed", { maintenant: t("10:00") });
+  assert.strictEqual(p.lib, "Tanger Med"); assert.deepStrictEqual([...p.dedans.map((x) => x.v.id)], ["v1"], "V-0 a embarqué : il est attendu à Algeciras");
+  const exp = p.sens.find((s) => s.port === "tmed_export"); assert.strictEqual(exp.mediane, 240, "V-0 : 4 h au port"); assert.strictEqual(exp.etapes.find((x) => x.e.id === "tme_douane").attente.length, 1, "V-1 attend la douane");
+  assert.strictEqual(exp.etapes.find((x) => x.e.id === "tme_douane").mediane, 60, "douane : 60 min après PortNet (V-0)"); assert.strictEqual(exp.etapes.find((x) => x.e.id === "tme_portnet").mediane, 35, "PortNet : médiane de 30 min (V-0) et 40 min (V-1)");
+  const alg = N.vuePort("alg", { maintenant: t("10:00") }); assert.deepStrictEqual([...alg.dedans.map((x) => [x.v.id, x.enMer])].map(String), ["v0,true"], "en traversée vers Algeciras");
+  assert.ok(alg.evenements.some((e) => e.type === "preparer" && /ENS/.test(e.titre)), "l'ENS se range dans Algeciras");
+  N.S.voyages[1].scanRouge = { tmed_export: true }; assert.strictEqual(N.vuePort("tmed", { maintenant: t("10:00") }).sens[0].mediane, null, "inspection : écartée des temps habituels");
+});
+
 test("passages : messages selon le routage (fil, transitaire, chauffeur avec ses documents), une seule fois par événement", () => {
   etatPorts(); const v = N.S.voyages[0]; N.S.entreprise = { audiences: { transitaire: { email: "transit@exemple.ma" }, dispatcher_casa: { ntfy: "https://ntfy.sh/atlas-casa-123" } } }; N.S.chauffeurs[0].tel = "+212 600 000 000";
   N.marquerEtapePort(v, "tme_parc", { date: new Date(Date.now() - 3600000).toISOString() });

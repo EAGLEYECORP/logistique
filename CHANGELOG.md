@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.5.1 — Passages douane port par port
+
+- **Vue Tanger Med et vue Algeciras** sur la page Passages douane : pour chaque port, toutes les étapes (sortie et entrée), le nombre de camions qui attendent chacune (touchez un camion pour son fil), **votre temps habituel** par étape et au port (médiane de vos passages des 90 derniers jours, inspections physiques écartées), le repère d'alerte, les passages terminés des 7 derniers jours, les alertes du port.
+- Un camion qui a embarqué apparaît « en traversée » côté Algeciras (ou Tanger Med au retour) ; les rappels « à préparer » se rangent dans le port concerné (CHED et ENS : Algeciras ; DUM import : Tanger Med).
+
 ## 4.5.0 — Centre des passages en douane
 
 - **Page « Passages douane »** : un centre de notifications pour chaque étape du passage à Tanger Med et Algeciras, aller et retour.

@@ -815,3 +815,14 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 .passage-conseil { display: flex; gap: 6px; align-items: flex-start; font-size: .88rem; color: var(--warn); }
 .passage-conseil svg.i { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 2px; }
 .passage-suivie { display: inline-flex; gap: 4px; align-items: center; } .passage-suivie svg.i { width: 14px; height: 14px; color: var(--ok); }
+.passage-sens { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.passage-pipeline { list-style: none; margin: 6px 0 0; padding: 0; border-left: 2px solid var(--border); }
+.passage-pipeline li { position: relative; padding: 6px 0 8px 14px; display: flex; flex-direction: column; gap: 2px; }
+.passage-pipeline li::before { content: ""; position: absolute; left: -6px; top: 11px; width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+.passage-pipeline li.occupe::before { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.passage-pipeline li.retard::before { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.pp-tete { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.pp-n { margin-left: auto; }
+.pp-camions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.pp-camions .chip { background: var(--primary-soft); color: var(--primary); padding: 4px 10px; }
+.pp-camions .chip.retard { background: var(--warn-soft); color: var(--warn); }

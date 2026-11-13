@@ -7,7 +7,7 @@
    Logique pure dans passages.js ; étapes dans data.js ; saisie d'une étape : ports_ui.js.
    ============================================================ */
 
-let filtrePassages = "", voyagePassages = "";
+let filtrePassages = "", voyagePassages = "", lieuPassages = "";
 const ICONE_PASSAGE = { fait: "check", inspection: "search", reference: "file", retard: "clock", preparer: "flag" };
 const passagesLus = () => S.notifsEtat?.passagesLus || "";
 const nonLusPassages = () => { const lu = passagesLus(); return centrePassages().filter((e) => e.date > lu && e.type !== "fait").length; };
@@ -23,10 +23,24 @@ function carteEnPassage(x) {
   return `<div class="passage-port ${x.retard ? "retard" : ""}"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap"><div><strong>${esc(v.ref)}</strong> <span class="sub">${esc(nomCamion(v.camionId) || "")}${v.chauffeurId ? " · " + esc(nomChauffeur(v.chauffeurId)) : ""} · ${x.sens === "aller" ? "aller" : "retour"}</span></div>
       ${badge(x.retard ? `en attente ${dureePassage(x.depuisMin)}` : `depuis ${dureePassage(x.depuisMin)}`, x.retard ? (x.depuisMin > 2 * x.seuil ? "danger" : "warn") : "neutral")}</div>
     <div class="passage-barre" title="${x.faites}/${x.total} étapes"><i style="width:${pct}%"></i></div>
-    <span class="sub">Fait : ${esc(etapePortLib(x.derniere))}</span>
+    <span class="sub">${x.enMer ? `${ic("ship")}En traversée · ` : ""}Fait : ${esc(etapePortLib(x.derniere))}</span>
     ${x.sautees.length ? `<span class="passage-conseil">${ic("alert")}Non notée(s) : ${x.sautees.map((e) => esc(e.lib)).join(" · ")} — à vérifier avec le transitaire.</span>` : ""}
     ${blocSuite(x.suite)}
     <div class="row" style="margin-top:6px">${x.prochaine ? btn("passage-fait", "Étape suivante faite", { id: `${v.id}|${x.prochaine.e.id}`, cls: "btn sm", icone: "check" }) : ""}${btn("passage-voyage", "Voyage", { id: v.id, cls: "btn ghost sm" })}${btn("passage-filtrer", "Son fil", { id: v.id, cls: "btn ghost sm" })}</div></div>`;
+}
+/** Un port : chaque étape, aller et retour, avec les camions qui l'attendent, votre temps habituel et le repère d'alerte. */
+function blocLieu(p) {
+  if (!p) return "";
+  const hm = (m) => (m === null ? "—" : dureePassage(m));
+  return `<div class="card passage-lieu"><div class="card-head"><h2>${esc(p.lib)} : ce qui se passe</h2>${p.alertes.length ? badge(`${p.alertes.length} alerte(s) · 30 j`, "warn") : badge("aucune alerte", "ok")}</div>
+    <div class="passage-sens">${p.sens.map((s) => `<div><div class="groupe">${esc(s.lib)} · ${s.n ? `temps habituel au port ${esc(hm(s.mediane))} (${s.n} passage(s))` : "pas encore d'historique"}</div>
+      <ol class="passage-pipeline">${s.etapes.map((x) => `<li class="${x.attente.length ? "occupe" : ""} ${x.attente.some((a) => a.retard) ? "retard" : ""}">
+        <div class="pp-tete"><strong>${esc(x.e.lib)}</strong>${x.e.frais ? ` <span class="sub">(frais)</span>` : ""}${x.e.facultatif ? ` <span class="sub">(si nécessaire)</span>` : ""}
+          <span class="pp-n">${x.attente.length ? badge(`${x.attente.length} camion(s)`, x.attente.some((a) => a.retard) ? "warn" : "neutral") : ""}</span></div>
+        <span class="sub">${esc(ACTEURS_PASSAGE[SUITES_PASSAGE[x.e.id]?.acteur] || "")}${x.n ? ` · habituel chez vous : ${esc(hm(x.mediane))}` : ""}${x.repere ? ` · alerte après ${esc(hm(x.repere))}` : ""}</span>
+        ${x.attente.length ? `<div class="pp-camions">${x.attente.map((a) => `<button type="button" class="chip ${a.retard ? "retard" : ""}" data-act="passage-filtrer" data-id="${a.v.id}" title="Voir son fil">${a.enMer ? ic("ship") : ""}${esc(a.v.ref)} · ${esc(dureePassage(a.depuisMin))}</button>`).join("")}</div>` : ""}</li>`).join("")}</ol></div>`).join("")}</div>
+    ${p.termines.length ? `<div class="groupe">Passages terminés · 7 jours</div>${p.termines.map((t) => `<div class="trav"><div><strong>${esc(t.v.ref)} · ${esc(PORTS_PASSAGE[t.port].lib)}</strong><span class="sub">${esc(dureePassage(t.r.dureeMs / 60000))} au port · sorti le ${dateHeureFr(new Date(t.r.fin).toISOString())}</span></div></div>`).join("")}` : ""}
+    <p class="hint">${p.lieu === "alg" ? "PCF d'Algeciras ouvert lun.–ven. 7 h 30–22 h, sam., dim. et fêtes 9 h 30–22 h. " : "Passage portuaire dématérialisé : le camion est appelé quand son dossier PortNet est complet ; le résultat du scanner part directement dans BADR. "}Temps habituels calculés sur vos passages des 90 derniers jours, inspections physiques écartées.</p></div>`;
 }
 function ligneEvenement(e, lu, detaillee = true) {
   const neuf = e.date > lu && e.type !== "fait";
@@ -41,16 +55,17 @@ VUES.passages = {
   sous: "Chaque étape à Tanger Med et Algeciras : ce qui vient de se passer, ce qui suit, qui doit agir",
   actions: () => btn("passages-lu", "Tout marquer comme lu", { cls: "btn ghost", icone: "check" }),
   rendu() {
-    const maintenant = Date.now(), au = voyagesEnPassage(maintenant), tous = centrePassages({ maintenant }), lu = passagesLus();
+    const maintenant = Date.now(), L = lieuPassages && LIEUX_PASSAGE[lieuPassages], au = voyagesEnPassage(maintenant).filter((x) => !L || L.ports.includes(x.port)), tous = centrePassages({ maintenant }).filter((e) => !L || L.ports.includes(e.port)), lu = passagesLus();
     const ev = tous.filter((e) => (!voyagePassages || e.voyageId === voyagePassages) && (!filtrePassages || (filtrePassages === "alertes" ? e.categorie === "alerte" : filtrePassages === "preparer" ? e.type === "preparer" : e.type === "fait")));
     const n = (f) => tous.filter(f).length, v = voyagePassages && parId(S.voyages, voyagePassages);
     const jours = []; for (const e of ev.slice(0, 200)) { const j = e.date.slice(0, 10); if (jours[jours.length - 1]?.j !== j) jours.push({ j, l: [] }); jours[jours.length - 1].l.push(e); }
-    return `<div class="kpis compact">
+    const choixLieu = `<div class="row passage-filtres"><div class="segmented" role="tablist">${[["", "Tous les ports"], ["tmed", "Tanger Med"], ["alg", "Algeciras"]].map(([k, l]) => `<button role="tab" data-act="passage-lieu" data-id="${k}" aria-selected="${k === lieuPassages}">${l}</button>`).join("")}</div></div>`;
+    return `${choixLieu}${L ? blocLieu(vuePort(lieuPassages, { maintenant })) : ""}<div class="kpis compact">
         <div class="kpi"><div class="l">Au port maintenant</div><div class="v">${au.length}</div><div class="s">${au.filter((x) => x.retard).length} en attente anormale</div></div>
         <div class="kpi"><div class="l">Alertes · 30 jours</div><div class="v">${n((e) => e.categorie === "alerte")}</div><div class="s">${nonLusPassages()} non lue(s) · ${n((e) => e.type === "inspection")} inspection(s) · ${n((e) => e.type === "reference")} référence(s) à noter</div></div>
         <div class="kpi"><div class="l">À préparer</div><div class="v">${n((e) => e.type === "preparer")}</div><div class="s">CHED, ENS, export, DUM import</div></div>
         <div class="kpi"><div class="l">Étapes faites · 30 jours</div><div class="v">${n((e) => e.type === "fait")}</div><div class="s">à Tanger Med et Algeciras</div></div></div>
-      <div class="section-title">Au port maintenant · ${au.length}</div>
+      <div class="section-title">${L ? `Dans le port de ${esc(L.lib)}` : "Au port maintenant"} · ${au.length}</div>
       <div class="card">${au.length ? `<div class="passage-ports">${au.map(carteEnPassage).join("")}</div>` : `<p class="hint" style="margin:0">Aucun camion en cours de passage. Dès qu'une étape est faite (sur la fiche du voyage, par le GPS ou par le chauffeur), il apparaît ici avec ce qui doit se passer ensuite.</p>`}</div>
       <div class="section-title">Fil des passages</div>
       <div class="row passage-filtres"><div class="segmented" role="tablist">${[["", "Tout"], ["alertes", "Alertes"], ["preparer", "À préparer"], ["fait", "Étapes faites"]].map(([k, l]) => `<button role="tab" data-act="passage-filtre" data-id="${k}" aria-selected="${k === filtrePassages}">${l}</button>`).join("")}</div>
@@ -60,6 +75,7 @@ VUES.passages = {
   },
   async agir(act, id) {
     if (act === "passage-filtre") { filtrePassages = id; return rafraichir(); }
+    if (act === "passage-lieu") { lieuPassages = id; return rafraichir(); }
     if (act === "passage-filtrer") { voyagePassages = id; return rafraichir(); }
     if (act === "passage-voyage") return typeof ouvrirVoyage === "function" ? ouvrirVoyage(id) : afficher("voyages");
     if (act === "passages-lu") { (S.notifsEtat ||= { annulees: {}, reports: {} }).passagesLus = new Date().toISOString(); sauver(); return rafraichir(); }

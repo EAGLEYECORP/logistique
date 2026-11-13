@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2180,6 +2180,61 @@ test("ports : quatre passages (aller et retour), étapes détaillées, contrôle
   assert.strictEqual(new Set(Object.values(N.PORTS_PASSAGE).flatMap((p) => p.etapes.map((e) => e.id))).size, Object.values(N.PORTS_PASSAGE).reduce((n, p) => n + p.etapes.length, 0), "identifiants uniques");
   assert.ok(N.etapesApplicables(v, "alg_entree").some((e) => e.id === "alg_pcf"), "frais : contrôle sanitaire à Algeciras"); assert.ok(!N.etapesApplicables({ ...v, tempMin: undefined, tempMax: undefined }, "alg_entree").some((e) => e.id === "alg_pcf"), "sec : pas de contrôle sanitaire");
 });
+test("passages : chaque étape a sa signification, ce qui suit (étape suivante, documents, qui agit), d'un port à l'autre", () => {
+  etatPorts(); const v = N.S.voyages[0];
+  for (const p of Object.values(N.PORTS_PASSAGE)) for (const e of p.etapes) assert.ok(N.SUITES_PASSAGE[e.id]?.apres, `signification de ${e.id}`);
+  N.marquerEtapePort(v, "tme_parc", { date: "2026-11-12T09:00:00.000Z", ref: "DFDS-778" });
+  let ev = N.evenementsPassage(v, Date.parse("2026-11-12T09:30:00.000Z")), f = ev.find((e) => e.type === "fait");
+  assert.strictEqual(f.etape, "tme_parc"); assert.ok(/PortNet/.test(f.texte)); assert.strictEqual(f.suite.id, "tme_portnet"); assert.strictEqual(f.suite.acteur, "Transitaire"); assert.ok([...f.suite.docs].includes("DUM export (BADR)"));
+  assert.ok(ev.some((e) => e.type === "preparer" && /CHED/.test(e.titre)), "frais : CHED à déposer dès le départ");
+  for (const id of ["tme_portnet", "tme_douane", "tme_sanitaire", "tme_scanner", "tme_police", "tme_tmpa"]) N.marquerEtapePort(v, id, { date: "2026-11-12T10:00:00.000Z", ref: "X" });
+  N.marquerEtapePort(v, "tme_embarquement", { date: "2026-11-12T12:00:00.000Z" });
+  f = N.evenementsPassage(v, Date.parse("2026-11-12T12:10:00.000Z")).find((e) => e.type === "fait" && e.etape === "tme_embarquement");
+  assert.strictEqual(f.suite.id, "alg_debarquement", "la suite passe au port suivant"); assert.ok(/^Algeciras — Débarquement$/.test(f.suite.lib));
+  assert.ok(N.evenementsPassage(v, Date.parse("2026-11-12T12:10:00.000Z")).some((e) => e.type === "preparer" && /ENS/.test(e.titre)), "ENS à vérifier avant l'arrivée");
+  for (const id of ["alg_debarquement", "alg_police", "alg_douane", "alg_pcf"]) N.marquerEtapePort(v, id, { date: "2026-11-12T15:00:00.000Z", ref: id === "alg_pcf" ? "CHEDPP.ES.2026.1" : "" });
+  N.marquerEtapePort(v, "alg_sortie", { date: "2026-11-12T16:00:00.000Z" });
+  f = N.evenementsPassage(v, Date.parse("2026-11-12T16:10:00.000Z")).find((e) => e.etape === "alg_sortie");
+  assert.strictEqual(f.suite.id, ""); assert.ok(/^Route vers/.test(f.suite.lib), "fin du passage aller");
+  const parc = N.evenementsPassage(v, Date.parse("2026-11-12T16:10:00.000Z")).find((e) => e.etape === "tme_parc" && e.type === "fait");
+  assert.strictEqual(parc.suite.id, "tme_portnet", "une étape passée garde sa vraie suite"); assert.strictEqual(parc.suite.fait, true); assert.strictEqual(parc.suite.date, "2026-11-12T10:00:00.000Z");
+  assert.ok(!N.evenementsPassage(v, Date.parse("2026-11-12T16:10:00.000Z")).some((e) => e.type === "preparer" && /CHED/.test(e.titre)), "CHED noté : plus de rappel");
+});
+
+test("passages : attente trop longue (repère réglable, puis urgente), inspection au scanner, référence non notée, voyages au port", () => {
+  etatPorts(); const v = N.S.voyages[0]; N.S.params = { ...N.S.params };
+  N.marquerEtapePort(v, "tme_parc", { date: "2026-11-12T09:00:00.000Z" });
+  const t = (h) => Date.parse(`2026-11-12T${h}:00.000Z`);
+  assert.ok(!N.evenementsPassage(v, t("10:00")).some((e) => e.type === "retard"), "dans le repère (90 min)");
+  let r = N.evenementsPassage(v, t("10:40")).find((e) => e.type === "retard"); assert.strictEqual(r.niveau, "warn"); assert.strictEqual(r.etape, "tme_portnet"); assert.ok(/PortNet/.test(r.conseil)); assert.strictEqual(r.id, "v1:tme_portnet:retard:1");
+  r = N.evenementsPassage(v, t("12:10")).find((e) => e.type === "retard"); assert.strictEqual(r.niveau, "danger"); assert.strictEqual(r.id, "v1:tme_portnet:retard:2", "nouvelle alerte quand c'est urgent");
+  N.S.params.seuilsPassage = { tme_portnet: 240 }; assert.ok(!N.evenementsPassage(v, t("12:10")).some((e) => e.type === "retard"), "repère réglé à 4 h");
+  const au = N.voyagesEnPassage(t("12:10")); assert.strictEqual(au.length, 1); assert.strictEqual(au[0].prochaine.e.id, "tme_portnet"); assert.strictEqual(au[0].retard, false);
+  delete N.S.params.seuilsPassage;
+  N.marquerEtapePort(v, "tme_portnet", { date: "2026-11-12T10:00:00.000Z" }); N.marquerEtapePort(v, "tme_scanner", { date: "2026-11-12T10:30:00.000Z", inspection: true });
+  const ev = N.evenementsPassage(v, t("10:35"));
+  assert.deepStrictEqual([...N.voyagesEnPassage(t("10:35"))[0].sautees.map((e) => e.id)], ["tme_douane", "tme_sanitaire"], "étapes non notées avant le scanner");
+  assert.ok(ev.some((e) => e.type === "inspection" && e.niveau === "warn")); assert.ok(ev.some((e) => e.type === "reference" && /N° DUM/.test(e.titre)), "DUM non notée");
+  assert.ok(!ev.some((e) => e.type === "reference" && e.etape === "tme_parc"), "pas de référence exigée au parc");
+  assert.ok(N.evenementsPassage(v, t("10:35")).every((e, i, l) => !i || l[i - 1].date >= e.date), "du plus récent au plus ancien");
+  assert.strictEqual(N.evenementsPassage({ ...v, statut: "annule" }).length, 0);
+  assert.ok(!N.evenementsPassage(v, Date.parse("2026-11-15T10:00:00.000Z")).some((e) => e.type === "retard"), "plus de 48 h : données anciennes, pas d'alerte");
+});
+
+test("passages : messages selon le routage (fil, transitaire, chauffeur avec ses documents), une seule fois par événement", () => {
+  etatPorts(); const v = N.S.voyages[0]; N.S.entreprise = { audiences: { transitaire: { email: "transit@exemple.ma" }, dispatcher_casa: { ntfy: "https://ntfy.sh/atlas-casa-123" } } }; N.S.chauffeurs[0].tel = "+212 600 000 000";
+  N.marquerEtapePort(v, "tme_parc", { date: new Date(Date.now() - 3600000).toISOString() });
+  const ev = N.evenementsPassage(v).find((e) => e.type === "fait");
+  let m = N.messagesEvenement(ev); assert.deepStrictEqual([...m.messages.map((x) => x.audience)], ["in_app"], "étape ordinaire : fil seulement par défaut");
+  m = N.messagesEvenement(ev, { routage: { etape: ["in_app", "transitaire"], chauffeur: ["chauffeur"] } });
+  assert.deepStrictEqual([...m.messages.map((x) => [x.audience, x.canal])].map((x) => x.join(":")), ["in_app:in_app", "transitaire:email", "chauffeur:whatsapp"]);
+  const ch = m.messages.find((x) => x.audience === "chauffeur"); assert.ok(/étape suivante : Tanger Med — Pré-enregistrement PortNet/.test(ch.texte)); assert.ok(/DUM export/.test(ch.texte), "documents à présenter");
+  assert.ok(/Ensuite : Tanger Med — Pré-enregistrement PortNet \(Transitaire\)/.test(m.messages[0].texte));
+  const avant = N.passagesANotifier().length; assert.ok(avant >= 1);
+  v.notifsPassage = N.passagesANotifier().map((x) => x.ev.id); assert.strictEqual(N.passagesANotifier().length, 0, "déjà notifiés");
+  const alerte = { ...ev, id: "x", categorie: "alerte", type: "retard" }; assert.deepStrictEqual([...N.messagesEvenement(alerte).messages.map((x) => x.audience)], ["in_app", "dispatcher_casa", "transitaire"], "alertes : exploitation et transitaire par défaut");
+});
+
 test("ports : une étape faite pose l'étape du voyage, la traversée, le scanner, la sortie du port et le séjour Schengen ; annulation propre", () => {
   etatPorts(); const v = N.S.voyages[0], h = N.S.chauffeurs[0];
   let fx = N.marquerEtapePort(v, "tme_parc", { date: "2026-11-12T09:00:00.000Z", ref: "DFDS-778" }); assert.ok(v.jalons.some((j) => j.type === "port_tmed" && j.source === "port")); assert.ok(fx[0].includes("Entrée port Tanger Med"));

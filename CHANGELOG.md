@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.5.0 — Centre des passages en douane
+
+- **Page « Passages douane »** : un centre de notifications pour chaque étape du passage à Tanger Med et Algeciras, aller et retour.
+  - **Au port maintenant** : chaque camion en cours de passage, depuis combien de temps, la dernière étape faite, les étapes non notées, et **ce qui doit se passer ensuite** (étape, qui agit, documents à présenter, délai habituel) ; « Étape suivante faite » en un geste.
+  - **Fil** : chaque étape faite avec **ce qu'elle veut dire** (ex. DUM déposée : la marchandise est sous contrôle douanier ; PCF : partie II du CHED, le dédouanement peut se terminer ; EES : chaque jour Schengen est compté) et la suite réelle ; filtres Alertes, À préparer, Étapes faites ; par voyage.
+  - **Alertes** : attente anormale avant l'étape suivante (repères réglables, puis alerte urgente au double) avec un conseil par étape ; inspection physique au scanner ; référence non notée (DUM, TIR/T1, MRN, CHED).
+  - **À préparer avant d'arriver** : CHED dans TRACES au moins un jour ouvrable avant Algeciras (frais), déclaration d'entrée ENS (ICS2), déclaration d'export UE au retour, DUM import pour Tanger Med.
+- **Notifications automatiques** selon un routage réglable (Réglages → Rappels → Notifications des passages) : fil de l'application, exploitation, direction, transitaire ; au chauffeur, la prochaine étape et ses documents. « Notifier » à la main sur chaque événement. Bloc « Passages douane » sur l'accueil.
+- Étapes précisées d'après les sources officielles : passage portuaire dématérialisé et résultat du scanner transmis à BADR (Tanger Med), CHED et horaires du PCF d'Algeciras (ministère espagnol de l'Agriculture), EES en service complet depuis le 10/04/2026, ENS avant l'arrivée.
+
 ## 4.4.1 — Papiers cliquables et disponibilités sur la page Chauffeurs
 
 - **Papiers cliquables** sur les pages Chauffeurs et Camions : toucher les pastilles ouvre le détail — pourquoi rouge (expiré, obligatoire pour rouler ou non), orange (expire bientôt) ou vert, papiers sans date — et « Mettre à jour les dates » ouvre la fiche.

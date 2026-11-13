@@ -10,13 +10,13 @@ const CLE_ROLE = "logistique-role";
 const ROLES = {
   direction: { lib: "Direction", detail: "Tout voir et tout régler", onglets: null, finances: true },
   exploitation: { lib: "Exploitation", detail: "Suivi, voyages, flotte, chauffeurs, douane — sans les prix ni les marges", finances: false,
-    onglets: ["tableau", "operations", "planning", "commandes", "direct", "voyages", "gps", "itineraires", "douane", "international", "peages", "camions", "chauffeurs", "tachy", "carburant", "nomenclature"] },
+    onglets: ["tableau", "operations", "planning", "commandes", "direct", "voyages", "gps", "itineraires", "douane", "passages", "international", "peages", "camions", "chauffeurs", "tachy", "carburant", "nomenclature"] },
   commercial: { lib: "Commercial", detail: "Commandes, clients, factures, voyages et suivi", finances: true, onglets: ["tableau", "commandes", "clients", "factures", "direct", "voyages", "planning", "nomenclature"] },
   comptabilite: { lib: "Comptabilité", detail: "Factures, clients, rentabilité, gasoil, péages", finances: true, onglets: ["tableau", "factures", "clients", "direction", "rentabilite", "commandes", "voyages", "carburant", "peages"] },
   // profils des comptes du mode multi-utilisateur (non proposés comme profil d'appareil)
-  exploitant: { lib: "Exploitant", detail: "Toute l'exploitation, prix et marges compris", finances: true, compte: true, onglets: ["tableau", "operations", "planning", "commandes", "direct", "voyages", "gps", "itineraires", "douane", "international", "peages", "camions", "chauffeurs", "tachy", "carburant", "clients", "factures", "direction", "rentabilite", "nomenclature"] },
+  exploitant: { lib: "Exploitant", detail: "Toute l'exploitation, prix et marges compris", finances: true, compte: true, onglets: ["tableau", "operations", "planning", "commandes", "direct", "voyages", "gps", "itineraires", "douane", "passages", "international", "peages", "camions", "chauffeurs", "tachy", "carburant", "clients", "factures", "direction", "rentabilite", "nomenclature"] },
   chauffeur: { lib: "Chauffeur", detail: "Ses voyages", finances: false, compte: true, onglets: ["chauffeur"] },
-  transitaire: { lib: "Transitaire", detail: "Ses dossiers de douane et voyages", finances: false, compte: true, onglets: ["douane", "voyages", "nomenclature"] },
+  transitaire: { lib: "Transitaire", detail: "Ses dossiers de douane et voyages", finances: false, compte: true, onglets: ["douane", "passages", "voyages", "nomenclature"] },
 };
 const ONGLETS_TOUS = ONGLETS.map((o) => o.slice());
 const roleLire = () => { if (typeof roleMulti === "function" && roleMulti()) return { role: PROFIL_DU_ROLE[roleMulti()] || "exploitation", verrou: null, compte: true }; try { const r = JSON.parse(localStorage.getItem(CLE_ROLE) || "{}"); return { role: ROLES[r.role] ? r.role : "direction", verrou: r.verrou || null }; } catch { return { role: "direction", verrou: null }; } };

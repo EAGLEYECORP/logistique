@@ -24,6 +24,7 @@ commandes, clients, facturation, flotte, chauffeurs, trajets, douane, codes SH.
 | **Suivi en direct** | **Carte interactive de la flotte** (Leaflet + OpenStreetMap, gratuite), **camion cliquable avec fiche complète** (position, voyage, chauffeur, camion, température), état de chaque camion (traversée, port, signal perdu…), conduite sans pause, alertes, étapes automatiques, heure d'arrivée estimée ; nécessite le relais ou Traccar (`serveur/`) |
 | **Direction** | Résultat de l'entreprise en direct (MAD et EUR), tableau croisé client × corridor × camion × chauffeur × mois jusqu'au voyage, tendance 12 mois, **trésorerie à 90 jours** (zone rouge, détail du jour), **simulateur d'achat de camion**, **anomalies par camion** |
 | **Planning** | **Calendrier des disponibilités** des chauffeurs et des camions jour par jour (voyages, congés, maladie, formation, entretien, panne, papiers expirés), libres par jour, jours Schengen restants ; une case libre crée un voyage ou une absence ; « qui est libre du … au … » ; programme du chauffeur par WhatsApp ; impression de la semaine. Chevauchements signalés, disponibilité affichée dans le formulaire de voyage, bouton **Dupliquer** un voyage |
+| **Passages douane** | **Centre de notifications** de chaque étape à Tanger Med et Algeciras (aller et retour) : ce que l'étape faite veut dire, ce qui suit (qui agit, documents, délai habituel), camions au port maintenant, alertes (attente anormale, inspection au scanner, référence DUM/TIR/MRN/CHED non notée), à préparer (CHED, ENS, export UE, DUM import) ; envoi automatique au fil, à l'exploitation, au transitaire, au chauffeur |
 | **Opérations** | Une carte par camion (état, voyage, prochaine étape, arrivée estimée, alertes, marge), **conseils du moment** (prix plancher du retour, camion à l'arrêt, traversée à réserver, chauffeur hors règles, repos hebdomadaire) |
 | **Marge du voyage** | Pastille verte ou rouge et sa courbe, **dépenses par ligne** (20 types, source, reçu en photo), marge nette ; **carte carburant** importée et rattachée seule, per diem et froid calculés, rappels de facture aux étapes, amendes ; historique de chaque changement |
 | **Notifications par étape** | Qui est prévenu à chaque étape (équipe, client avec son accord, chauffeur), messages en français, anglais, espagnol, arabe, bouton « Notifier », **rappels programmés envoyés par le relais même application fermée** |
@@ -153,6 +154,7 @@ Automatique et sans action de votre part.
 | `tresorerie.js`, `investissement.js`, `anomalies.js` | Résultat de l'entreprise et tableau croisé, trésorerie à 90 jours ; simulateur d'achat ; anomalies par camion (testés) |
 | `optimisation.js`, `journal.js`, `prevision.js` | Conseils et tableau des opérations ; historique des voyages ; attentes aux ports et arrivée estimée (testés) |
 | `planning.js`, `calendrier.js` | Disponibilités, conflits d'affectation, ressources libres, duplication, programme du chauffeur (testé) ; page Planning |
+| `passages.js`, `passages_ui.js` | Événements de passage, suite de chaque étape, alertes, routage des messages (testé) ; page Passages douane |
 | `jalons_notifications.js`, `comptes.js` | Routage et rédaction des notifications par étape ; rôles et droits partagés avec le relais (testés) |
 | `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Accès par service, Journal) |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |
@@ -179,7 +181,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 211 tests (181 application, 30 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 214 tests (184 application, 30 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

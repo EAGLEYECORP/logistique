@@ -792,3 +792,26 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 .papiers-voir svg { width: 13px; height: 13px; }
 #dispo-chauffeurs .planning-wrap { margin-top: 4px; }
 .t-danger { color: var(--danger); } .t-warn { color: var(--warn); } .t-ok { color: var(--ok); }
+
+/* passages douane */
+.passage-ports { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.passage-port { border: 1px solid var(--border); border-radius: var(--radius-sm, 12px); padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.passage-port.retard { border-color: var(--warn); background: var(--warn-soft); }
+.passage-barre { height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; margin: 4px 0; }
+.passage-barre i { display: block; height: 100%; background: var(--primary); }
+.passage-suite { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 8px 10px; border-left: 3px solid var(--primary); background: var(--primary-soft); border-radius: 0 8px 8px 0; }
+.passage-suite > .sub:first-child { text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; font-weight: 600; }
+.passage-filtres { justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.passage-ev { display: flex; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.passage-ev:last-child { border-bottom: 0; }
+.passage-ev.nouveau { background: linear-gradient(90deg, var(--primary-soft), transparent 60%); margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 8px; }
+.passage-ic { flex: 0 0 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--ok-soft); color: var(--ok); }
+.passage-ic svg.i { width: 17px; height: 17px; }
+.passage-ev.niveau-warn .passage-ic { background: var(--warn-soft); color: var(--warn); }
+.passage-ev.niveau-danger .passage-ic { background: var(--danger-soft); color: var(--danger); }
+.passage-ev.niveau-info .passage-ic { background: var(--info-soft); color: var(--info); }
+.passage-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.passage-texte { font-size: .92rem; line-height: 1.45; }
+.passage-conseil { display: flex; gap: 6px; align-items: flex-start; font-size: .88rem; color: var(--warn); }
+.passage-conseil svg.i { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 2px; }
+.passage-suivie { display: inline-flex; gap: 4px; align-items: center; } .passage-suivie svg.i { width: 14px; height: 14px; color: var(--ok); }

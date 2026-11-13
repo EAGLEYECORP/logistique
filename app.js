@@ -153,6 +153,7 @@ const ONGLETS = [
   ["gps", "Traces GPS", "pin", "Exploitation"],
   ["itineraires", "Trajets", "route", "Exploitation"],
   ["douane", "Douane", "file", "Exploitation"],
+  ["passages", "Passages douane", "bell", "Exploitation"],
   ["international", "Autorisations & visas", "shield", "Exploitation"],
   ["peages", "Péages Maroc", "gauge", "Exploitation"],
   ["camions", "Camions", "truck", "Flotte"],

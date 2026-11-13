@@ -16,7 +16,7 @@ const roleMulti = () => (multiActif() ? multi.utilisateur.role : null);
 const bureauUtilisateur = () => (multiActif() ? multi.utilisateur.office || "" : "");
 const ONGLETS_CHEF = ["utilisateurs", "acces", "journal"];
 /** Page → groupe de droits (comptes.js) : une page dont le service n'a aucun droit disparaît du menu ; un accès accordé par le chef la fait apparaître. */
-const PAGE_GROUPE = { voyages: "voyages", planning: "voyages", direct: "voyages", operations: "voyages", gps: "voyages", itineraires: "voyages", international: "voyages", commandes: "commandes", factures: "factures", clients: "clients", camions: "flotte", chauffeurs: "flotte", carburant: "flotte", tachy: "flotte", douane: "douane", nomenclature: "douane" };
+const PAGE_GROUPE = { passages: "voyages", voyages: "voyages", planning: "voyages", direct: "voyages", operations: "voyages", gps: "voyages", itineraires: "voyages", international: "voyages", commandes: "commandes", factures: "factures", clients: "clients", camions: "flotte", chauffeurs: "flotte", carburant: "flotte", tachy: "flotte", douane: "douane", nomenclature: "douane" };
 /** Pages permises selon le compte (undefined = laisser profils.js décider). */
 function comptesOngletPermis(id) {
   if (!multiActif()) return ONGLETS_CHEF.includes(id) ? false : undefined;

@@ -82,10 +82,10 @@ function rattacherCarburant(lignes) {
     const cam = camionDeLigne(l), v = cam && voyageALaDate({ camionId: cam.id }, l.date, { avant: 1 });
     const raison = !["MAD", "EUR"].includes(l.devise) ? `devise ${l.devise} : à convertir` : !cam ? "camion inconnu" : !v ? "aucun voyage à cette date" : "";
     if (!raison) {
-      ajouterLigneCout(v, { type: "carburant", montant: l.montant, devise: l.devise, source: "fuel_card_csv", date: l.date, ref: l.ref, libelle: libCarburant(l), cle: l.cle, camionId: cam.id });
+      ajouterLigneCout(v, { type: "carburant", montant: l.montant, devise: l.devise, source: "fuel_card_csv", date: l.date, ref: l.ref, libelle: libCarburant(l), cle: l.cle, camionId: cam.id, litres: l.litres || undefined, pays: l.pays || undefined });
       bilan.rattachees++; if (!bilan.voyages.includes(v.id)) bilan.voyages.push(v.id);
     } else {
-      (S.depensesAttente ||= []).push({ id: uid(), type: "carburant", montant: l.montant, devise: l.devise, source: "fuel_card_csv", date: l.date, ref: l.ref, libelle: libCarburant(l), cle: l.cle, camionId: cam?.id || "", vehicule: l.plaque || l.carte || "", raison });
+      (S.depensesAttente ||= []).push({ id: uid(), type: "carburant", montant: l.montant, devise: l.devise, source: "fuel_card_csv", date: l.date, ref: l.ref, libelle: libCarburant(l), cle: l.cle, litres: l.litres || undefined, pays: l.pays || undefined, camionId: cam?.id || "", vehicule: l.plaque || l.carte || "", raison });
       bilan.attente++;
     }
   }

@@ -22,10 +22,11 @@ function carburantVoyage(v) {
   const lignes = (v.lignesCout || []).filter((l) => l.type === "carburant");
   if (lignes.length) return { mad: lignes.reduce((s, l) => s + ligneCoutMad(l), 0), estime: false };
   if (num(v.carburantMad) > 0) return { mad: num(v.carburantMad), estime: false };
-  if (!v.camionId || !v.dateDepart) return { mad: 0, estime: false };
   const fin = finVoyage(v);
-  const mad = S.pleins.filter((p) => p.camionId === v.camionId && p.date >= v.dateDepart && p.date <= fin).reduce((s, p) => s + num(p.litres) * num(p.prix), 0);
-  return { mad, estime: mad > 0 };
+  const mad = v.camionId && v.dateDepart ? S.pleins.filter((p) => p.camionId === v.camionId && p.date >= v.dateDepart && p.date <= fin).reduce((s, p) => s + num(p.litres) * num(p.prix), 0) : 0;
+  if (mad > 0) return { mad, estime: true, source: "pleins" };
+  const jour = typeof estimationCarburantJour === "function" ? estimationCarburantJour(v) : null; // prixjour.js : kilomètres × consommation × prix du jour
+  return jour ? { mad: jour.mad, estime: true, source: "prix_jour", detail: jour.detail } : { mad: 0, estime: false };
 }
 /** Coût d'un voyage avec le carburant réel ou estimé d'après les pleins. */
 function coutCompletVoyage(v) {

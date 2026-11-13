@@ -102,3 +102,21 @@ function programmeChauffeur(ch, debut = today(), n = 7) {
   for (const a of ch.absences || []) if (chevauche(debut, fin, a.debut, a.fin)) lignes.push(`• ${libDe(TYPES_ABSENCE, a.type)} du ${dateFr(a.debut)} au ${dateFr(a.fin || a.debut)}`);
   return `Bonjour ${ch.nom}, votre programme du ${dateFr(debut)} au ${dateFr(fin)} :\n${lignes.length ? lignes.join("\n") : "• Aucun voyage prévu pour l'instant."}${S.entreprise?.nom ? `\n— ${S.entreprise.nom}` : ""}`;
 }
+
+/**
+ * Pourquoi une case « papiers » est rouge : tous les papiers suivis de la ressource, à une date donnée.
+ * [{ cle, lib, date, statut: "expire" | "bientot" | "ok" | "manquant", bloquant, texte }] — les expirés d'abord.
+ * Bloquants (la case devient rouge) : permis, carte conducteur, visite médicale ; assurance et visite technique du camion. Les autres sont signalés sans bloquer.
+ */
+function etatPapiers(genre, r, jour = today()) {
+  const docs = genre === "chauffeur" ? DOCS_CHAUFFEUR : DOCS_CAMION, bloquants = (genre === "chauffeur" ? PAPIERS_BLOQUANTS_CHAUFFEUR : PAPIERS_BLOQUANTS_CAMION).map(([k]) => k), alerte = num(S.params?.alerteJours, 30);
+  const ordre = { expire: 0, bientot: 1, manquant: 2, ok: 3 };
+  return docs.map(([cle, lib]) => {
+    const d = r?.[cle] ? String(r[cle]).slice(0, 10) : "", bloquant = bloquants.includes(cle);
+    if (!d) return { cle, lib, date: "", statut: "manquant", bloquant, texte: "date non renseignée" };
+    const j = joursEntre(jour, d);
+    if (j < 0) return { cle, lib, date: d, statut: "expire", bloquant, texte: `expiré depuis le ${dateFr(d)} (${-j} j)${bloquant ? " — bloque tout voyage" : ""}` };
+    if (j <= alerte) return { cle, lib, date: d, statut: "bientot", bloquant, texte: `expire le ${dateFr(d)} (dans ${j} j)` };
+    return { cle, lib, date: d, statut: "ok", bloquant, texte: `valable jusqu'au ${dateFr(d)}` };
+  }).sort((a, b) => ordre[a.statut] - ordre[b.statut] || Number(b.bloquant) - Number(a.bloquant));
+}

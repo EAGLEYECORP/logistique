@@ -20,7 +20,7 @@ function margeVoyage(voyageId) {
   if (!v) return null;
   const c = coutVoyage(v), carb = carburantVoyage(v), jours = joursVoyage(v);
   const couts_directs = lignesVoyage(v).map((l) => ({ id: l.id, type: l.type, montant: l.mad, source: l.source, ref: l.ref || "", date: l.date || "", sens: l.sens || "", libelle: l.libelle || "", projete: !!l.projete, origine: l.devise === "EUR" ? { montant: num(l.montant), devise: "EUR" } : null }));
-  if (carb.estime) couts_directs.push({ type: "carburant", montant: carb.mad, source: "calcule", ref: "", date: "", sens: "", libelle: "Estimé d'après les pleins du camion", projete: true, origine: null });
+  if (carb.estime) couts_directs.push({ type: "carburant", montant: carb.mad, source: "calcule", ref: "", date: "", sens: "", libelle: carb.source === "prix_jour" ? `Estimé au prix du jour : ${carb.detail}` : "Estimé d'après les pleins du camion", projete: true, origine: null });
   const total_direct = couts_directs.reduce((s, l) => s + l.montant, 0), revenu = c.prix;
   const cam = parId(S.camions, v.camionId), couts_fixes_alloues = [];
   if (cam) { const f = fixesMensuelsCamion(cam, v.dateDepart || today()); if (f.total > 0) couts_fixes_alloues.push({ camionId: cam.id, montant: (f.total * jours) / JOURS_PAR_MOIS, cle: "jours", mensuel: f.total }); }

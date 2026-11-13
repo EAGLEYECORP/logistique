@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1062,7 +1062,7 @@ function etatRentabilite() {
 test("rentabilité : carburant saisi ou estimé d'après les pleins, fin de voyage réelle", () => {
   etatRentabilite();
   assert.deepStrictEqual({ ...N.carburantVoyage(N.S.voyages[0]) }, { mad: 9000, estime: false });
-  assert.deepStrictEqual({ ...N.carburantVoyage(N.S.voyages[1]) }, { mad: 10000, estime: true }); // pleins du 16 et du 20 octobre, pas celui de novembre
+  assert.deepStrictEqual({ ...N.carburantVoyage(N.S.voyages[1]) }, { mad: 10000, estime: true, source: "pleins" }); // pleins du 16 et du 20 octobre, pas celui de novembre
   const c = N.coutCompletVoyage(N.S.voyages[1]); assert.strictEqual(c.total, 10000); assert.strictEqual(c.marge, 22000); assert.strictEqual(c.carburantEstime, true); assert.strictEqual(c.jours, 8);
   assert.strictEqual(N.finVoyage({ dateRetourPrevue: "2026-10-10", jalons: [{ type: "retour", date: "2026-10-12T08:00:00Z" }] }), "2026-10-12");
   assert.strictEqual(N.corridorDe("agadir", "PERPIGNAN (France)"), "Agadir → Perpignan");
@@ -2211,6 +2211,60 @@ test("ports : une étape déjà posée par le GPS compte comme faite ; référen
   N.marquerEtapePort(v, "tme_portnet", { ref: "DUM 301-2026-000123" }); N.marquerEtapePort(v, "tmi_douane", { ref: "DUM import 45" });
   assert.deepStrictEqual([...N.referencesPortuaires(v).map((x) => `${x.lib}=${x.ref}`)], ["N° de réservation=DFDS-1", "N° DUM=DUM 301-2026-000123", "N° DUM import=DUM import 45"]);
 });
+test("papiers : pourquoi la case est rouge — chaque document, expiré, bientôt, manquant, valable ; les bloquants d'abord", () => {
+  N.S.params.alerteJours = 30;
+  const ch = { nom: "Karim", permis: "2026-11-20", visa: "2026-11-25", passeport: "2030-01-01", carteConducteur: "2026-12-10" };
+  const l = N.etatPapiers("chauffeur", ch, "2026-11-22");
+  assert.deepStrictEqual([...l.map((p) => [p.cle, p.statut, p.bloquant])], [["permis", "expire", true], ["carteConducteur", "bientot", true], ["visa", "bientot", false], ["visiteMedicale", "manquant", true], ["passeport", "ok", false]]);
+  assert.strictEqual(l[0].texte, "expiré depuis le 20/11/2026 (2 j) — bloque tout voyage"); assert.strictEqual(l[1].texte, "expire le 10/12/2026 (dans 18 j)");
+  assert.strictEqual(N.occupation("chauffeur", { id: "x", ...ch }, "2026-11-22").libelle, "Permis expiré", "même règle que la case du planning");
+  const cam = N.etatPapiers("camion", { immat: "A", assurance: "2026-11-01", visite: "2027-05-01" }, "2026-11-22");
+  assert.strictEqual(cam[0].cle, "assurance"); assert.strictEqual(cam[0].bloquant, true); assert.ok(cam.find((p) => p.cle === "carteVerte").statut === "manquant" && !cam.find((p) => p.cle === "carteVerte").bloquant);
+});
+
+/* ---------- prix du jour : taux EUR → MAD, gazole, voyages figés ---------- */
+const etatPrix = () => {
+  N.S.params.tauxEUR = 10.8; N.S.params.prixGasoil = 11; N.S.params.consoDefaut = 33; delete N.S.params.prixGasoilJour; delete N.S.params.tauxEURInfo;
+  N.S.camions = [{ id: "c1", immat: "A" }]; N.S.factures = []; N.S.commandes = [];
+  N.S.pleins = [{ id: "p1", camionId: "c1", date: "2026-11-10", litres: 400, prix: 12.1 }, { id: "p2", camionId: "c1", date: "2026-11-05", litres: 300, prix: 11.9 }, { id: "p3", camionId: "c1", date: "2026-10-01", litres: 300, prix: 10.5 }];
+  N.S.voyages = [{ id: "v1", ref: "V-1", camionId: "c1", statut: "prevu", origine: "Agadir", destination: "Perpignan", dateDepart: "2026-11-20", dateRetourPrevue: "2026-11-28", prix: 4000, devise: "EUR", kmAller: 2000, kmRetourVide: 2000, lignesCout: [] },
+    { id: "v2", ref: "V-2", camionId: "c1", statut: "termine", dateDepart: "2026-10-20", dateRetourPrevue: "2026-10-30", prix: 3000, devise: "EUR", kmAller: 1000, lignesCout: [{ id: "l", type: "carburant", montant: 806, devise: "EUR", litres: 520, pays: "ES", source: "fuel_card_csv", date: "2026-11-08" }] }];
+};
+const MARCHES = { taux: { eurMad: 10.9124, date: "2026-11-12", source: "Bank Al-Maghrib (cours de référence)", officiel: true }, carburant: { ES: { prix: 1.869, algeciras: 1.877, date: "2026-11-12", source: "Ministère espagnol" }, FR: { prix: 2.149, poidsLourds: 2.149, pyreneesOrientales: 2.109, date: "2026-11-12", source: "prix-carburants.gouv.fr" } } };
+
+test("prix du jour : taux de Bank Al-Maghrib appliqué, gazole marocain d'après vos pleins, Espagne et France officiels", () => {
+  etatPrix();
+  const r = N.prixGasoilReels("2026-11-13"); assert.deepStrictEqual(JSON.parse(JSON.stringify(r)), { MA: { prix: 12, n: 2, dernier: "2026-11-10" }, ES: { prix: 1.55, n: 1, dernier: "2026-11-08" } }, "14 derniers jours seulement ; carte : 806 € pour 520 L");
+  const c = N.appliquerPrixDuJour(MARCHES, "2026-11-13");
+  assert.strictEqual(N.S.params.tauxEUR, 10.9124); assert.strictEqual(N.S.params.tauxEURInfo.source, "Bank Al-Maghrib (cours de référence)"); assert.strictEqual(N.S.params.tauxEURInfo.officiel, true);
+  assert.strictEqual(N.S.params.prixGasoil, 12, "utilisé par les calculs de trajets"); assert.ok(c.some((x) => /taux EUR → MAD/.test(x)) && c.some((x) => /gazole Maroc/.test(x)));
+  const j = N.S.params.prixGasoilJour; assert.strictEqual(j.ES.prix, 1.869); assert.strictEqual(j.ES.algeciras, 1.877); assert.strictEqual(j.ES.paye, 1.55, "à côté : ce que vous avez payé"); assert.strictEqual(j.FR.pyreneesOrientales, 2.109); assert.strictEqual(j.MA.source, "vos pleins et cartes carburant");
+  N.S.params.tauxEUR = 10.8; N.appliquerPrixDuJour({ ...MARCHES, taux: { ...MARCHES.taux, date: "2026-10-01" } }, "2026-11-13"); assert.strictEqual(N.S.params.tauxEUR, 10.8, "taux de plus de 7 jours : pas appliqué");
+  N.appliquerPrixDuJour({ taux: { eurMad: 1000 } }, "2026-11-13"); assert.strictEqual(N.S.params.tauxEUR, 10.8, "valeur absurde refusée");
+  N.S.pleins = []; N.S.voyages = []; N.appliquerPrixDuJour(null, "2026-11-13"); assert.strictEqual(N.S.params.prixGasoil, 12, "sans pleins récents : le prix précédent reste");
+});
+
+test("taux par voyage : un voyage terminé ou facturé garde le taux de son jour ; les autres suivent le taux du jour", () => {
+  etatPrix(); const [v1, v2] = N.S.voyages;
+  assert.strictEqual(N.figerTauxVoyages(), 1); assert.strictEqual(v2.tauxEUR, 10.8); assert.ok(!v1.tauxEUR);
+  N.S.params.tauxEUR = 11.2; assert.strictEqual(N.coutVoyage(v2).prix, 3000 * 10.8, "voyage terminé : taux figé"); proche(N.coutVoyage(v2).parts.carburant, 806 * 10.8);
+  assert.strictEqual(N.coutVoyage(v1).prix, 4000 * 11.2, "voyage prévu : taux du jour");
+  v1.clientId = "k"; N.S.clients = [{ id: "k", nom: "K" }]; N.creerFactureVoyages([v1]); assert.strictEqual(N.figerTauxVoyages(), 1); assert.strictEqual(v1.tauxEUR, 11.2, "figé à la facture"); assert.strictEqual(N.figerTauxVoyages(), 0);
+});
+
+test("carburant d'un voyage prévu estimé au prix du jour (Maroc d'après vos pleins, Europe officiel), remplacé dès qu'une dépense réelle arrive", () => {
+  etatPrix(); const v = N.S.voyages[0];
+  assert.strictEqual(N.estimationCarburantJour(v), null, "pas encore de prix du jour");
+  N.appliquerPrixDuJour(MARCHES, "2026-11-13"); N.S.pleins = []; // sans pleins pendant le voyage
+  const e = N.estimationCarburantJour(v), attendu = Math.round((700 * 0.33) * 12 + (3300 * 0.33) * ((1.877 + 2.149) / 2) * 10.9124);
+  assert.strictEqual(e.mad, attendu); assert.ok(/^4.000 km × 33,0 L\/100 · Maroc 12,00 MAD\/L · Europe 2,013 €\/L$/.test(e.detail), e.detail);
+  const c = N.carburantVoyage(v); assert.strictEqual(c.mad, attendu); assert.strictEqual(c.source, "prix_jour");
+  assert.ok(N.margeVoyage(v).couts_directs.some((l) => /Estimé au prix du jour/.test(l.libelle)));
+  v.kmPays = "MA:500"; assert.ok(N.estimationCarburantJour(v).mad !== attendu, "kilomètres au Maroc saisis : pris en compte");
+  N.ajouterLigneCout(v, { type: "carburant", montant: 9000, source: "fuel_card_csv" }); assert.strictEqual(N.carburantVoyage(v).mad, 9000); assert.strictEqual(N.carburantVoyage(v).estime, false);
+  assert.strictEqual(N.estimationCarburantJour({ ...v, statut: "termine" }), null);
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

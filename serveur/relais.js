@@ -14,6 +14,7 @@ const { envoyerCourriel, adresseValide, motEntete } = require("./courriel.js");
 const { creerCoffre, chargerCoffre, ecrireAtomique } = require("./coffre.js");
 const { planPurge, appliquerPurge } = require("./purge-photos.js");
 const { creerMulti } = require("./multi.js");
+const { recupererMarches } = require("./marches.js");
 const { peutSuivre } = require("../comptes.js");
 const { page } = require("./page-client.js");
 
@@ -39,7 +40,7 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null, ...(temp !== null ? { temp } : {}) };
 }
 
-function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel, coffre = creerCoffre(null), journalAcces = false, purgePhotosMois = 0, multi = null } = {}) {
+function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel, coffre = creerCoffre(null), journalAcces = false, purgePhotosMois = 0, multi = null, marches_ = recupererMarches } = {}) {
   if (!jetonEcriture || !jetonLecture) throw new Error("JETON_ECRITURE et JETON_LECTURE sont obligatoires.");
   const historique = new Map(); // id -> [positions triées]
   const noms = new Map();
@@ -190,6 +191,13 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
   const ipTronquee = (ip) => (ip.includes(":") && !/^::ffff:/.test(ip) ? ip.split(":").slice(0, 3).join(":") + "::" : ip.replace(/^::ffff:/, "").replace(/\.\d+$/, ".0"));
   if (dossier && journalAcces) { const limite = Date.now() - 30 * 86400000; for (const f of fs.readdirSync(dossier).filter((x) => /^acces-\d{4}-\d{2}-\d{2}\.jsonl$/.test(x))) if (Date.parse(f.slice(6, 16)) < limite) { try { fs.unlinkSync(path.join(dossier, f)); } catch { /* ignoré */ } } }
   const noterAcces = (req, res, p, ip, autorise) => { if (!dossier || !journalAcces) return; const t = Date.now(); try { fs.appendFileSync(fichierAcces(t), coffre.ligne(JSON.stringify({ t, m: req.method, p: p.replace(/\/suivi\/[^/]+/, "/suivi/…").slice(0, 120), code: res.statusCode, ip: ipTronquee(ip), jeton: autorise })) + "\n", { mode: 0o600 }); } catch { /* ignoré */ } };
+  /* ---------- prix du jour (taux EUR → MAD, gazole Espagne et France) : récupérés toutes les 6 h au plus ---------- */
+  let marches = dossier ? (() => { try { return JSON.parse(coffre.lireTexte(path.join(dossier, "marches.json"))); } catch { return null; } })() : null, marchesEnCours = null;
+  async function marchesDuJour(forcer = false) {
+    if (!forcer && marches && Date.now() - marches.maj < 6 * 3600000) return marches;
+    marchesEnCours ||= (async () => { try { const r = await marches_(http_); const garder = { ...r, taux: r.taux || marches?.taux || null, carburant: { ...(marches?.carburant || {}), ...r.carburant } }; marches = garder; if (dossier) { try { coffre.ecrire(path.join(dossier, "marches.json"), JSON.stringify(garder)); } catch { /* garde en mémoire */ } } return garder; } finally { marchesEnCours = null; } })();
+    return marchesEnCours;
+  }
   const nombre = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
   const textes = (v, max = 120) => String(v ?? "").slice(0, max).trim();
   /** Champs d'un partage acceptés depuis l'application (tout le reste est ignoré). */
@@ -338,6 +346,10 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
             if (dossier) { try { coffre.ecrire(fichierSynchro(), JSON.stringify(synchro)); } catch { /* garde en mémoire */ } }
             return json(res, 200, { ok: true, version: synchro.version });
           }
+        }
+        if (p === "/api/marches" && req.method === "GET") {
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          try { return json(res, 200, await marchesDuJour(url.searchParams.get("actualiser") === "1")); } catch (e) { return json(res, 502, { erreur: `Sources injoignables : ${e.message}` }); }
         }
         if (p === "/api/alertes/historique" && req.method === "GET") {
           if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });

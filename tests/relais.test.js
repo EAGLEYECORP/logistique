@@ -8,6 +8,7 @@ const { creerCoffre, chargerCoffre, estChiffre } = require("../serveur/coffre.js
 const { planPurge } = require("../serveur/purge-photos.js");
 const A = require("../serveur/auth.js");
 const { creerMulti } = require("../serveur/multi.js");
+const M = require("../serveur/marches.js");
 
 const tests = [];
 const test = (n, f) => tests.push([n, f]);
@@ -580,6 +581,41 @@ test("multi-utilisateur : tout survit à un redémarrage (chiffré au repos), r�
     const j = s.multi.lireAudit().map((x) => x.action); for (const a of ["initialisation", "compte_cree", "connexion", "modification", "reinitialisation_demandee", "mot_de_passe_reinitialise", "echec_recuperation", "recuperation"]) assert.ok(j.includes(a), a);
     await s.arreter();
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});
+
+test("prix du jour : taux Bank Al-Maghrib, gazole Espagne (Cadix, Algeciras) et France (poids lourds, Pyrénées-Orientales), archive ZIP", () => {
+  const html = '<p>Date : 12/11/2026</p><tr><td><a title="1 EURO (EUR)" href="/graph/currency/eur">1 EURO</a></td><td>10,9124</td></tr><tr><td>1 DOLLAR</td><td>9,1</td></tr>';
+  assert.deepStrictEqual(M.lireTauxBam(html), { taux: 10.9124, date: "2026-11-12" }); assert.strictEqual(M.lireTauxBam("<p>rien</p>"), null); assert.strictEqual(M.lireTauxBam('1 EURO (EUR) 999,9'), null, "valeur absurde refusée");
+  const es = { Fecha: "12/11/2026 23:45:13", ListaEESSPrecio: [
+    { "Precio Gasoleo A": "1,850", IDProvincia: "11", Municipio: "Algeciras" }, { "Precio Gasoleo A": "1,900", IDProvincia: "11", Municipio: "San Roque" }, { "Precio Gasoleo A": "1,800", IDProvincia: "11", Municipio: "Cádiz" },
+    { "Precio Gasoleo A": "1,700", IDProvincia: "28", Municipio: "Madrid" }, { "Precio Gasoleo A": "", IDProvincia: "28", Municipio: "Madrid" } ] };
+  assert.deepStrictEqual(M.lireGazoleEspagne(es), { prix: 1.825, n: 4, cadix: 1.85, algeciras: 1.875, nAlgeciras: 2, date: "2026-11-12", unite: "EUR/L" });
+  const xml = `<pdv_liste><pdv id="1" cp="66160"><services><service>Piste poids lourds</service></services><prix nom="Gazole" id="1" maj="2026-11-12 06:55:20" valeur="2.109"/></pdv>
+    <pdv id="2" cp="75001"><prix nom="Gazole" id="1" maj="2026-11-11 08:00:00" valeur="2.199"/><prix nom="SP95" maj="2026-11-11 08:00:00" valeur="1.9"/></pdv>
+    <pdv id="3" cp="13001"><services><service>Piste poids lourds</service></services><prix nom="Gazole" id="1" maj="2026-10-01 08:00:00" valeur="1.5"/></pdv></pdv_liste>`;
+  const fr = M.lireGazoleFrance(xml, Date.parse("2026-11-13T00:00:00Z"));
+  assert.deepStrictEqual(fr, { prix: 2.154, n: 2, poidsLourds: 2.109, nPoidsLourds: 1, pyreneesOrientales: 2.109, date: "2026-11-12", unite: "EUR/L" }, "prix de plus de 8 jours écarté");
+  // archive ZIP (deflate) construite à la main, comme celle du site
+  const zlib = require("zlib"), nom = Buffer.from("PrixCarburants_instantane.xml"), brut = Buffer.from(xml, "latin1"), comp = zlib.deflateRawSync(brut);
+  const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt32LE(comp.length, 18); local.writeUInt32LE(brut.length, 22); local.writeUInt16LE(nom.length, 26);
+  const cd = Buffer.alloc(46); cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(8, 10); cd.writeUInt32LE(comp.length, 20); cd.writeUInt32LE(brut.length, 24); cd.writeUInt16LE(nom.length, 28); cd.writeUInt32LE(0, 42);
+  const debutCd = 30 + nom.length + comp.length, fin = Buffer.alloc(22); fin.writeUInt32LE(0x06054b50, 0); fin.writeUInt16LE(1, 10); fin.writeUInt32LE(46 + nom.length, 12); fin.writeUInt32LE(debutCd, 16);
+  const zip = Buffer.concat([local, nom, comp, cd, nom, fin]);
+  assert.strictEqual(M.premierFichierZip(zip).toString("latin1"), xml); assert.throws(() => M.premierFichierZip(Buffer.from("pas un zip")), /ZIP/);
+  assert.strictEqual(M.mediane([3, 1, 2]), 2); assert.strictEqual(M.mediane([]), null);
+});
+
+test("prix du jour : route du relais, cache de 6 h, actualisation forcée, une source en panne n'efface pas les autres", async () => {
+  let appels = 0, panne = false;
+  const marches_ = async () => { appels++; return panne ? { maj: Date.now(), taux: null, carburant: { FR: { prix: 2.2 } }, erreurs: ["Bank Al-Maghrib : réponse 503"] } : { maj: Date.now(), taux: { eurMad: 10.9124, date: "2026-11-12", source: "Bank Al-Maghrib (cours de référence)", officiel: true }, carburant: { ES: { prix: 1.869 }, FR: { prix: 2.149 } }, erreurs: [] }; };
+  const s = await demarrer(null, { marches_ });
+  try {
+    assert.strictEqual((await s.appel("/api/marches")).code, 401);
+    let r = (await s.appel("/api/marches", { jeton: "lit" })).json; assert.strictEqual(r.taux.eurMad, 10.9124); assert.strictEqual(r.carburant.ES.prix, 1.869);
+    await s.appel("/api/marches", { jeton: "lit" }); assert.strictEqual(appels, 1, "en cache");
+    panne = true; r = (await s.appel("/api/marches?actualiser=1", { jeton: "lit" })).json; assert.strictEqual(appels, 2);
+    assert.strictEqual(r.taux.eurMad, 10.9124, "taux précédent gardé si Bank Al-Maghrib est injoignable"); assert.strictEqual(r.carburant.FR.prix, 2.2); assert.strictEqual(r.carburant.ES.prix, 1.869); assert.ok(r.erreurs[0].includes("503"));
+  } finally { await s.arreter(); }
 });
 
 test("lien client : traversée en cours et position inconnue", async () => {

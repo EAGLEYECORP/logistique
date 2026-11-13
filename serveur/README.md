@@ -170,6 +170,10 @@ Le jeton d'**écriture** (balises, Traccar) ne peut pas créer de lien. Un lien 
 
 `MULTI_UTILISATEUR=true` : le relais sert l'application à son adresse, avec des comptes (chef d'entreprise, exploitant, répartiteur, commercial, comptable, chauffeur, transitaire), des droits appliqués par le serveur, la double authentification, les modifications concurrentes (versions, fusion), le temps réel et un journal. Premier démarrage : ouvrez l'adresse du relais ; le jeton de lecture est demandé pour créer le premier compte. Variables utiles : `URL_PUBLIQUE` (liens de réinitialisation), `RETENTION_AUDIT_JOURS` (730), `COOKIE_NON_SECURISE` (essais en http seulement). Tout est décrit dans [docs/10-multi-utilisateur.md](../docs/10-multi-utilisateur.md).
 
+## Prix du jour
+
+`GET /api/marches` (jeton de lecture ou session) : taux EUR → MAD de Bank Al-Maghrib, gazole en Espagne (ministère) et en France (prix-carburants), récupérés au plus toutes les 6 heures et gardés en cache. Sources publiques et gratuites, sans clé. Derrière un proxy d'entreprise, lancez Node avec `NODE_USE_ENV_PROXY=1`.
+
 ## Mise en ligne (https)
 
 - **PC, Raspberry Pi ou serveur** : placez un proxy https devant le relais, par exemple [Caddy](https://caddyserver.com) : `suivi.mon-entreprise.ma { reverse_proxy localhost:8787 }` (certificat automatique).

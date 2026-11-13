@@ -19,7 +19,7 @@ function grilleHtml(g) {
     const r = ressourcePlanning(planGenre, l.id), tel = planGenre === "chauffeur" && r?.tel;
     const cellules = l.cellules.map((c, i) => {
       const debutSerie = i === 0 || l.cellules[i - 1].libelle !== c.libelle || l.cellules[i - 1].voyageId !== c.voyageId;
-      const titre = c.statut === "voyage" ? `${c.libelle} → ${c.destination}` : c.statut === "libre" ? "Libre : toucher pour planifier" : `${c.libelle}${c.note ? " — " + c.note : ""}`;
+      const titre = c.statut === "voyage" ? `${c.libelle} → ${c.destination}` : c.statut === "libre" ? "Libre : toucher pour planifier" : c.statut === "papiers" ? `${c.libelle} : toucher pour voir le détail et mettre à jour` : `${c.libelle}${c.note ? " — " + c.note : ""}`;
       return `<td class="cel cel-${c.niveau} ${g.jours[i] === today() ? "auj" : ""}" data-act="cellule" data-id="${planGenre}|${l.id}|${g.jours[i]}" title="${esc(titre)}">${debutSerie && c.statut !== "libre" ? `<span>${esc(c.libelle)}</span>` : ""}</td>`;
     }).join("");
     return `<tr><th class="res-col"><strong>${esc(l.nom)}</strong><span class="sub">${planGenre === "chauffeur" ? `Schengen : ${l.schengen} j restants` : r?.marque ? esc(r.marque) : ""} · ${l.libres} j libres</span>
@@ -76,6 +76,17 @@ async function nouveauVoyageDepuisPlanning(genre, resId, jour) {
   rafraichir();
 }
 
+/** Une case rouge « papiers » : quel document, depuis quand, et la mise à jour en un geste. */
+async function expliquerPapiers(genre, r, jour) {
+  const l = etatPapiers(genre, r, jour), nom = genre === "chauffeur" ? r.nom : r.immat, cls = { expire: "danger", bientot: "warn", manquant: "neutral", ok: "ok" };
+  const ok = await modale({ titre: `Papiers de ${nom} au ${dateFr(jour)}`, valider: "Mettre à jour les dates", annuler: "Fermer", corps: `<p style="margin-top:0">La case est rouge parce qu'au moins un papier <strong>obligatoire pour rouler</strong> est expiré ce jour-là.</p>
+    <ul class="ctl papiers">${l.map((p) => `<li class="${cls[p.statut]}">${ic(p.statut === "ok" ? "check" : p.statut === "manquant" ? "clock" : "alert")}<span><strong>${esc(p.lib)}</strong>${p.bloquant ? "" : ` <span class="sub">(signalé, ne bloque pas)</span>`}<span class="sub">${esc(p.texte)}</span></span></li>`).join("")}</ul>
+    <p class="hint">Rouge : permis, carte conducteur, visite médicale${genre === "camion" ? " ; assurance et visite technique" : ""} expirés. Orange : expire dans moins de ${num(S.params.alerteJours, 30)} jours. Une fois renouvelé, saisissez la nouvelle date : la case redevient libre.</p>` });
+  if (!ok) return;
+  const vue = genre === "chauffeur" ? VUES.chauffeurs : VUES.camions;
+  await vue.agir.call(vue, "modifier", r.id); afficher("planning");
+}
+
 VUES.planning = {
   titre: "Planning",
   sous: "Disponibilités des chauffeurs et des camions, jour par jour",
@@ -105,6 +116,7 @@ VUES.planning = {
     if (act === "cellule") {
       const [genre, resId, jour] = id.split("|"), r = ressourcePlanning(genre, resId), c = occupation(genre, r, jour);
       if (c.statut === "voyage") return typeof ouvrirVoyage === "function" ? ouvrirVoyage(c.voyageId) : afficher("voyages");
+      if (c.statut === "papiers") return expliquerPapiers(genre, r, jour);
       if (c.statut === "absent" && c.absenceId) return saisirAbsence(genre, resId, (r[genre === "chauffeur" ? "absences" : "immobilisations"] || []).find((a) => a.id === c.absenceId));
       const f = await formulaire(`${genre === "chauffeur" ? r.nom : r.immat} · ${dateFr(jour)}`, [{ name: "quoi", label: c.statut === "papiers" ? `${c.libelle} : à régler avant tout voyage` : "Que voulez-vous faire ?", type: "select", options: [["voyage", "Créer un voyage qui part ce jour"], ["absence", genre === "chauffeur" ? "Déclarer une absence" : "Déclarer une immobilisation"]], value: "voyage", full: true }], { valider: "Continuer" });
       if (!f) return;

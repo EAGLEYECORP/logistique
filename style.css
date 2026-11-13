@@ -773,3 +773,5 @@ ol.port-etapes { list-style: none; margin: 6px 0 0; padding: 0; } ol.port-etapes
 .port-pt { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border); display: inline-flex; align-items: center; justify-content: center; margin-top: 2px; }
 li.fait .port-pt { background: var(--ok); border-color: var(--ok); color: #fff; } li.fait .port-pt .i { width: 12px; height: 12px; } li.facultatif .port-txt > strong { font-weight: 500; }
 .port-txt .sub { display: block; } .port-docs { color: var(--text-2); }
+
+ul.ctl.papiers li.ok { color: var(--text-2); } ul.ctl.papiers li.ok .i { color: var(--ok); }

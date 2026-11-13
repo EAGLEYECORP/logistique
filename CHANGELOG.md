@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.3.0 — Prix du jour (taux EUR → MAD, gazole) et papiers expliqués
+
+- **Taux EUR → MAD du jour** : cours de référence de **Bank Al-Maghrib**, récupéré par le relais (repli : open.er-api.com, indiqué « indicatif »). Appliqué seul toutes les 6 heures ; un voyage **terminé ou facturé garde le taux de son jour** (ses marges ne bougent plus) ; les voyages en cours suivent le taux du jour.
+- **Gazole aux prix réels du jour** : Maroc = médiane de ce que vous avez payé (pleins et cartes carburant des 14 derniers jours, utilisée pour les calculs de trajets) ; Espagne = prix officiels du ministère (médiane nationale, Cadix, Algeciras) ; France = prix officiels prix-carburants (stations avec piste poids lourds, Pyrénées-Orientales). Carte « Prix du jour » sur la page Gasoil et dans les Réglages, avec ce que vous avez payé à côté.
+- **Carburant d'un voyage prévu estimé au prix du jour** (kilomètres × consommation du camion × prix Maroc et Europe) tant qu'aucune dépense réelle n'est arrivée ; la carte carburant garde désormais les litres et le pays de chaque plein.
+- **Papiers expliqués** : sur le planning, une case rouge « papiers » montre chaque document (expiré depuis quand, bientôt, manquant, valable ; bloquant ou non) et ouvre la fiche pour saisir la nouvelle date.
+- Relais : route `GET /api/marches` (cache de 6 h ; une source en panne n'efface pas les autres).
+
 ## 4.2.0 — Passage des ports étape par étape, chaque voyage relié à sa facture
 
 - **Passage des ports** sur chaque voyage — aller : Tanger Med (parc de régulation, PortNet et DUM, douane, contrôle sanitaire export pour le frais, scanner, police, droits de port, embarquement) puis Algeciras (débarquement, police des frontières et EES, douane espagnole, poste de contrôle sanitaire pour le frais, sortie du port) ; retour : Algeciras (douane de sortie, police, embarquement) puis Tanger Med (débarquement, police, scanner, DUM import, contrôles, mainlevée). Pour chaque étape : ce qui s'y passe, les documents à présenter, la référence à noter (DUM, TIR/T1, MRN, CHED…), l'heure, le temps passé au port.

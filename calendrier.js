@@ -12,8 +12,8 @@ const nbJoursPlanning = () => (typeof innerWidth === "number" && innerWidth < 70
 const JOURS_COURTS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
 const ressourcePlanning = (genre, id) => parId(genre === "chauffeur" ? S.chauffeurs : S.camions, id);
 
-function grilleHtml(g) {
-  const auj = today();
+function grilleHtml(g, genre = planGenre) {
+  const planGenre = genre, auj = today();
   const entete = g.jours.map((j) => { const d = new Date(j + "T00:00:00Z"), we = [0, 6].includes(d.getUTCDay()); return `<th class="jour-col ${j === auj ? "auj" : ""} ${we ? "we" : ""}"><span>${JOURS_COURTS[d.getUTCDay()]}</span><strong>${d.getUTCDate()}</strong></th>`; }).join("");
   const ligne = (l) => {
     const r = ressourcePlanning(planGenre, l.id), tel = planGenre === "chauffeur" && r?.tel;
@@ -77,14 +77,19 @@ async function nouveauVoyageDepuisPlanning(genre, resId, jour) {
 }
 
 /** Une case rouge « papiers » : quel document, depuis quand, et la mise à jour en un geste. */
-async function expliquerPapiers(genre, r, jour) {
+async function expliquerPapiers(genre, r, jour = today()) {
   const l = etatPapiers(genre, r, jour), nom = genre === "chauffeur" ? r.nom : r.immat, cls = { expire: "danger", bientot: "warn", manquant: "neutral", ok: "ok" };
-  const ok = await modale({ titre: `Papiers de ${nom} au ${dateFr(jour)}`, valider: "Mettre à jour les dates", annuler: "Fermer", corps: `<p style="margin-top:0">La case est rouge parce qu'au moins un papier <strong>obligatoire pour rouler</strong> est expiré ce jour-là.</p>
+  const bloque = l.some((p) => p.statut === "expire" && p.bloquant), expire = l.some((p) => p.statut === "expire"), bientot = l.some((p) => p.statut === "bientot"), manque = l.filter((p) => p.statut === "manquant").length;
+  const pourquoi = bloque ? `<strong class="t-danger">Rouge</strong> : au moins un papier <strong>obligatoire pour rouler</strong> est expiré${jour === today() ? "" : " ce jour-là"} — ${genre === "chauffeur" ? "ce chauffeur ne peut pas partir" : "ce camion ne peut pas partir"}.`
+    : expire ? `<strong class="t-danger">Rouge</strong> : un papier est expiré (il ne bloque pas le planning, mais à renouveler).`
+    : bientot ? `<strong class="t-warn">Orange</strong> : un papier expire dans moins de ${num(S.params.alerteJours, 30)} jours.`
+    : `<strong class="t-ok">Vert</strong> : tous les papiers renseignés sont valables.`;
+  const ok = await modale({ titre: `Papiers de ${nom} au ${dateFr(jour)}`, valider: "Mettre à jour les dates", annuler: "Fermer", corps: `<p style="margin-top:0">${pourquoi}${manque ? ` ${manque} papier(s) sans date : à saisir pour être suivis.` : ""}</p>
     <ul class="ctl papiers">${l.map((p) => `<li class="${cls[p.statut]}">${ic(p.statut === "ok" ? "check" : p.statut === "manquant" ? "clock" : "alert")}<span><strong>${esc(p.lib)}</strong>${p.bloquant ? "" : ` <span class="sub">(signalé, ne bloque pas)</span>`}<span class="sub">${esc(p.texte)}</span></span></li>`).join("")}</ul>
     <p class="hint">Rouge : permis, carte conducteur, visite médicale${genre === "camion" ? " ; assurance et visite technique" : ""} expirés. Orange : expire dans moins de ${num(S.params.alerteJours, 30)} jours. Une fois renouvelé, saisissez la nouvelle date : la case redevient libre.</p>` });
   if (!ok) return;
   const vue = genre === "chauffeur" ? VUES.chauffeurs : VUES.camions;
-  await vue.agir.call(vue, "modifier", r.id); afficher("planning");
+  await vue.agir.call(vue, "modifier", r.id); rafraichir();
 }
 
 VUES.planning = {
@@ -156,3 +161,23 @@ VUES.voyages.agir = async function (act, id, b) {
   }
   return agirVoyagesAvantPlanning.call(this, act, id, b);
 };
+
+/* ---------- page Chauffeurs : disponibilités des 14 prochains jours, papiers cliquables (aussi sur Camions) ---------- */
+function carteDispoChauffeurs() {
+  if (!S.chauffeurs.length) return "";
+  const debut = today(), n = nbJoursPlanning(), g = grillePlanning("chauffeur", debut, n), libresAuj = g.libresParJour[0];
+  return `<div class="card" id="dispo-chauffeurs"><div class="card-head"><h2>Disponibilités · ${n} prochains jours</h2>${badge(`${libresAuj} libre(s) aujourd'hui`, libresAuj ? "ok" : "warn")}</div>
+    ${grilleHtml(g, "chauffeur")}
+    <div class="row" style="margin-top:8px">${btn("dispo-absence", "Déclarer une absence", { icone: "plus", cls: "btn ghost sm" })}${btn("aller", "Planning complet", { id: "planning", icone: "calendar", cls: "btn ghost sm" })}<span class="hint">Touchez une case : voyage, absence, papiers expirés ou case libre pour planifier.</span></div></div>`;
+}
+for (const [vue, genre] of [[VUES.chauffeurs, "chauffeur"], [VUES.camions, "camion"]]) {
+  if (!vue) continue;
+  const agirBase = vue.agir;
+  vue.agir = async function (act, id, b) {
+    if (act === "papiers") { const r = ressourcePlanning(genre, id); return r && expliquerPapiers(genre, r, today()); }
+    if (act === "cellule" || act === "absence-modifier" || act === "absence-supprimer") return VUES.planning.agir(act, id, b);
+    if (act === "dispo-absence") return saisirAbsence(genre, "");
+    return agirBase.call(this, act, id, b);
+  };
+}
+{ const renduChauffeursBase = VUES.chauffeurs.rendu; VUES.chauffeurs.rendu = function () { return carteDispoChauffeurs() + renduChauffeursBase.call(this); }; }

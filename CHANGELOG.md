@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.4.1 — Papiers cliquables et disponibilités sur la page Chauffeurs
+
+- **Papiers cliquables** sur les pages Chauffeurs et Camions : toucher les pastilles ouvre le détail — pourquoi rouge (expiré, obligatoire pour rouler ou non), orange (expire bientôt) ou vert, papiers sans date — et « Mettre à jour les dates » ouvre la fiche.
+- **Disponibilités des 14 prochains jours** en tête de la page Chauffeurs (7 sur téléphone) : en voyage, absent, papiers expirés, libre ; nombre de libres par jour ; toucher une case ouvre le voyage, l'absence, le détail des papiers ou planifie ; « Déclarer une absence » et « Planning complet ».
+
 ## 4.4.0 — Accès limités par service
 
 - **Accès par service** (mode multi-utilisateur, page réservée au chef d'entreprise) : pour chaque rôle — exploitant, répartiteur, commercial, comptable, chauffeur, transitaire — et chaque groupe de données (voyages, commandes, factures, clients, flotte, charges, douane, réglages), choisir *défaut*, *aucun accès*, *lecture sans prix*, *lecture*, *modification sans prix*, *modification*, *tout sans prix* ou *tout*. **Appliqué par le serveur** : sans prix, les prix, coûts et marges ne sont pas envoyés ; sans accès, les données ne quittent pas le serveur et la page disparaît du menu ; un accès accordé fait apparaître la page.

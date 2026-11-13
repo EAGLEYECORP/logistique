@@ -390,7 +390,7 @@ VUES.camions = {
             <td class="r num">${fmt(c.km)} km</td>
             <td><div class="gauges">${etats.filter((e) => e.pct !== undefined).map((e) =>
               `<div class="gauge ${e.niveau}"><span class="lbl">${e.type}</span><span class="bar"><i style="width:${e.pct}%"></i></span><span class="txt">${esc(e.texte)}</span></div>`).join("")}</div></td>
-            <td><div class="chips" style="margin:0">${etats.filter((e) => e.pct === undefined).map((e) => `<span title="${esc(e.texte)}">${badge(e.type, e.niveau)}</span>`).join("") || '<span class="sub">Non renseigné</span>'}</div></td>
+            <td><button type="button" class="chips papiers-btn" data-act="papiers" data-id="${c.id}" title="Voir le détail des papiers et mettre à jour">${etats.filter((e) => e.pct === undefined).map((e) => `<span title="${esc(e.texte)}">${badge(e.type, e.niveau)}</span>`).join("") || '<span class="sub">Non renseigné</span>'}<span class="papiers-voir">${ic("search")}Détail</span></button></td>
             <td class="r num">${moy ? fmt(moy, 1) + " L/100" : "—"}</td>
             <td class="r num">${fmt(coutEntretien(c.id))} MAD</td>
             <td><div class="actions">
@@ -575,7 +575,7 @@ VUES.chauffeurs = {
           <td><strong>${esc(c.nom)}</strong>${c.tel ? `<span class="sub"><a href="tel:${esc(c.tel.replace(/\s/g, ""))}">${esc(c.tel)}</a></span>` : ""}</td>
           <td>${c.camionId ? esc(nomCamion(c.camionId)) : '<span class="sub">—</span>'}</td>
           <td>${badge(e.dispo ? (e.code === "service" ? "En service" : "Disponible") : e.code === "repos" ? "En repos" : e.code === "conge" ? "Congé" : "Indisponible", e.niveau)}<span class="sub">${esc(e.texte)}</span></td>
-          <td><div class="chips" style="margin:0">${pap || '<span class="sub">—</span>'}</div></td>
+          <td><button type="button" class="chips papiers-btn" data-act="papiers" data-id="${c.id}" title="Voir le détail des papiers et mettre à jour">${pap}${DOCS_CHAUFFEUR.some(([k]) => !c[k]) ? badge(`${DOCS_CHAUFFEUR.filter(([k]) => !c[k]).length} sans date`, "neutral") : ""}<span class="papiers-voir">${ic("search")}Détail</span></button></td>
           <td class="r num">${termines.length}<span class="sub">${fmt(termines.reduce((s, t) => s + t.distance, 0))} km</span></td>
           <td><div class="actions">
             ${c.conge ? "" : c.debutService ? btn("repos", "Fin de service", { id: c.id, cls: "btn sm" }) : btn("service", "Prise de service", { id: c.id, icone: "play", cls: "btn ghost sm" })}

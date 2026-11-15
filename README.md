@@ -155,6 +155,7 @@ Automatique et sans action de votre part.
 | `optimisation.js`, `journal.js`, `prevision.js` | Conseils et tableau des opérations ; historique des voyages ; attentes aux ports et arrivée estimée (testés) |
 | `planning.js`, `calendrier.js` | Disponibilités, conflits d'affectation, ressources libres, duplication, programme du chauffeur (testé) ; page Planning |
 | `passages.js`, `passages_ui.js` | Événements de passage, suite de chaque étape, alertes, routage des messages (testé) ; page Passages douane |
+| `aller_retour.js`, `aller_retour_ui.js` | Un dossier par voyage : commande → voyage, retour chargé (seconde commande), suivi unique, recette et rentabilité réparties, facturation sans doublon (testé) |
 | `jalons_notifications.js`, `comptes.js` | Routage et rédaction des notifications par étape ; rôles et droits partagés avec le relais (testés) |
 | `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Accès par service, Journal) |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |
@@ -181,7 +182,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 215 tests (185 application, 30 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 218 tests (188 application, 30 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

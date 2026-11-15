@@ -66,7 +66,7 @@ let champsVoyage = (v = {}) => [ // « let » : calendrier.js ajoute la disponib
   { name: "ref", label: "Référence", required: true, value: v.ref ?? `V-${new Date().getFullYear()}-${String(S.voyages.length + 1).padStart(4, "0")}` },
   { name: "statut", label: "Statut", type: "select", options: STATUTS_VOYAGE, value: v.statut || "prevu" },
   { name: "clientId", label: "Client", type: "select", options: optsClients("— Aucun —"), value: v.clientId },
-  { name: "commandeId", label: "Commande liée (comptée une seule fois dans la rentabilité)", type: "select", options: [["", "— Aucune —"], ...S.commandes.map((c) => [c.id, `${c.ref} · ${nomClient(c.clientId)}`])], value: v.commandeId },
+  { name: "commandeId", label: "Commande de l'aller (comptée une seule fois dans la rentabilité)", type: "select", options: [["", "— Aucune —"], ...S.commandes.filter((c) => c.id === v.commandeId || typeof voyageDeCommande !== "function" || !voyageDeCommande(c)).map((c) => [c.id, `${c.ref} · ${nomClient(c.clientId)}`])], value: v.commandeId },
   { name: "marchandise", label: "Marchandise", value: v.marchandise },
   { name: "origine", label: "Départ (ville)", value: v.origine, required: true, placeholder: "Agadir" },
   { name: "destination", label: "Destination (ville)", value: v.destination, required: true, placeholder: "Perpignan" },
@@ -81,7 +81,7 @@ let champsVoyage = (v = {}) => [ // « let » : calendrier.js ajoute la disponib
   { name: "autorisationId", label: "Autorisation bilatérale utilisée", type: "select", options: optsAutorisations(), value: v.autorisationId },
   { name: "ptacT", label: "PTAC prévu (tonnes)", type: "number", min: 0, value: v.ptacT },
   { name: "transportCombine", label: "Transport combiné (conteneur 40 pieds : 44 t)", type: "checkbox", value: v.transportCombine },
-  { name: "prix", label: "Prix de vente", type: "number", min: 0, value: v.prix },
+  { name: "prix", label: "Prix de vente de l'aller (le retour chargé a sa propre commande)", type: "number", min: 0, value: v.prix },
   { name: "devise", label: "Devise", type: "select", options: optsDevise, value: v.devise || "EUR" },
   { name: "peageTrajet", label: "Péage Maroc : trajet type (grille ADM)", type: "select", options: [["", "— Saisie manuelle ci-dessous —"], ...ADM_TRAJETS.map((t) => [t.id, t.lib])], value: v.peageTrajet },
   { name: "peageAR", label: "Compter aussi le péage au retour", type: "checkbox", value: v.peageAR },
@@ -173,7 +173,7 @@ function carteVoyage(v) {
         ${v.kmPays && peagesEuropeVoyage(v).manquants.length ? `<tr><td colspan="2" class="sub">Péages d'Europe : tarif au km non renseigné pour ${peagesEuropeVoyage(v).manquants.join(", ")} (Réglages → calculs) — ces pays ne sont pas comptés.</td></tr>` : ""}
         ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages France (VINCI)" ? `<span class="sub">${peagesFranceVoyage(v).detail.map((d) => `${esc(d.liaison)} ${fmt(d.eur, 2)} €`).join(" · ")}${v.peageFrAR ? " ×2" : ""} · classe ${peagesFranceVoyage(v).classe} · tarif officiel du ${dateFr(FR_LIAISONS_DATE)}</span>` : ""}${l === "Péages Europe" && v.peagesEurReel ? `<span class="sub">relevé de télépéage : ${Object.entries(v.peagesEurPays || {}).map(([p, m]) => `${p} ${fmt(m, 2)} €`).join(", ") || "total du relevé"}</span>` : ""}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
         <tr><td><strong>Coût total</strong></td><td class="r num"><strong>${fmt(c.total)} MAD</strong></td></tr>
-        <tr><td>Prix de vente</td><td class="r num">${c.prix ? fmt(c.prix) + " MAD" : "—"}</td></tr>
+        <tr><td>Prix de vente${c.prixRetour ? `<span class="sub">aller ${fmt(c.prixAller)} MAD + retour ${fmt(c.prixRetour)} MAD</span>` : ""}</td><td class="r num">${c.prix ? fmt(c.prix) + " MAD" : "—"}</td></tr>
         <tr><td><strong>Marge directe</strong></td><td class="r num ${c.marge < 0 ? "neg" : ""}"><strong>${c.prix ? `${fmt(c.marge)} MAD · ${fmt(c.taux, 1)} %` : "—"}</strong></td></tr>
         ${lignesMargeNette(v)}
         ${num(v.kmGps) ? `<tr><td>Distance mesurée par le GPS</td><td class="r num">${fmt(v.kmGps)} km</td></tr>` : ""}

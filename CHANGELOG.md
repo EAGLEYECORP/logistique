@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.6.0 — Un seul dossier par voyage, avec un aller et un retour
+
+- **« Planifier » sur une commande** crée son voyage pré-rempli : client, villes, dates, prix, équipe, CMR, référence client, frais de route ; retour au dépôt estimé (livraison + 4 jours) ; traversées créées. Fini la double saisie.
+- **Le retour chargé est une seconde commande sur le même voyage** : son client, son prix, son CMR, sa facture. Sur la fiche du voyage, bloc « Chargement de retour » : nouvelle commande de retour pré-remplie (chargement à la destination de l'aller, livraison au départ, même équipe), ou commande existante ; prix plancher affiché tant qu'il n'y a pas de retour. Sur la page Commandes : « En retour » charge une commande au retour d'un voyage (ceux qui livrent près du chargement d'abord).
+- **Un seul suivi** : les étapes du voyage font avancer ses deux commandes (chargée, en transit, en douane, livrée), datées comme le voyage, et l'équipe suit ; une commande liée renvoie à son voyage.
+- **La recette du voyage = aller + retour** ; rentabilité et compte de résultat répartis chez chaque client (coûts au kilomètre chargé, sinon au prix), corridor du retour à part, un seul voyage compté par camion ; prévision de trésorerie avec la facture de chaque client.
+- **Pas de double facture** : une commande facturée par son voyage (ou l'inverse) ne peut plus l'être deux fois ; la facture de l'aller ne facture pas le retour ; « Facturer le retour » à son propre client.
+- Sans perte de données : les voyages et commandes existants gardent leurs liens ; aucun changement de format.
+
 ## 4.5.1 — Passages douane port par port
 
 - **Vue Tanger Med et vue Algeciras** sur la page Passages douane : pour chaque port, toutes les étapes (sortie et entrée), le nombre de camions qui attendent chacune (touchez un camion pour son fil), **votre temps habituel** par étape et au port (médiane de vos passages des 90 derniers jours, inspections physiques écartées), le repère d'alerte, les passages terminés des 7 derniers jours, les alertes du port.

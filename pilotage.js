@@ -43,7 +43,7 @@ function coutCompletVoyage(v) {
 function rentabilite({ debut = "", fin = "" } = {}) {
   const dans = (d) => !!d && (!debut || d >= debut) && (!fin || d <= fin);
   const voyages = S.voyages.filter((v) => v.statut !== "annule" && dans(v.dateDepart));
-  const liees = new Set(S.voyages.map((v) => v.commandeId).filter(Boolean));
+  const liees = commandesLiees();
   const commandes = S.commandes.filter((c) => c.statut !== "devis" && !liees.has(c.id) && dans(c.dateChargement));
   const dates = [...voyages.map((v) => v.dateDepart), ...commandes.map((c) => c.dateChargement), ...S.interventions.map((i) => i.date).filter(dans)].filter(Boolean).sort();
   const d0 = debut || dates[0] || today(), d1 = fin || today();
@@ -56,15 +56,18 @@ function rentabilite({ debut = "", fin = "" } = {}) {
   for (const c of S.camions) de(parCamion, c.id, { id: c.id, nom: c.immat, fixeRenseigne: fixesMensuelsCamion(c, d1).total > 0 });
   const avert = { carburantEstime: 0, sansKm: 0, sansPrix: 0, sansCamion: 0 };
 
-  const ajouter = ({ camionId, clientId, corridor, date, km, kmVide, jours: j, ca, variable }) => {
+  const ajouter = ({ camionId, clientId, corridor, date, km, kmVide, jours: j, ca, variable, nbFlotte = 1 }) => { // nbFlotte : 0 pour le retour d'un voyage déjà compté (camion, mois)
     const cibles = [de(parCamion, camionId || "", { id: camionId || "", nom: camionId ? nomCamion(camionId) : "Sans camion" }), de(parClient, clientId || "", { id: clientId || "", nom: clientId ? nomClient(clientId) : "Sans client" }), de(parCorridor, corridor, { nom: corridor }), de(parMois, date.slice(0, 7), { nom: date.slice(0, 7) })];
-    for (const x of cibles) { x.nb++; x.km += km; x.kmVide += kmVide; x.jours += j; x.ca += ca; x.variable += variable; }
+    for (const [i, x] of cibles.entries()) { x.nb += i === 0 || i === 3 ? nbFlotte : 1; x.km += km; x.kmVide += kmVide; x.jours += j; x.ca += ca; x.variable += variable; }
     if (!camionId) avert.sansCamion++;
   };
   for (const v of voyages) {
     const c = coutCompletVoyage(v);
     if (c.carburantEstime) avert.carburantEstime++; if (!c.km) avert.sansKm++; if (!c.prix) avert.sansPrix++;
-    ajouter({ camionId: v.camionId, clientId: v.clientId, corridor: corridorDe(v.origine, v.destination), date: v.dateDepart, km: c.km, kmVide: num(v.kmRetourVide), jours: c.jours, ca: c.prix, variable: c.total });
+    const parts = partsVoyage(v);
+    if (parts.length === 1) ajouter({ camionId: v.camionId, clientId: v.clientId, corridor: corridorDe(v.origine, v.destination), date: v.dateDepart, km: c.km, kmVide: num(v.kmRetourVide), jours: c.jours, ca: c.prix, variable: c.total });
+    else for (const p of parts) { const r = p.sens === "retour" ? commandeRetour(v) : null; // aller et retour chargé : chacun chez son client, coûts au prorata
+      ajouter({ camionId: v.camionId, clientId: p.clientId, corridor: r ? corridorDe(r.origine, r.destination) : corridorDe(v.origine, v.destination), date: v.dateDepart, km: c.km * p.part, kmVide: num(v.kmRetourVide) * p.part, jours: c.jours * p.part, ca: p.ca, variable: c.total * p.part, nbFlotte: r ? 0 : 1 }); }
   }
   for (const c of commandes) {
     const m = margeCommande(c), t = c.trajetId && parId(S.trajets, c.trajetId);

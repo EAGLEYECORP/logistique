@@ -13,7 +13,7 @@ const jalonFait = (v, k) => (v.jalons || []).some((j) => j.type === k);
  * Plancher = coût complet de l'aller-retour (coûts directs + part de charges fixes et générales) − prix de l'aller. Renvoie null si le voyage n'est pas concerné.
  */
 function seuilRetour(v) {
-  if (!v || ["annule", "termine"].includes(v.statut) || !jalonFait(v, "livre") || jalonFait(v, "charge_retour") || num(v.kmRetourCharge) > 0 || v.retourTrouve) return null;
+  if (!v || ["annule", "termine"].includes(v.statut) || !jalonFait(v, "livre") || jalonFait(v, "charge_retour") || num(v.kmRetourCharge) > 0 || v.retourTrouve || v.commandeRetourId) return null;
   const m = margeVoyage(v), complet = m.total_direct + m.total_structure, seuilMad = Math.max(0, complet - m.revenu);
   return { voyageId: v.id, coutComplet: complet, revenu: m.revenu, seuilMad, seuilEur: seuilMad / S.params.tauxEUR, dejaCouvert: m.revenu >= complet, parKm: num(v.kmRetourVide) > 0 ? seuilMad / num(v.kmRetourVide) : 0 };
 }

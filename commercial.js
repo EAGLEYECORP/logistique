@@ -53,7 +53,7 @@ VUES.commandes = {
     }
     const filtres = {
       actives: ["En cours", (c) => c.statut !== "livre"],
-      facturer: ["À facturer", (c) => c.statut === "livre" && !c.factureId],
+      facturer: ["À facturer", (c) => c.statut === "livre" && !factureDeCommande(c)],
       toutes: ["Toutes", () => true],
     };
     const liste = S.commandes.filter(filtres[filtreCmd][1]).sort((a, b) => (a.dateChargement || "").localeCompare(b.dateChargement || ""));
@@ -68,17 +68,18 @@ VUES.commandes = {
           const m = margeCommande(c);
           const nx = suivant(c.statut);
           const jc = joursAvant(c.dateChargement);
-          const facture = c.factureId && parId(S.factures, c.factureId);
+          const facture = factureDeCommande(c), lien = voyageDeCommande(c);
           return `<tr>
             <td><strong>${esc(c.ref)}</strong><span class="sub">${esc(nomClient(c.clientId))}${c.marchandise ? " · " + esc(c.marchandise) : ""}</span></td>
             <td>${esc(lieu(c.origine, c.paysOrigine))} → ${esc(lieu(c.destination, c.paysDest))}<span class="sub">${[c.poids && fmt(c.poids) + " kg", c.palettes && fmt(c.palettes) + " pal.", c.cmr && "CMR " + c.cmr].filter(Boolean).map(esc).join(" · ")}</span></td>
             <td>${dateFr(c.dateChargement)}${c.statut === "devis" || c.statut === "confirme" ? (jc === 0 ? " " + badge("Aujourd'hui", "warn") : jc < 0 ? " " + badge("En retard", "danger") : "") : ""}<span class="sub">→ ${dateFr(c.dateLivraison)}</span></td>
             <td>${c.chauffeurId ? esc(nomChauffeur(c.chauffeurId)) : badge("À affecter", "warn")}<span class="sub">${c.camionId ? esc(nomCamion(c.camionId)) : ""}</span></td>
             <td class="r num fin">${fmtDevise(c.prix, c.devise)}<span class="sub ${m.marge < 0 ? "neg" : ""}">${c.trajetId || coutCommande(c) ? `marge ${fmt(m.marge)} MAD · ${fmt(m.taux)} %${c.trajetId ? "" : " · hors gasoil"}` : "coûts non saisis"}</span></td>
-            <td>${badge(libStatutCmd(c.statut), niveauStatut[c.statut])}${facture ? `<span class="sub">${esc(facture.numero)}</span>` : ""}</td>
+            <td>${badge(libStatutCmd(c.statut), niveauStatut[c.statut])}${lien ? `<span class="sub">${lien.sens === "aller" ? "Aller" : "Retour"} du voyage ${esc(lien.v.ref)}</span>` : ""}${facture ? `<span class="sub">${esc(facture.numero)}</span>` : ""}</td>
             <td><div class="actions">
-              ${nx ? btn("avancer", libStatutCmd(nx), { id: c.id, icone: "arrow", cls: "btn ghost sm", titre: `Passer à l'étape « ${libStatutCmd(nx)} »` }) : ""}
-              ${c.statut === "livre" && !c.factureId ? btn("facturer", "Facturer", { id: c.id, icone: "receipt", cls: "btn sm" }) : ""}
+              ${lien ? btn("ouvrir-voyage", lien.v.ref, { id: c.id, icone: "ship", cls: "btn ghost sm", titre: "Suivie par son voyage : ouvrir le voyage" })
+                : `${["devis", "confirme"].includes(c.statut) ? btn("planifier", "Planifier", { id: c.id, icone: "ship", cls: "btn sm", titre: "Créer le voyage de cette commande (client, villes, dates, prix, équipe repris)" }) + btn("en-retour", "En retour", { id: c.id, cls: "btn ghost sm", titre: "Charger cette commande au retour d'un voyage" }) : ""}${nx ? btn("avancer", libStatutCmd(nx), { id: c.id, icone: "arrow", cls: "btn ghost sm", titre: `Passer à l'étape « ${libStatutCmd(nx)} »` }) : ""}`}
+              ${c.statut === "livre" && !facture ? btn("facturer", "Facturer", { id: c.id, icone: "receipt", cls: "btn sm" }) : ""}
               ${!c.trajetId ? iconBtn("trajet", "route", "Créer le trajet (coût gasoil et péages)", c.id) : ""}
               ${iconBtn("imprimer-ordre", "print", "Imprimer l'ordre de transport", c.id)}${boutonPhotos("commande:" + c.id, `Photos — ${c.ref} (CMR, livraison, dommages)`)}${iconBtn("suivi", "clock", "Suivi des étapes", c.id)}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}
             </div></td></tr>`;
@@ -101,6 +102,7 @@ VUES.commandes = {
       Object.assign(c, lireCommande(v)); sauver(); toast("Commande mise à jour"); rafraichir();
     }
     if (act === "avancer") {
+      const l = voyageDeCommande(c); if (l) return toast(`Cette commande suit les étapes du voyage ${l.v.ref} : marquez-les sur le voyage.`, "warn");
       const nx = suivant(c.statut);
       if (!nx) return;
       if (nx === "charge" && (!c.chauffeurId || !c.camionId)) {
@@ -132,7 +134,7 @@ VUES.commandes = {
       }).join("");
       await modale({ titre: `Suivi — ${c.ref}`, valider: "Fermer", annuler: "", corps: `<p class="hint" style="margin:0 0 12px">${esc(nomClient(c.clientId))} · ${esc(lieu(c.origine, c.paysOrigine))} → ${esc(lieu(c.destination, c.paysDest))}</p><ol class="timeline">${etapes}</ol>` });
     }
-    if (act === "facturer") facturerCommandes([c]);
+    if (act === "facturer") { const f = factureDeCommande(c); if (f) return toast(`Déjà facturée : ${f.numero}.`, "warn"); facturerCommandes([c]); }
     if (act === "imprimer-ordre") imprimerOrdre(c);
     if (act === "suppr" && (await confirmer(`Supprimer ${c.ref} ?`, c.factureId ? "La facture associée est conservée." : "Cette action est définitive."))) {
       supprimerPhotosDe(`commande:${id}`);

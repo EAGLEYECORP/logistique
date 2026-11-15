@@ -31,7 +31,7 @@ function pivotPnl(lignes, dims) {
 function pnlPeriode(debut = "", fin = "") {
   const dans = (d) => !!d && (!debut || d >= debut) && (!fin || d <= fin);
   const voyages = S.voyages.filter((v) => v.statut !== "annule" && dans(v.dateDepart));
-  const liees = new Set(S.voyages.map((v) => v.commandeId).filter(Boolean));
+  const liees = commandesLiees();
   const commandes = S.commandes.filter((c) => c.statut !== "devis" && !liees.has(c.id) && dans(c.dateChargement));
   const lignes = [], couts_directs_par_type = {};
   const type = (t, m) => { if (m) couts_directs_par_type[t] = (couts_directs_par_type[t] || 0) + m; };
@@ -39,7 +39,8 @@ function pnlPeriode(debut = "", fin = "") {
   for (const v of voyages) {
     const m = margeVoyage(v);
     for (const l of m.couts_directs) type(l.type, l.montant);
-    lignes.push({ id: v.id, genre: "voyage", ref: v.ref || "", date: v.dateDepart, mois: v.dateDepart.slice(0, 7), ...dims(v), revenue: m.revenu, direct: m.total_direct, structure: m.total_structure, km: m.km });
+    for (const p of partsVoyage(v)) { const r = p.sens === "retour" ? commandeRetour(v) : null; // le retour chargé : une ligne chez son propre client
+      lignes.push({ id: r ? `${v.id}:retour` : v.id, genre: "voyage", ref: (v.ref || "") + (r ? " (retour)" : ""), date: v.dateDepart, mois: v.dateDepart.slice(0, 7), ...dims(v), ...(r ? { client: r.clientId || "", clientNom: r.clientId ? nomClient(r.clientId) : "Sans client", corridor: corridorDe(r.origine, r.destination) } : {}), revenue: p.ca, direct: m.total_direct * p.part, structure: m.total_structure * p.part, km: m.km * p.part }); }
   }
   for (const c of commandes) {
     const m = margeCommande(c), t = c.trajetId && parId(S.trajets, c.trajetId);
@@ -90,7 +91,9 @@ function previsionsTresorerie(jours = 90, { depart = today(), solde } = {}) {
   for (const v of S.voyages) {
     if (!["prevu", "en_cours"].includes(v.statut)) continue;
     const finV = finVoyage(v) || depart, m = margeVoyage(v), cmd = v.commandeId && parId(S.commandes, v.commandeId);
-    if (m.revenu > 0 && !factureDuVoyage(v)) { const cl = parId(S.clients, v.clientId); mv(ajouterJours(finV, num(cl?.delai, S.params.delaiPaiement)), m.revenu, "recette_prevue", `Voyage ${v.ref || ""} à facturer${cl ? " — " + cl.nom : ""}`, v.id); }
+    const cv = coutVoyage(v), rt = commandeRetour(v);
+    if (cv.prixAller > 0 && !factureDuVoyage(v)) { const cl = parId(S.clients, v.clientId); mv(ajouterJours(finV, num(cl?.delai, S.params.delaiPaiement)), cv.prixAller, "recette_prevue", `Voyage ${v.ref || ""} à facturer${cl ? " — " + cl.nom : ""}`, v.id); }
+    if (rt && cv.prixRetour > 0 && !factureDeCommande(rt)) { const cl = parId(S.clients, rt.clientId); mv(ajouterJours(finV, num(cl?.delai, S.params.delaiPaiement)), cv.prixRetour, "recette_prevue", `Retour ${rt.ref || ""} (voyage ${v.ref || ""}) à facturer${cl ? " — " + cl.nom : ""}`, rt.id); }
     for (const l of m.couts_directs) {
       if (!l.projete) continue;
       const t = l.type === "traversee" ? (v.traversees || []).find((x) => x.sens === l.sens) : null;

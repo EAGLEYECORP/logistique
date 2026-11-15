@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2180,6 +2180,51 @@ test("ports : quatre passages (aller et retour), étapes détaillées, contrôle
   assert.strictEqual(new Set(Object.values(N.PORTS_PASSAGE).flatMap((p) => p.etapes.map((e) => e.id))).size, Object.values(N.PORTS_PASSAGE).reduce((n, p) => n + p.etapes.length, 0), "identifiants uniques");
   assert.ok(N.etapesApplicables(v, "alg_entree").some((e) => e.id === "alg_pcf"), "frais : contrôle sanitaire à Algeciras"); assert.ok(!N.etapesApplicables({ ...v, tempMin: undefined, tempMax: undefined }, "alg_entree").some((e) => e.id === "alg_pcf"), "sec : pas de contrôle sanitaire");
 });
+const etatAR = () => {
+  N.S.params = { ...N.S.params, tauxEUR: 11, tvaDefaut: 0, delaiPaiement: 30 }; N.S.factures = []; N.S.trajets = []; N.S.interventions = []; N.S.chargesGenerales = []; N.S.camions = [{ id: "c1", immat: "111-A-1" }]; N.S.chauffeurs = [{ id: "h1", nom: "Youssef", sejours: [] }];
+  N.S.clients = [{ id: "k1", nom: "Primeurs Souss", delai: 30 }, { id: "k2", nom: "Emballages Roussillon", delai: 45 }];
+  N.S.commandes = [
+    { id: "o1", ref: "CMD-1", clientId: "k1", marchandise: "Clémentines", origine: "Agadir", paysOrigine: "Maroc", destination: "Perpignan", paysDest: "France", dateChargement: "2026-11-16", dateLivraison: "2026-11-19", prix: 3000, devise: "EUR", chauffeurId: "h1", camionId: "c1", cmr: "MA-1", fraisChauffeur: 2500, statut: "confirme", jalons: [] },
+    { id: "o2", ref: "CMD-2", clientId: "k2", marchandise: "Emballages vides", origine: "Perpignan", paysOrigine: "France", destination: "Casablanca", paysDest: "Maroc", dateChargement: "2026-11-20", prix: 1400, devise: "EUR", statut: "devis", jalons: [] },
+  ];
+  N.S.voyages = [];
+};
+test("aller-retour : une commande devient un voyage pré-rempli ; le retour est une seconde commande sur le même voyage", () => {
+  etatAR(); const [o1, o2] = N.S.commandes;
+  const v = { id: "v1", ...N.voyageDepuisCommande(o1), jalons: [], traversees: [] }; N.S.voyages.push(v);
+  assert.strictEqual(v.commandeId, "o1"); assert.strictEqual(v.clientId, "k1"); assert.strictEqual(v.prix, 3000); assert.strictEqual(v.devise, "EUR"); assert.strictEqual(v.dateDepart, "2026-11-16"); assert.strictEqual(v.livraisonPrevue, "2026-11-19T12:00"); assert.strictEqual(v.cmr, "MA-1"); assert.strictEqual(v.fraisRouteMad, 2500); assert.strictEqual(v.chauffeurId, "h1"); assert.strictEqual(v.dateRetourPrevue, "2026-11-23", "retour estimé : livraison + 4 j");
+  assert.strictEqual(N.voyageDeCommande(o1).sens, "aller");
+  const base = N.commandeRetourDepuisVoyage(v); assert.strictEqual(base.origine, "Perpignan"); assert.strictEqual(base.destination, "Agadir"); assert.strictEqual(base.paysOrigine, "France"); assert.strictEqual(base.paysDest, "Maroc"); assert.strictEqual(base.chauffeurId, "h1");
+  N.lierRetour(v, o2); assert.strictEqual(v.commandeRetourId, "o2"); assert.strictEqual(o2.statut, "confirme", "devis confirmé en le chargeant"); assert.strictEqual(o2.camionId, "c1");
+  assert.deepStrictEqual([...N.commandesLiees()].sort(), ["o1", "o2"]);
+  assert.throws(() => N.lierRetour(v, o1), /déjà l'aller/); const o3 = { id: "o3", ref: "CMD-3", statut: "confirme", jalons: [] }; N.S.commandes.push(o3); assert.throws(() => N.lierRetour(v, o3), /déjà un retour/);
+  const v2 = { id: "v2", ref: "V-2", statut: "prevu", jalons: [] }; N.S.voyages.push(v2); assert.throws(() => N.lierRetour(v2, o2), /déjà portée par le voyage/);
+  assert.strictEqual(N.delierRetour(v).id, "o2"); assert.ok(!v.commandeRetourId);
+});
+test("aller-retour : recette = aller + retour, rentabilité et compte de résultat chez chaque client (au km chargé), trésorerie, pas de double compte", () => {
+  etatAR(); const [o1, o2] = N.S.commandes;
+  const v = { id: "v1", ...N.voyageDepuisCommande(o1), kmAller: 2400, kmRetourCharge: 1600, jalons: [], traversees: [] }; delete v.fraisRouteMad; N.S.voyages.push(v); N.lierRetour(v, o2);
+  const c = N.coutVoyage(v); assert.strictEqual(c.prixAller, 33000); assert.strictEqual(c.prixRetour, 15400); assert.strictEqual(c.prix, 48400);
+  const p = N.partsVoyage(v); assert.strictEqual(p.length, 2); proche(p[1].part, 0.4); assert.strictEqual(p[1].clientId, "k2"); assert.strictEqual(p[1].ca, 15400);
+  const r = N.rentabilite({}); const k2 = [...r.clients].find((x) => x.id === "k2"), k1 = [...r.clients].find((x) => x.id === "k1");
+  assert.strictEqual(k2.ca, 15400); assert.strictEqual(k1.ca, 33000); assert.strictEqual(r.totaux.ca, 48400, "la commande de retour n'est pas comptée une seconde fois");
+  assert.strictEqual([...r.camions].find((x) => x.id === "c1").nb, 1, "un seul voyage pour le camion"); proche(k2.km, 1600, "km du retour chez son client");
+  const pnl = N.pnlPeriode(); assert.strictEqual(pnl.lignes.length, 2); assert.ok(pnl.lignes.some((l) => l.client === "k2" && l.revenue === 15400 && /\(retour\)/.test(l.ref)));
+  assert.ok(/et retour/.test(N.designationVoyage({ ...v, commandeRetourId: undefined })) && !/et retour/.test(N.designationVoyage(v)), "la facture de l'aller ne facture pas le retour");
+});
+test("aller-retour : un seul suivi — les étapes du voyage font avancer ses deux commandes ; une commande facturée par son voyage ne l'est pas deux fois", () => {
+  etatAR(); const [o1, o2] = N.S.commandes;
+  const v = { id: "v1", ...N.voyageDepuisCommande(o1), jalons: [], traversees: [] }; N.S.voyages.push(v); N.lierRetour(v, o2);
+  v.jalons.push({ type: "douane_export", date: "2026-11-16T15:00:00.000Z" }, { type: "embarque_aller", date: "2026-11-17T10:00:00.000Z" });
+  N.synchroCommandesVoyage(v); assert.strictEqual(o1.statut, "transit"); assert.strictEqual(o1.jalons.find((j) => j.statut === "charge").date, "2026-11-16T15:00:00.000Z", "étape datée comme le voyage"); assert.strictEqual(o2.statut, "confirme");
+  v.jalons.push({ type: "livre", date: "2026-11-19T09:00:00.000Z" }, { type: "charge_retour", date: "2026-11-20T08:00:00.000Z" });
+  v.chauffeurId = "h2"; N.synchroCommandesVoyage(v); assert.strictEqual(o1.statut, "livre"); assert.strictEqual(o2.statut, "charge"); assert.strictEqual(o2.chauffeurId, "h2", "l'équipe suit le voyage");
+  assert.strictEqual(N.synchroCommandesVoyage(v), 0, "rien ne change deux fois"); o1.statut = "livre"; v.jalons.push({ type: "douane_export", date: "2026-11-21T00:00:00.000Z" }); N.synchroCommandesVoyage(v); assert.strictEqual(o1.statut, "livre", "jamais en arrière");
+  const f = N.creerFactureVoyages([v]); assert.strictEqual(N.factureDeCommande(o1).id, f.id, "l'aller est facturé par le voyage"); assert.strictEqual(N.factureDeCommande(o2), null, "le retour se facture à son client");
+  assert.strictEqual(f.lignes[0].montant, 3000, "facture de l'aller : prix de l'aller seulement");
+  N.S.commandes = N.S.commandes.filter((c) => c.id !== "o2"); N.synchroToutesCommandes(); assert.ok(!v.commandeRetourId, "commande supprimée : lien retiré");
+});
+
 test("passages : chaque étape a sa signification, ce qui suit (étape suivante, documents, qui agit), d'un port à l'autre", () => {
   etatPorts(); const v = N.S.voyages[0];
   for (const p of Object.values(N.PORTS_PASSAGE)) for (const e of p.etapes) assert.ok(N.SUITES_PASSAGE[e.id]?.apres, `signification de ${e.id}`);

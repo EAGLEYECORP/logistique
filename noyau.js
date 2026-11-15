@@ -308,7 +308,7 @@ function alertes() {
   }
   for (const { voyage: v, depuis } of voyagesAFacturer()) if (depuis >= 1) ajouter(depuis > 7 ? "danger" : "warn", "voyages", `Voyage ${v.ref || ""}${v.clientId ? " (" + nomClient(v.clientId) + ")" : ""} fait depuis ${depuis} j : pas encore facturé`, "factures", `voy:${v.id}:facturer`);
   for (const c of S.commandes) {
-    if (c.statut === "livre" && !c.factureId) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`, "commandes", `cmd:${c.id}:facturer`);
+    if (c.statut === "livre" && !(typeof factureDeCommande === "function" ? factureDeCommande(c) : c.factureId)) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`, "commandes", `cmd:${c.id}:facturer`);
     const jc = joursAvant(c.dateChargement);
     if (["devis", "confirme"].includes(c.statut) && jc !== null && jc <= 1 && (!c.chauffeurId || !c.camionId)) {
       ajouter(jc < 0 ? "danger" : "warn", "commandes", `Commande ${c.ref} — chargement ${jc < 0 ? "en retard" : jc === 0 ? "aujourd'hui" : "demain"}, chauffeur ou camion non affecté`, "commandes", `cmd:${c.id}:equipe`);
@@ -519,9 +519,9 @@ function coutVoyage(v) {
   const parts = { peagesMaroc: 0, peagesFrance: 0, peagesEurope: 0, traversees: 0, carburant: 0, fraisRoute: 0, douane: 0, autres: 0, froid: 0, amendes: 0, maintien: 0 };
   for (const l of lignesVoyage(v)) parts[typeCout(l.type)[2]] += l.mad;
   const total = Object.values(parts).reduce((a, b) => a + b, 0);
-  const prix = v.devise === "EUR" ? num(v.prix) * taux : num(v.prix);
+  const prixAller = v.devise === "EUR" ? num(v.prix) * taux : num(v.prix), prixRetour = typeof prixRetourMad === "function" ? prixRetourMad(v, taux) : 0, prix = prixAller + prixRetour; // le retour chargé a sa propre commande (aller_retour.js)
   const km = num(v.kmAller) + num(v.kmRetourCharge) + num(v.kmRetourVide);
-  return { parts, total, prix, marge: prix - total, taux: prix ? ((prix - total) / prix) * 100 : 0, km, coutKm: km ? total / km : 0 };
+  return { parts, total, prix, prixAller, prixRetour, marge: prix - total, taux: prix ? ((prix - total) / prix) * 100 : 0, km, coutKm: km ? total / km : 0 };
 }
 /** Part des kilomètres roulés à vide et coût estimé (au coût moyen du kilomètre). */
 function retourVide(voyages) {
@@ -706,7 +706,7 @@ function voyagesAFacturer(auj = today()) {
 }
 /** Libellé de la ligne de facture d'un voyage : trajet, aller-retour, marchandise, référence, CMR, références du client. */
 function designationVoyage(v) {
-  const ar = num(v.kmRetourCharge) > 0 ? " et retour" : "";
+  const ar = num(v.kmRetourCharge) > 0 && !v.commandeRetourId ? " et retour" : ""; // un retour porté par une autre commande se facture à son propre client
   return `Transport international ${v.origine || "?"} → ${v.destination || "?"}${ar}${v.marchandise ? " — " + v.marchandise : ""} · voyage ${v.ref || ""}${v.cmr ? " · CMR " + v.cmr : ""}${v.refClient ? " · réf. " + v.refClient : ""}`;
 }
 /**

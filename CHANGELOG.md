@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.8.0 — Documents attendus du client
+
+- **Pastille « Docs 4/7 »** sur chaque commande (verte : tout est là ; orange : il en manque ; rouge : un document bloquant manque à 3 jours du chargement). Elle ouvre la liste.
+- **La liste dépend du sens et de la marchandise** : facture commerciale et liste de colisage pour tout transport international ; EUR.1 (n'empêche pas le départ) ; à l'export du Maroc d'une marchandise fraîche : certificat EACCE, certificat phytosanitaire, CHED partie I dans TRACES (par l'importateur) ; au retour depuis l'Union : déclaration d'export (MRN) ; adresse et créneau de livraison. Chaque document : reçu (avec sa référence), ou « non requis » pour cette commande. Liste de départ à confirmer avec votre transitaire.
+- **Demander les manquants** en un geste : message prêt, dans la langue du client (français, anglais, espagnol), à envoyer par WhatsApp ou e-mail ; la demande est notée sur la commande.
+- **Alerte** dès J-3 du chargement s'il manque un document bloquant (urgente la veille) ; **point « à régler »** sur le voyage tant que la commande n'est pas chargée ; ligne « Documents du client » (aller et retour) sur la fiche du voyage.
+- Sur téléphone, la case de référence n'apparaît qu'une fois le document reçu : la liste tient sur un écran.
+
 ## 4.7.0 — Coller un message : la demande du client devient une commande
 
 - **« Coller un message »** sur la page Commandes : collez l'e-mail, le WhatsApp ou le SMS du client tel quel. L'application lit, sur l'appareil, sans réseau ni coût :

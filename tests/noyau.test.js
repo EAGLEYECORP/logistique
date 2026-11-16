@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2180,6 +2180,37 @@ test("ports : quatre passages (aller et retour), étapes détaillées, contrôle
   assert.strictEqual(new Set(Object.values(N.PORTS_PASSAGE).flatMap((p) => p.etapes.map((e) => e.id))).size, Object.values(N.PORTS_PASSAGE).reduce((n, p) => n + p.etapes.length, 0), "identifiants uniques");
   assert.ok(N.etapesApplicables(v, "alg_entree").some((e) => e.id === "alg_pcf"), "frais : contrôle sanitaire à Algeciras"); assert.ok(!N.etapesApplicables({ ...v, tempMin: undefined, tempMax: undefined }, "alg_entree").some((e) => e.id === "alg_pcf"), "sec : pas de contrôle sanitaire");
 });
+const etatDocs = () => { N.S.clients = [{ id: "k1", nom: "Souss Agrumes", contact: "M. Bennani", tel: "+212 661 22 33 44", email: "achats@souss.ma", langueNotif: "es" }]; N.S.entreprise = { nom: "Atlas Fret" };
+  N.S.commandes = [{ id: "o1", ref: "CMD-1", clientId: "k1", marchandise: "Clémentines, 26 palettes", origine: "Agadir", paysOrigine: "Maroc", destination: "Perpignan", paysDest: "France", dateChargement: "2026-11-18", statut: "confirme", refClient: "PO-88412" },
+    { id: "o2", ref: "CMD-2", clientId: "k1", marchandise: "Emballages vides", origine: "Perpignan", paysOrigine: "France", destination: "Agadir", paysDest: "Maroc", dateChargement: "2026-11-25", statut: "confirme" },
+    { id: "o3", ref: "CMD-3", clientId: "k1", marchandise: "Textile", origine: "Tanger", paysOrigine: "Maroc", destination: "Casablanca", paysDest: "Maroc", dateChargement: "2026-11-17", statut: "confirme" }];
+  N.S.voyages = []; };
+test("documents du client : liste selon le sens et la marchandise (frais à l'export : EACCE, phyto, CHED ; import : export UE), reçus, non requis", () => {
+  etatDocs(); const [o1, o2, o3] = N.S.commandes;
+  let e = N.etatDocuments(o1); assert.strictEqual(e.sens, "export"); assert.ok(e.frais);
+  assert.deepStrictEqual([...e.attendus.map((x) => x.id)], ["facture", "colisage", "eur1", "eacce", "phyto", "ched", "livraison"]);
+  assert.deepStrictEqual([...e.bloquantsManquants.map((x) => x.id)], ["facture", "colisage", "eacce", "phyto", "ched"], "EUR.1 et l'adresse ne bloquent pas");
+  assert.deepStrictEqual([...N.etatDocuments(o2).attendus.map((x) => x.id)], ["facture", "colisage", "eur1", "export_ue", "livraison"], "retour : déclaration d'export UE");
+  assert.deepStrictEqual([...N.etatDocuments(o3).attendus.map((x) => x.id)], ["livraison"], "national : seulement l'adresse");
+  assert.ok(N.etatDocuments({ ...o2, marchandise: "", tempMin: 2 }).frais, "une consigne de température suffit à dire « frais »");
+  N.noterDocument(o1, "facture", { recu: true, ref: "FA-2026-118" }); N.noterDocument(o1, "ched", { nonRequis: true });
+  e = N.etatDocuments(o1); assert.strictEqual(e.total, 6, "non requis : retiré du compte"); assert.strictEqual(e.recus, 1); assert.strictEqual(e.attendus.find((x) => x.id === "facture").ref, "FA-2026-118");
+  N.noterDocument(o1, "facture", { recu: false, ref: "" }); assert.ok(!o1.documents.facture, "rien à garder : effacé");
+});
+test("documents du client : alerte à J-3 (urgente la veille), point à régler sur le voyage tant que la commande n'est pas chargée, message dans la langue du client", () => {
+  etatDocs(); const [o1, o2] = N.S.commandes;
+  let a = N.alertesDocuments("2026-11-14"); assert.strictEqual(a.length, 0, "J-4 : pas encore");
+  a = N.alertesDocuments("2026-11-15"); assert.strictEqual(a.length, 1); assert.strictEqual(a[0].niveau, "warn"); assert.ok(/dans 3 j/.test(a[0].texte));
+  assert.strictEqual(N.alertesDocuments("2026-11-17")[0].niveau, "danger");
+  for (const id of ["facture", "colisage", "eacce", "phyto", "ched"]) N.noterDocument(o1, id, { recu: true });
+  assert.strictEqual(N.alertesDocuments("2026-11-17").length, 0, "bloquants reçus : plus d'alerte");
+  delete o1.documents; const v = { id: "v1", ref: "V-1", commandeId: "o1", commandeRetourId: "o2", jalons: [] }; N.S.voyages.push(v);
+  let k = N.controlesDocumentsVoyage(v); assert.deepStrictEqual([...k.map((x) => x.niveau)], ["danger", "warn"]); assert.ok(/aller manquants \(CMD-1\)/.test(k[0].texte));
+  o1.statut = "charge"; assert.strictEqual(N.controlesDocumentsVoyage(v).length, 1, "chargée : la question est réglée");
+  const d = N.demandeDocuments(o2); assert.strictEqual(d.langue, "es"); assert.ok(/^Buenos días M\. Bennani/.test(d.texte)); assert.ok(/- Declaración de exportación UE \(MRN\)/.test(d.texte)); assert.ok(/Atlas Fret$/.test(d.texte));
+  N.S.clients[0].langueNotif = "ar"; assert.strictEqual(N.demandeDocuments(o2).langue, "fr", "langue sans modèle : français");
+});
+
 const etatLecture = () => { N.S.clients = [{ id: "k1", nom: "Primeurs du Souss", email: "achats@primeurs-souss.ma", tel: "+212 661 22 33 44" }, { id: "k2", nom: "Roussillon Emballages", email: "logistique@roussillon-emb.fr" }]; N.S.commandes = []; N.S.entreprise = { email: "contact@atlas-fret.ma" }; };
 const lire = (m) => N.lireDemande(m, { aujourdhui: "2026-11-16" }); // lundi 16/11/2026
 test("lecture d'un message : e-mail en français — villes, jours de la semaine, palettes, tonnes, température, référence, client par son e-mail, demande de prix", () => {

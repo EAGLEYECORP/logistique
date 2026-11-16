@@ -836,3 +836,18 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 .lecture-manque { color: var(--warn); } .lecture-info { color: var(--info); }
 .lecture-manque svg.i, .lecture-info svg.i { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 3px; }
 #message-colle { min-height: 180px; font: inherit; }
+
+/* documents attendus du client */
+.puce-docs { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font: 600 .76rem/1 inherit; font-family: inherit; padding: 4px 9px; border-radius: 99px; border: 0; cursor: pointer; }
+.puce-docs svg.i { width: 13px; height: 13px; }
+.puce-docs.ok { background: var(--ok-soft); color: var(--ok); } .puce-docs.warn { background: var(--warn-soft); color: var(--warn); } .puce-docs.danger { background: var(--danger-soft); color: var(--danger); }
+.doc-tete { margin: 0 0 10px; color: var(--muted); font-size: .9rem; }
+.doc-liste { display: flex; flex-direction: column; gap: 2px; }
+.doc-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 8px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.doc-ligne:last-child { border-bottom: 0; }
+.doc-ligne input[type=text] { min-width: 0; }
+.doc-ligne.bloquant strong { color: var(--danger); } .doc-ligne.recu strong { color: var(--ok); } .doc-ligne.non-requis { opacity: .55; }
+.check.petit { font-size: .82rem; white-space: nowrap; }
+@media (max-width: 560px) { .doc-ligne { grid-template-columns: minmax(0, 1fr) auto; } .doc-ligne input[type=text] { grid-column: 1 / -1; grid-row: 2; } }
+.docs-voyage.danger strong { color: var(--danger); }
+.doc-ligne:not(:has(input[name^="recu__"]:checked)) input[type=text] { display: none; } /* la référence n'apparaît qu'une fois le document reçu */

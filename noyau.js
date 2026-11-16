@@ -307,6 +307,7 @@ function alertes() {
     if (e.code === "retard") ajouter("danger", "factures", `Facture ${f.numero} (${nomClient(f.clientId)}) — ${e.texte}, ${fmtDevise(totauxFacture(f).ttc, f.devise)}`, "factures", `fac:${f.id}`);
   }
   for (const { voyage: v, depuis } of voyagesAFacturer()) if (depuis >= 1) ajouter(depuis > 7 ? "danger" : "warn", "voyages", `Voyage ${v.ref || ""}${v.clientId ? " (" + nomClient(v.clientId) + ")" : ""} fait depuis ${depuis} j : pas encore facturé`, "factures", `voy:${v.id}:facturer`);
+  if (typeof alertesDocuments === "function") for (const a of alertesDocuments()) ajouter(a.niveau, "commandes", a.texte, "commandes", a.cle); // documents_commande.js
   for (const c of S.commandes) {
     if (c.statut === "livre" && !(typeof factureDeCommande === "function" ? factureDeCommande(c) : c.factureId)) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`, "commandes", `cmd:${c.id}:facturer`);
     const jc = joursAvant(c.dateChargement);
@@ -570,6 +571,7 @@ function controlesVoyage(v) {
     else if (t.statut === "a_reserver") ajouter("warn", `Traversée ${sens} (${LIGNES_TRAVERSEE[t.ligne]?.lib || "?"}) à réserver`);
   }
   if (typeof conflitsAffectation === "function") for (const c of conflitsAffectation(v)) ajouter("danger", c.texte); // planning.js
+  if (typeof controlesDocumentsVoyage === "function") for (const c of controlesDocumentsVoyage(v)) ajouter(c.niveau, c.texte); // documents_commande.js
   return r;
 }
 

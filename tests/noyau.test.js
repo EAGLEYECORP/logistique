@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }

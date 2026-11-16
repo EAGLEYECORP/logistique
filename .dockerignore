@@ -1,0 +1,9 @@
+# Contexte de construction de l'image du relais : l'application entière (servie en mode multi-utilisateur) et le serveur, sans le reste.
+.git
+.github
+node_modules
+tests
+docs
+serveur/donnees
+*.md
+!serveur/README.md

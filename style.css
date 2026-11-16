@@ -887,3 +887,10 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 
 /* envoi des factures */
 .pieces-liste { display: flex; flex-direction: column; gap: 6px; }
+
+/* relais */
+.relais-etat { list-style: none; margin: 12px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.relais-etat li { display: flex; gap: 8px; align-items: flex-start; }
+.relais-etat li svg.i { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 3px; }
+.relais-etat li.ok svg.i { color: var(--ok); } .relais-etat li.ko { color: var(--warn); }
+#relais-linux, #relais-env { width: 100%; box-sizing: border-box; font: .82rem ui-monospace, Menlo, monospace; }

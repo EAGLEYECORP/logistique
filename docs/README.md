@@ -15,6 +15,7 @@
 | [09 — Arrivée estimée](09-prevision-arrivee.md) | Attentes aux ports mesurées, repli, contrôle sanitaire, fourchette qui se resserre, exemple. |
 | [10 — Multi-utilisateur](10-multi-utilisateur.md) | Comptes et rôles, matrice des droits appliqués par le serveur, connexion et double authentification, versions et conflits, temps réel, journal, API, sécurité. |
 | [11 — Décisions pour la version 4](11-decisions-v4.md) | Arbitrages (dépendances, chiffrement et comptes, coût zéro) et ordre de construction, d'après l'audit de valeur. |
+| [12 — Héberger le relais gratuitement](12-heberger-le-relais.md) | Choisir (PC du bureau, sans IP publique, machine virtuelle), installation en une commande (Linux) ou par un script (Windows), https gratuit, e-mail, sauvegarde, mise à jour, dépannage. |
 | [data/adm-grille-2026-11.csv](data/adm-grille-2026-11.csv) | Grille tarifaire officielle d'ADM (584 sections, 3 classes), relevée le 10/11/2026. |
 
 **Légende** : ✅ confirmé (source citée) · 🔶 à vérifier · ❓ inconnu. Les tarifs et règles changent : vérifiez-les avant tout usage commercial.

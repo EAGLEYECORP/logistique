@@ -163,6 +163,7 @@ Automatique et sans action de votre part.
 | `devis.js`, `devis_ui.js` | Prix conseillé (coût de l'aller-retour d'après vos voyages passés ou estimé, chance de retour, marge visée), historique des prix, devis imprimable et envoyé, accepté ou perdu, taux de devis gagnés (testé) |
 | `plein.js`, `plein_ui.js` | Consigne de plein par pays : trajet découpé (Maroc, Espagne, France), arrêts au prix du jour, économie, écart d'après la carte carburant (testé) |
 | `relances.js`, `envoi_facture_ui.js` | Facture envoyée avec CMR signé et preuve de livraison (relais, partage du téléphone ou messagerie), relances programmées dans la langue du client (testé) |
+| `relais_ui.js`, `serveur/installer.sh`, `serveur/demarrer-windows.cmd`, `serveur/Dockerfile` | Brancher et tester le relais depuis les Réglages, préparer une installation ; installation Linux en une commande, lancement Windows, image Docker complète ; guide `docs/12-heberger-le-relais.md` |
 | `jalons_notifications.js`, `comptes.js` | Routage et rédaction des notifications par étape ; rôles et droits partagés avec le relais (testés) |
 | `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Accès par service, Journal) |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |

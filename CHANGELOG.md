@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.14.0 — Héberger le relais gratuitement
+
+- **Guide pas à pas** (`docs/12-heberger-le-relais.md`) : pourquoi un relais, choisir entre le PC du bureau avec la box (0 MAD, recommandé), un nom de domaine + Cloudflare Tunnel quand la box n'a pas d'IP publique (≈ 100 à 150 MAD par an), ou une machine virtuelle gratuite (conditions à vérifier) ; https gratuit (Caddy, Let's Encrypt), e-mail (boîte de l'entreprise ou Gmail avec mot de passe d'application), sauvegarde, mise à jour, sécurité, dépannage. Déconseillé, avec la raison : l'offre gratuite de Tailscale (non commerciale), les hébergeurs qui mettent en veille, les tunnels dont l'adresse change.
+- **Linux en une commande** : `sudo DOMAINE=… bash serveur/installer.sh` installe Node.js si besoin, le code, une configuration secrète (jetons et clé de chiffrement tirés au hasard), un service qui démarre avec la machine et redémarre seul, et Caddy pour le https. Relancé, il met à jour sans toucher à la configuration ni aux données.
+- **Windows** : `serveur/demarrer-windows.cmd` (redémarrage automatique) et `serveur/relais.env.exemple`.
+- **Image Docker corrigée** : elle ne contenait que quatre fichiers et ne démarrait plus depuis l'ajout de l'e-mail, du chiffrement, des comptes et des prix du jour ; elle contient maintenant l'application entière, avec un contrôle de santé.
+- **Réglages → Général → Relais** : adresse et jeton, « Enregistrer et tester » (joignable en https, jeton accepté, e-mail prêt pour les factures et relances, canaux de notification, prix du jour), « Préparer l'installation » (configuration et commandes, jetons tirés sur l'appareil).
+
 ## 4.13.0 — Factures envoyées avec leurs justificatifs, relances programmées
 
 - **« Envoyer »** sur chaque facture (et proposé dès qu'une facture est créée) : e-mail au client, dans sa langue, avec **la facture, la preuve de livraison (signature, réserves) et les photos du voyage** (CMR signé, livraison), le RIB dans le message. Trois chemins, sans coût :

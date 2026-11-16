@@ -15,7 +15,7 @@ Rien dans ce projet n'exige de payer. Voici ce qui est gratuit, et ce qu'il faut
 | Application | GitHub Pages (déjà en place) | dépôt public |
 | Carte | **Leaflet** (embarqué) + **OpenStreetMap** | Aucune clé. Le serveur public d'OpenStreetMap est réservé à un **usage léger** (quelques personnes qui regardent la carte, pas de téléchargement en masse) ; l'application garde les tuiles vues 7 jours sur l'appareil. Si l'usage grossit : un fournisseur à offre gratuite avec clé (son modèle d'adresse se colle dans les réglages) ou votre propre serveur de tuiles. |
 | Relais (suivi, lien client, alertes, synchronisation) | Un **PC du bureau**, un mini-PC ou un **vieux téléphone Android** (Termux) allumé en permanence | Node 18+, aucune dépendance. |
-| https devant le relais | Un **tunnel gratuit** (par exemple Cloudflare Tunnel ou Tailscale Funnel) | Vérifiez vous-même les conditions de l'offre gratuite ; certains tunnels « rapides » changent d'adresse à chaque redémarrage. |
+| https devant le relais | **Caddy** (certificat gratuit) avec la box du bureau, ou **Cloudflare Tunnel** (nom de domaine à acheter) ; l'offre gratuite de Tailscale est réservée à un usage non commercial | Vérifiez vous-même les conditions de l'offre gratuite ; certains tunnels « rapides » changent d'adresse à chaque redémarrage. |
 | Balises GPS | **Traccar** (open source) pour décoder les protocoles, renvoi vers le relais | sur la même machine que le relais |
 | Alertes | **Telegram** ou **ntfy** | WhatsApp passe par l'API de Meta, payante selon l'usage : à éviter pour rester à zéro. |
 | Géorepérage, états, ETA, péages | Calculés par l'application et le relais | aucune API de cartographie payante |
@@ -177,9 +177,11 @@ Le jeton d'**écriture** (balises, Traccar) ne peut pas créer de lien. Un lien 
 
 ## Mise en ligne (https)
 
-- **PC, Raspberry Pi ou serveur** : placez un proxy https devant le relais, par exemple [Caddy](https://caddyserver.com) : `suivi.mon-entreprise.ma { reverse_proxy localhost:8787 }` (certificat automatique).
-- **Sans ouvrir de port** : un tunnel (par exemple Cloudflare Tunnel) expose le relais en https depuis une machine du bureau.
-- **Conteneur** (à construire depuis la racine du dépôt) : `docker build -f serveur/Dockerfile -t relais . && docker run -d -p 8787:8787 -v relais-donnees:/donnees relais`.
+**Guide pas à pas : [`docs/12-heberger-le-relais.md`](../docs/12-heberger-le-relais.md)** — PC du bureau, Windows, sans IP publique, machine virtuelle ; sauvegarde, mise à jour, dépannage.
+
+- **Linux en une commande** : `sudo DOMAINE=fret.exemple.ma bash serveur/installer.sh` (Node.js, service qui démarre avec la machine, configuration avec jetons et clé de chiffrement tirés au hasard, https par Caddy). Relancer le script met à jour sans toucher à la configuration.
+- **Windows** : `serveur/demarrer-windows.cmd` avec `serveur/relais.env` (copie de `relais.env.exemple`).
+- **Conteneur** : `docker build -f serveur/Dockerfile -t logistique-relais .` puis `docker run -d --restart unless-stopped -p 127.0.0.1:8787:8787 -v relais-donnees:/donnees --env-file relais.env logistique-relais`. L'image contient l'application entière (servie en mode multi-utilisateur).
 - **Téléphone Android (Termux)** : `pkg install nodejs`, puis `node serveur/relais.js` ; adresse `http://localhost:8787` depuis le même téléphone.
 
 Choisissez et vérifiez vous-même l'hébergement, ses conditions et son coût : aucun n'est imposé.

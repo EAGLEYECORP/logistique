@@ -57,7 +57,7 @@ function voyageDepuisCommande(c, { ref = "" } = {}) {
     clientId: c.clientId || "", commandeId: c.id, marchandise: c.marchandise || "", origine: c.origine || "", destination: c.destination || "",
     dateDepart: c.dateChargement || today(), dateRetourPrevue: dateISO(Date.parse((c.dateLivraison || c.dateChargement || today()) + "T00:00:00Z") + (c.dateLivraison ? 4 : 8) * 86400000), livraisonPrevue: c.dateLivraison ? `${c.dateLivraison}T12:00` : "",
     chauffeurId: c.chauffeurId || "", camionId: c.camionId || "", prix: num(c.prix), devise: c.devise || "EUR",
-    ...(c.cmr ? { cmr: c.cmr } : {}), ...(c.refClient ? { refClient: c.refClient } : {}),
+    ...(Number.isFinite(c.tempMin) ? { tempMin: c.tempMin } : {}), ...(Number.isFinite(c.tempMax) ? { tempMax: c.tempMax } : {}), ...(c.cmr ? { cmr: c.cmr } : {}), ...(c.refClient ? { refClient: c.refClient } : {}),
     ...(num(c.fraisChauffeur) ? { fraisRouteMad: num(c.fraisChauffeur) } : {}), ...(num(c.autres) ? { autresMad: num(c.autres) } : {}),
   };
 }

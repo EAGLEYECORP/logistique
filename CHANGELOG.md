@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.7.0 — Coller un message : la demande du client devient une commande
+
+- **« Coller un message »** sur la page Commandes : collez l'e-mail, le WhatsApp ou le SMS du client tel quel. L'application lit, sur l'appareil, sans réseau ni coût :
+  - villes de chargement et de livraison (corridor Maroc ⇄ Europe, noms français, espagnols, anglais et arabes ; villes de vos commandes passées) ;
+  - dates : « jeudi », « demain », « 20/11 », « 20 novembre », « Nov 20 », « el 19/11 », « le 21 » — rangées en chargement ou livraison selon les mots autour ;
+  - palettes, poids (kg ou tonnes, « 18.500 kg »), température (« 2 à 6 °C », « -1/+2 ºC », « +4°C »), prix et devise (€, EUR, MAD, dh), référence du client (PO, réf., order no), marchandise ;
+  - le client, par son e-mail, son domaine (pas les messageries publiques), son numéro ou son nom ; client inconnu : création proposée avec ses coordonnées.
+- Chaque champ lu est montré **avec l'extrait du message** d'où il vient, en tête du formulaire ; ce qui manque est listé ; **doublon possible** signalé ; plusieurs montants : à choisir.
+- **Demande de prix** (« votre meilleur prix ? », « quote », « ¿precio? ») : la commande est créée **« à chiffrer »** ; nouveau filtre « À chiffrer » sur la page Commandes. Le message d'origine est gardé dans les notes.
+- La commande a maintenant sa **consigne de température**, reprise par « Planifier » dans le voyage.
+
 ## 4.6.0 — Un seul dossier par voyage, avec un aller et un retour
 
 - **« Planifier » sur une commande** crée son voyage pré-rempli : client, villes, dates, prix, équipe, CMR, référence client, frais de route ; retour au dépôt estimé (livraison + 4 jours) ; traversées créées. Fini la double saisie.

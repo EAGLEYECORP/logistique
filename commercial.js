@@ -25,6 +25,8 @@ const champsCommande = (c = {}) => [
   { name: "dateLivraison", label: "Livraison prévue", type: "date", value: c.dateLivraison },
   { name: "poids", label: "Poids (kg)", type: "number", value: c.poids, min: 0 },
   { name: "palettes", label: "Palettes", type: "number", value: c.palettes, min: 0, step: 1 },
+  { name: "tempMin", label: "Température mini (°C, froid)", type: "number", step: "0.5", value: c.tempMin },
+  { name: "tempMax", label: "Température maxi (°C, froid)", type: "number", step: "0.5", value: c.tempMax },
   { name: "prix", label: "Prix de vente", type: "number", value: c.prix, min: 0, required: true },
   { name: "devise", label: "Devise", type: "select", options: optsDevise, value: c.devise || "EUR" },
   { name: "chauffeurId", label: "Chauffeur", type: "select", options: [["", "— À affecter —"], ...S.chauffeurs.map((h) => [h.id, h.nom])], value: c.chauffeurId },
@@ -39,6 +41,7 @@ const champsCommande = (c = {}) => [
 const lireCommande = (v) => ({
   clientId: v.clientId, marchandise: v.marchandise, origine: v.origine, paysOrigine: v.paysOrigine, destination: v.destination, paysDest: v.paysDest,
   dateChargement: v.dateChargement, dateLivraison: v.dateLivraison, poids: num(v.poids), palettes: num(v.palettes), prix: num(v.prix), devise: v.devise,
+  tempMin: v.tempMin === "" || v.tempMin === undefined ? undefined : num(v.tempMin), tempMax: v.tempMax === "" || v.tempMax === undefined ? undefined : num(v.tempMax),
   chauffeurId: v.chauffeurId, camionId: v.camionId, cmr: v.cmr, refClient: v.refClient, ferry: num(v.ferry), fraisChauffeur: num(v.fraisChauffeur), autres: num(v.autres), notes: v.notes,
 });
 
@@ -52,6 +55,7 @@ VUES.commandes = {
         S.clients.length ? btn("ajouter", "Nouvelle commande", { icone: "plus" }) : btn("aller", "Ajouter un client", { id: "clients", icone: "plus" }))}</div>`;
     }
     const filtres = {
+      chiffrer: ["À chiffrer", (c) => c.statut === "devis"],
       actives: ["En cours", (c) => c.statut !== "livre"],
       facturer: ["À facturer", (c) => c.statut === "livre" && !factureDeCommande(c)],
       toutes: ["Toutes", () => true],

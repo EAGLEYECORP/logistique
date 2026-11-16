@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2180,6 +2180,41 @@ test("ports : quatre passages (aller et retour), étapes détaillées, contrôle
   assert.strictEqual(new Set(Object.values(N.PORTS_PASSAGE).flatMap((p) => p.etapes.map((e) => e.id))).size, Object.values(N.PORTS_PASSAGE).reduce((n, p) => n + p.etapes.length, 0), "identifiants uniques");
   assert.ok(N.etapesApplicables(v, "alg_entree").some((e) => e.id === "alg_pcf"), "frais : contrôle sanitaire à Algeciras"); assert.ok(!N.etapesApplicables({ ...v, tempMin: undefined, tempMax: undefined }, "alg_entree").some((e) => e.id === "alg_pcf"), "sec : pas de contrôle sanitaire");
 });
+const etatLecture = () => { N.S.clients = [{ id: "k1", nom: "Primeurs du Souss", email: "achats@primeurs-souss.ma", tel: "+212 661 22 33 44" }, { id: "k2", nom: "Roussillon Emballages", email: "logistique@roussillon-emb.fr" }]; N.S.commandes = []; N.S.entreprise = { email: "contact@atlas-fret.ma" }; };
+const lire = (m) => N.lireDemande(m, { aujourdhui: "2026-11-16" }); // lundi 16/11/2026
+test("lecture d'un message : e-mail en français — villes, jours de la semaine, palettes, tonnes, température, référence, client par son e-mail, demande de prix", () => {
+  etatLecture();
+  const r = lire("De : Karim <achats@primeurs-souss.ma>\nBonjour, 26 palettes de clémentines, chargement jeudi à Agadir, livraison lundi à Perpignan Saint-Charles. Température 2 à 6 °C, 22 tonnes. Réf. PO-88412. Votre meilleur prix ?");
+  const c = r.champs;
+  assert.deepStrictEqual([c.origine, c.paysOrigine, c.destination, c.paysDest], ["Agadir", "Maroc", "Perpignan", "France"]);
+  assert.strictEqual(c.dateChargement, "2026-11-19", "jeudi suivant"); assert.strictEqual(c.dateLivraison, "2026-11-23", "lundi suivant");
+  assert.strictEqual(c.palettes, 26); assert.strictEqual(c.poids, 22000); assert.strictEqual(c.tempMin, 2); assert.strictEqual(c.tempMax, 6); assert.strictEqual(c.refClient, "PO-88412");
+  assert.strictEqual(c.marchandise, "Clémentines, 26 palettes"); assert.strictEqual(c.clientId, "k1"); assert.strictEqual(r.client.nom, "Karim");
+  assert.strictEqual(r.demandePrix, true); assert.deepStrictEqual([...r.manquants], ["prix"]); assert.ok(/chargement jeudi/.test(r.sources.dateChargement), "l'extrait montre d'où vient la date");
+});
+test("lecture d'un message : anglais, espagnol, WhatsApp — dates écrites, milliers, prix et devise, ºC négatifs, villes en espagnol", () => {
+  etatLecture();
+  let c = lire("Hello, we need a reefer from Murcia to Casablanca. Loading Nov 20, delivery Nov 24. 33 pallets, 18.500 kg, +4°C. Price 1.650 EUR. Order no 4521-B").champs;
+  assert.deepStrictEqual([c.origine, c.destination, c.dateChargement, c.dateLivraison, c.palettes, c.poids, c.tempMin, c.prix, c.devise, c.refClient], ["Murcie", "Casablanca", "2026-11-20", "2026-11-24", 33, 18500, 4, 1650, "EUR", "4521-B"]);
+  const r = lire("Buenos días, carga en Almería el 19/11, entrega en Rotterdam el 22/11. 24 palés de pimientos, -1/+2 ºC. ¿Precio?"); c = r.champs;
+  assert.deepStrictEqual([c.origine, c.paysDest, c.dateChargement, c.dateLivraison, c.palettes, c.tempMin, c.tempMax, c.marchandise], ["Almería", "Pays-Bas", "2026-11-19", "2026-11-22", 24, -1, 2, "Poivrons, 24 palettes"]); assert.ok(r.demandePrix);
+  c = lire("Salam, 18 pal textile Tanger -> Madrid le 21, 9 t, prix 1850€. Merci").champs;
+  assert.deepStrictEqual([c.origine, c.destination, c.dateChargement, c.palettes, c.poids, c.prix], ["Tanger", "Madrid", "2026-11-21", 18, 9000, 1850]);
+  c = lire("Besoin camion Casa → Lyon demain, 12 palettes pièces auto, 6500 kg, 2 900 € HT. tél 0661223344").champs;
+  assert.deepStrictEqual([c.origine, c.dateChargement, c.prix, c.marchandise, c.clientId], ["Casablanca", "2026-11-17", 2900, "Pièces automobiles, 12 palettes", "k1"], "client reconnu par son numéro");
+  c = lire("نقل من طنجة إلى مدريد، 6 500 dh").champs; assert.deepStrictEqual([c.origine, c.destination, c.prix, c.devise], ["Tanger", "Madrid", 6500, "MAD"], "villes en arabe, dirhams");
+  assert.strictEqual(lire("chargement le 10, Agadir vers Paris").champs.dateChargement, "2026-12-10", "le 10 déjà passé ce mois-ci : mois suivant");
+});
+test("lecture d'un message : client par son domaine (pas les messageries publiques), notre propre adresse ignorée, doublon signalé, plusieurs montants", () => {
+  etatLecture();
+  assert.strictEqual(lire("From: Marie <marie.dupont@roussillon-emb.fr>, To: contact@atlas-fret.ma — Perpignan to Agadir").champs.clientId, "k2", "même domaine");
+  const r = lire("De : x@gmail.com Agadir → Paris"); assert.strictEqual(r.champs.clientId, undefined, "gmail : pas d'association au domaine"); assert.strictEqual(r.client.email, "x@gmail.com");
+  N.S.commandes = [{ id: "o1", ref: "CMD-1", clientId: "k1", origine: "Agadir", destination: "Perpignan", dateChargement: "2026-11-19", statut: "confirme" }];
+  assert.strictEqual(lire("achats@primeurs-souss.ma : chargement Agadir le 20/11 pour Perpignan").doublon?.ref, "CMD-1");
+  assert.ok(lire("Agadir → Lyon, 1 200 € ou 1 350 € selon délai").alertes.some((a) => /2 montants/.test(a)));
+  assert.ok(lire("camion frigo Agadir Perpignan").alertes.some((a) => /température/.test(a)));
+});
+
 const etatAR = () => {
   N.S.params = { ...N.S.params, tauxEUR: 11, tvaDefaut: 0, delaiPaiement: 30 }; N.S.factures = []; N.S.trajets = []; N.S.interventions = []; N.S.chargesGenerales = []; N.S.camions = [{ id: "c1", immat: "111-A-1" }]; N.S.chauffeurs = [{ id: "h1", nom: "Youssef", sejours: [] }];
   N.S.clients = [{ id: "k1", nom: "Primeurs Souss", delai: 30 }, { id: "k2", nom: "Emballages Roussillon", delai: 45 }];

@@ -826,3 +826,13 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 .pp-camions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .pp-camions .chip { background: var(--primary-soft); color: var(--primary); padding: 4px 10px; }
 .pp-camions .chip.retard { background: var(--warn-soft); color: var(--warn); }
+
+/* lecture d'un message collé */
+.lecture-resume { display: flex; flex-direction: column; gap: 6px; color: var(--text); background: var(--primary-soft); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: .92rem; }
+.lecture-resume ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lecture-resume li { display: flex; gap: 6px; align-items: flex-start; }
+.lecture-resume li svg.i { width: 15px; height: 15px; color: var(--ok); flex: 0 0 15px; margin-top: 3px; }
+.lecture-manque, .lecture-info { display: flex; gap: 6px; align-items: flex-start; margin: 0; }
+.lecture-manque { color: var(--warn); } .lecture-info { color: var(--info); }
+.lecture-manque svg.i, .lecture-info svg.i { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 3px; }
+#message-colle { min-height: 180px; font: inherit; }

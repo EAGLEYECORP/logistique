@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2496,6 +2496,42 @@ test("passages par port : Tanger Med et Algeciras, camions à chaque étape, tem
   const alg = N.vuePort("alg", { maintenant: t("10:00") }); assert.deepStrictEqual([...alg.dedans.map((x) => [x.v.id, x.enMer])].map(String), ["v0,true"], "en traversée vers Algeciras");
   assert.ok(alg.evenements.some((e) => e.type === "preparer" && /ENS/.test(e.titre)), "l'ENS se range dans Algeciras");
   N.S.voyages[1].scanRouge = { tmed_export: true }; assert.strictEqual(N.vuePort("tmed", { maintenant: t("10:00") }).sens[0].mediane, null, "inspection : écartée des temps habituels");
+});
+
+// trace simulée : [t (s), lat, lon, vitesse km/h] toutes les minutes ; aux arrêts, le camion bouge de quelques mètres
+const traceSimulee = (t0, etapes) => { const pts = []; let t = t0; for (const [lat, lon, min, v] of etapes) for (let i = 0; i < min; i++) { pts.push([t, lat + (v ? i * 0.0006 : (i % 3) * 0.00002), lon, v]); t += 60; } return pts; };
+const SCAN = [35.8845, -5.5052], POLICE = [35.8901, -5.4951];
+const allerTanger = (t0) => traceSimulee(t0, [[35.70, -5.55, 30, 70], [35.87, -5.51, 10, 15], [SCAN[0], SCAN[1], 15, 0], [35.887, -5.50, 3, 15], [POLICE[0], POLICE[1], 12, 0], [35.893, -5.49, 20, 10], [35.99, -5.47, 60, 30], [36.13, -5.44, 25, 10], [36.30, -5.40, 60, 80]]);
+test("étapes de port par le GPS : la position d'un arrêt est apprise quand l'étape est notée pendant cet arrêt ; à 2 passages, l'étape se pose seule, dans l'ordre", () => {
+  etatPorts(); N.S.params = { ...N.S.params, zonesEtapes: {} }; const Z = N.ZONES_DEFAUT;
+  const voyage = (id, t0) => ({ id, ref: id, chauffeurId: "h1", statut: "en_cours", jalons: [], traversees: [], dateDepart: new Date(t0 * 1000).toISOString().slice(0, 10) });
+  const t1 = Date.parse("2026-11-01T06:00:00Z") / 1000, t2 = Date.parse("2026-11-08T06:00:00Z") / 1000, t3 = Date.parse("2026-11-15T06:00:00Z") / 1000;
+  for (const [id, t0] of [["V-1", t1], ["V-2", t2]]) {
+    const p = allerTanger(t0), an = N.gpsAnalyser(p, Z), v = voyage(id, t0); N.S.voyages.push(v);
+    N.marquerEtapePort(v, "tme_scanner", { date: new Date((t0 + 40 * 60 + 8 * 60) * 1000).toISOString() }); // noté au bureau pendant l'arrêt au scanner
+    assert.strictEqual(N.apprendreDepuisArrets(v, an, Z, p), 1); assert.ok(v.etapesPort.tme_scanner.appris); assert.strictEqual(N.apprendreDepuisArrets(v, an, Z, p), 0, "pas deux fois");
+  }
+  const z = N.S.params.zonesEtapes.tme_scanner; assert.strictEqual(z.n, 2); assert.ok(Math.abs(z.lat - SCAN[0]) < 0.0005 && Math.abs(z.lon - SCAN[1]) < 0.0005); assert.ok(z.rayon >= 120 && z.rayon <= 450);
+  assert.ok(N.zoneEtapePrete("tme_scanner")); assert.ok(!N.zoneEtapePrete("tme_police"), "jamais noté : rien d'appris");
+  const p3 = allerTanger(t3), an3 = N.gpsAnalyser(p3, Z), v3 = voyage("V-3", t3); N.S.voyages.push(v3);
+  const prop = N.etapesDepuisGps(v3, an3, Z, p3); assert.deepStrictEqual([...prop.map((x) => x.etape)], ["tme_scanner"]);
+  assert.strictEqual(prop[0].date, new Date((t3 + 40 * 60 + 14 * 60) * 1000).toISOString(), "posée au départ de l'arrêt");
+  assert.strictEqual(N.appliquerPortsGps(v3, an3, Z, p3), 1); const s = N.etatEtapePort(v3, N.etapePort("tme_scanner")); assert.strictEqual(s.source, "gps"); assert.ok(/arrêt de 1\d min à l'emplacement appris \(2 passages\)/.test(s.note), s.note);
+  assert.strictEqual(N.appliquerPortsGps(v3, an3, Z, p3), 0, "déjà posée");
+  N.annulerEtapePort(v3, "tme_scanner"); assert.strictEqual(N.appliquerPortsGps(v3, an3, Z, p3), 0, "annulée à la main : le GPS ne la repose plus");
+  assert.deepStrictEqual([...N.arretsFinsAuPort(p3, Z).map((a) => a.dureeMin)], [14, 11], "arrêts de 5 min et plus dans le port : scanner et police (le camion qui roule au pas n'est pas arrêté)");
+  N.oublierZoneEtape("tme_scanner"); assert.ok(!N.zoneEtapePrete("tme_scanner"));
+  const app = N.apprentissagePorts(); assert.ok(app.find((x) => x.port === "tmed_export").etapes.some((e) => e.id === "tme_scanner")); assert.ok(!app.flatMap((x) => x.etapes).some((e) => e.id === "tme_parc"), "les étapes déjà vues par le GPS ne sont pas à apprendre");
+});
+test("étapes de port par le GPS : au retour, arrivée au port d'Algeciras et mainlevée / sortie de Tanger Med d'après les passages dans les zones", () => {
+  etatPorts(); N.S.params = { ...N.S.params, zonesEtapes: {} }; const Z = N.ZONES_DEFAUT, t0 = Date.parse("2026-11-20T08:00:00Z") / 1000;
+  const p = traceSimulee(t0, [[36.40, -5.40, 30, 80], [36.13, -5.44, 90, 5], [36.03, -5.47, 50, 30], [35.889, -5.50, 70, 5], [35.70, -5.55, 40, 70]]);
+  const an = N.gpsAnalyser(p, Z); assert.ok(an.traversees.some((x) => x.sens === "retour"), "traversée retour vue");
+  const v = { id: "R", ref: "R", statut: "en_cours", jalons: [], traversees: [] }; N.S.voyages = [v];
+  const prop = N.etapesDepuisGps(v, an, Z, p); const e = Object.fromEntries(prop.map((x) => [x.etape, x.date]));
+  assert.ok(e.ras_arrivee && Math.abs(Date.parse(e.ras_arrivee) / 1000 - (t0 + 30 * 60 + 60 * 0)) < 30 * 60, "entrée dans le port d'Algeciras");
+  assert.ok(e.tmi_mainlevee && Date.parse(e.tmi_mainlevee) > Date.parse(e.ras_arrivee), "sortie de Tanger Med après le débarquement");
+  N.appliquerPortsGps(v, an, Z, p); assert.ok(v.jalons.some((j) => j.type === "douane_import"), "la mainlevée pose l'étape du voyage");
 });
 
 test("passages : messages selon le routage (fil, transitaire, chauffeur avec ses documents), une seule fois par événement", () => {

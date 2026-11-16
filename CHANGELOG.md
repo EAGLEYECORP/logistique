@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.15.0 — Étapes de port posées par le GPS
+
+- **Sans rien apprendre**, en plus de l'entrée au port, de l'embarquement, du débarquement et de la sortie d'Algeciras déjà reconnus : **arrivée au port d'Algeciras au retour** (entrée dans le port avant l'embarquement) et **mainlevée / sortie de Tanger Med au retour** (sortie du port après le débarquement, qui pose aussi l'étape du voyage).
+- **Les contrôles à l'intérieur du port s'apprennent de vos propres camions** : quand une étape (douane, scanner, police, contrôle sanitaire…) est notée pendant que le camion est arrêté au port, la position de cet arrêt est retenue pour cette étape. **À partir de 2 passages**, un arrêt au même endroit pose l'étape seul, au départ de l'arrêt, dans l'ordre du passage. Aucune coordonnée inventée : seulement vos relevés, partagés entre appareils en mode multi-utilisateur.
+- **Arrêts courts** (5 minutes et plus dans un rayon de 60 m) repérés dans les ports — carte en direct et traces importées — là où l'analyse générale ne retient que les arrêts de 20 minutes.
+- Les étapes posées ainsi portent « GPS » et le détail (« arrêt de 14 min à l'emplacement appris ») ; **annulée à la main, une étape n'est plus reposée** par le GPS. Elles alimentent le centre des passages, les temps habituels et les notifications comme les autres.
+- Page **Passages douane**, vue de chaque port : « Reconnaissance par le GPS » — étapes déjà reconnues, en cours d'apprentissage (1/2), à relever ; « Oublier » un emplacement appris par erreur.
+
 ## 4.14.0 — Héberger le relais gratuitement
 
 - **Guide pas à pas** (`docs/12-heberger-le-relais.md`) : pourquoi un relais, choisir entre le PC du bureau avec la box (0 MAD, recommandé), un nom de domaine + Cloudflare Tunnel quand la box n'a pas d'IP publique (≈ 100 à 150 MAD par an), ou une machine virtuelle gratuite (conditions à vérifier) ; https gratuit (Caddy, Let's Encrypt), e-mail (boîte de l'entreprise ou Gmail avec mot de passe d'application), sauvegarde, mise à jour, sécurité, dépannage. Déconseillé, avec la raison : l'offre gratuite de Tailscale (non commerciale), les hébergeurs qui mettent en veille, les tunnels dont l'adresse change.

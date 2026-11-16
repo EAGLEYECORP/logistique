@@ -157,6 +157,7 @@ function directMajVoyages(flotte) {
         f.voyage.eta = { arrivee: f.eta.arrivee, fourchetteMin: f.eta.fourchetteMin, source: f.eta.source, maj: new Date().toISOString() }; change = true;
       }
     }
+    if (typeof appliquerPortsGps === "function" && appliquerPortsGps(f.voyage, an, zonesActives(), f.hist.filter((p) => p[0] >= depuis))) change = true; // étapes de port reconnues (ports_gps.js)
     if (!nouveaux.length) continue;
     (f.voyage.jalons ||= []).push(...nouveaux.map((j) => ({ type: j.type, date: j.date, source: "gps" })));
     for (const tr of an.traversees) { const x = (f.voyage.traversees || []).find((z) => z.sens === tr.sens); if (x && x.statut !== "effectuee") { const iso = gpsIso(tr.embarque); x.date = x.date || iso.slice(0, 10); x.heure = x.heure || iso.slice(11, 16); x.statut = "effectuee"; } }

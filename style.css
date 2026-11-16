@@ -894,3 +894,10 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 .relais-etat li svg.i { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 3px; }
 .relais-etat li.ok svg.i { color: var(--ok); } .relais-etat li.ko { color: var(--warn); }
 #relais-linux, #relais-env { width: 100%; box-sizing: border-box; font: .82rem ui-monospace, Menlo, monospace; }
+
+/* reconnaissance des étapes par le GPS */
+.gps-etapes { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.gps-etapes li { display: flex; gap: 8px; align-items: center; }
+.gps-etapes li > span { flex: 1; display: flex; flex-direction: column; }
+.gps-etapes li svg.i { width: 15px; height: 15px; flex: 0 0 15px; color: var(--muted); }
+.gps-etapes li.ok svg.i { color: var(--ok); } .gps-etapes li.encours svg.i { color: var(--warn); }

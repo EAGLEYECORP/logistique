@@ -155,6 +155,7 @@ Automatique et sans action de votre part.
 | `optimisation.js`, `journal.js`, `prevision.js` | Conseils et tableau des opérations ; historique des voyages ; attentes aux ports et arrivée estimée (testés) |
 | `planning.js`, `calendrier.js` | Disponibilités, conflits d'affectation, ressources libres, duplication, programme du chauffeur (testé) ; page Planning |
 | `passages.js`, `passages_ui.js` | Événements de passage, suite de chaque étape, alertes, routage des messages (testé) ; page Passages douane |
+| `ports_gps.js`, `ports_gps_ui.js` | Étapes de port posées par le GPS : passages dans les zones, et emplacements des contrôles appris de vos propres arrêts (testé) |
 | `aller_retour.js`, `aller_retour_ui.js` | Un dossier par voyage : commande → voyage, retour chargé (seconde commande), suivi unique, recette et rentabilité réparties, facturation sans doublon (testé) |
 | `lecture_commande.js`, `lecture_commande_ui.js` | « Coller un message » : demande reçue par e-mail ou WhatsApp lue sur l'appareil (villes, dates, palettes, poids, température, prix, référence, client), commande pré-remplie (testé) |
 | `documents_commande.js`, `documents_commande_ui.js` | Documents attendus du client par commande (selon le sens et la marchandise), reçus ou manquants, alerte avant chargement, demande au client dans sa langue (testé) |
@@ -190,7 +191,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 235 tests (204 application, 31 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 237 tests (206 application, 31 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

@@ -39,7 +39,7 @@ function enregistrerTrace(voyageId) {
   const t = {
     id: uid(), nom: gpsEnCours.nom.replace(/\.[^.]+$/, ""), voyageId: voyageId || "", camionId: v?.camionId || "", source: lu.format, importe: new Date().toISOString(), ecartes, rejetes: lu.rejetes || 0,
     nbPoints: an.nbPoints, debut: an.debut, fin: an.fin, km: Math.round(an.km * 10) / 10, dureeH: an.dureeH, vitMoyKmh: an.vitMoyKmh, conduiteH: an.conduiteH, conduiteMaxSansPauseH: an.conduiteMaxSansPauseH,
-    arrets: an.arrets.slice(0, 40), trous: an.trous.slice(0, 40), visites: an.visites, traversees: an.traversees, jalons: an.jalons, pts: gpsSimplifier(points), temps: gpsTemperatures(points), ralentis: gpsRalentissements(points).slice(0, 80),
+    arrets: an.arrets.slice(0, 40), ...(typeof arretsFinsAuPort === "function" ? { arretsPort: arretsFinsAuPort(points, zonesActives()).slice(0, 60) } : {}), trous: an.trous.slice(0, 40), visites: an.visites, traversees: an.traversees, jalons: an.jalons, pts: gpsSimplifier(points), temps: gpsTemperatures(points), ralentis: gpsRalentissements(points).slice(0, 80),
   };
   S.traces.unshift(t); tracesOuvertes.add(t.id); sauver();
   return t;
@@ -89,6 +89,7 @@ function appliquerTraceAuVoyage(t, v) {
   for (const j of t.jalons) if (!v.jalons.some((x) => x.type === j.type)) { v.jalons.push({ type: j.type, date: j.date, source: "gps" }); n++; }
   const sorties = sortiesPortDepuisVisites(t.visites, t.fin || 0);
   if (sorties.alg_entry && !v.sortiesPort?.alg_entry) { (v.sortiesPort ||= {}).alg_entry = sorties.alg_entry; n++; }
+  if (typeof appliquerPortsGps === "function") n += appliquerPortsGps(v, t, zonesActives()); // étapes de port reconnues (ports_gps.js), d'après les arrêts de la trace
   for (const tr of t.traversees) {
     const x = (v.traversees || []).find((z) => z.sens === tr.sens);
     if (x) { const iso = gpsIso(tr.embarque); x.date = x.date || iso.slice(0, 10); x.heure = x.heure || iso.slice(11, 16); x.statut = "effectuee"; }

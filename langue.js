@@ -54,6 +54,8 @@ const AR = {
   "Consigne de plein": "تعليمات التزود بالوقود", "Envoyer au chauffeur": "إرسال إلى السائق", "Où faire le plein": "أين تتزود بالوقود",
   "Pièces jointes": "المرفقات", "Relances des factures": "تذكيرات الفواتير", "Envoyer": "إرسال", "Renvoyer": "إعادة الإرسال", "Suspendre les relances": "إيقاف التذكيرات", "Reprendre les relances": "استئناف التذكيرات",
   "Linux (Ubuntu, Debian, Raspberry Pi OS) : une commande": "لينكس (أوبونتو، ديبيان، راسبيري باي): أمر واحد", "Windows ou Docker : fichier relais.env": "ويندوز أو دوكر: ملف relais.env", "Relais": "الخادم الوسيط", "Préparer l'installation du relais": "تحضير تثبيت الخادم الوسيط", "Tester le relais": "اختبار الخادم الوسيط", "Tester": "اختبار", "Préparer l'installation": "تحضير التثبيت", "Copier": "نسخ", "Enregistrer et tester": "حفظ واختبار",
+  "Oublier l'emplacement appris (s'il est faux)": "نسيان الموقع المتعلَّم (إن كان خاطئًا)",
+  "Reconnaissance par le GPS": "التعرف عبر GPS", "Oublier": "نسيان",
   "Attente aux quais": "الانتظار في الأرصفة", "Attente aux quais · 30 jours": "الانتظار في الأرصفة · 30 يومًا", "Noter": "تسجيل", "Arrivé au quai de chargement": "وصلت إلى رصيف الشحن", "Arrivé chez le destinataire": "وصلت عند المرسل إليه",
   "Documents du client": "وثائق الزبون", "Envoyer au client": "إرسال إلى الزبون", "Mettre à jour": "تحديث", "Non requis": "غير مطلوب",
   "Coller une demande de transport": "لصق طلب نقل", "Coller un message": "لصق رسالة", "À chiffrer": "للتسعير", "Lire le message": "قراءة الرسالة",

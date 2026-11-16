@@ -17,7 +17,7 @@ const etapesApplicables = (v, port) => (PORTS_PASSAGE[port]?.etapes || []).filte
 /** État d'une étape : { fait, date, ref, note, inspection, source: "saisie" | "gps" | "etape" }. Une étape liée à une étape du voyage déjà posée (GPS, chauffeur) compte comme faite. */
 function etatEtapePort(v, e) {
   const s = v.etapesPort?.[e.id];
-  if (s?.date) return { fait: true, date: s.date, ref: s.ref || "", note: s.note || "", inspection: !!s.inspection, source: "saisie" };
+  if (s?.date) return { fait: true, date: s.date, ref: s.ref || "", note: s.note || "", inspection: !!s.inspection, source: s.gps ? "gps" : "saisie" };
   const j = e.jalon && (v.jalons || []).find((x) => x.type === e.jalon);
   if (j) return { fait: true, date: j.date, ref: "", note: "", inspection: false, source: j.source === "gps" ? "gps" : "etape" };
   if (e.sortiePort && v.sortiesPort?.[e.sortiePort]) return { fait: true, date: v.sortiesPort[e.sortiePort], ref: "", note: "", inspection: false, source: "gps" };
@@ -36,10 +36,10 @@ function resumePort(v, port, maintenant = Date.now()) {
  * Marque une étape comme faite. Effets liés : étape du voyage (si absente), sortie du port d'Algeciras, traversée effectuée à l'embarquement,
  * passage au scanner (hors médiane des attentes), séjour Schengen du chauffeur ouvert ou fermé. Renvoie la liste des effets (pour l'affichage).
  */
-function marquerEtapePort(v, id, { date = new Date().toISOString(), ref = "", note = "", inspection = false } = {}) {
+function marquerEtapePort(v, id, { date = new Date().toISOString(), ref = "", note = "", inspection = false, gps = false } = {}) {
   const e = etapePort(id); if (!e) throw new Error("Étape inconnue");
   const effets = [];
-  (v.etapesPort ||= {})[id] = { date, ...(ref ? { ref: String(ref).trim().slice(0, 80) } : {}), ...(note ? { note: String(note).trim().slice(0, 300) } : {}), ...(inspection ? { inspection: true } : {}) };
+  (v.etapesPort ||= {})[id] = { date, ...(ref ? { ref: String(ref).trim().slice(0, 80) } : {}), ...(note ? { note: String(note).trim().slice(0, 300) } : {}), ...(inspection ? { inspection: true } : {}), ...(gps ? { gps: true } : {}) };
   if (e.jalon && !(v.jalons || []).some((j) => j.type === e.jalon)) {
     (v.jalons ||= []).push({ type: e.jalon, date, source: "port" }); v.jalons.sort((a, b) => String(a.date).localeCompare(String(b.date)));
     effets.push(`étape « ${JALONS_VOYAGE.find((j) => j[0] === e.jalon)?.[1] || e.jalon} »`);
@@ -66,6 +66,7 @@ function marquerEtapePort(v, id, { date = new Date().toISOString(), ref = "", no
 function annulerEtapePort(v, id) {
   const e = etapePort(id), s = v.etapesPort?.[id]; if (!e || !s) return false;
   delete v.etapesPort[id];
+  if (s.gps) v.etapesGpsRefusees = [...new Set([...(v.etapesGpsRefusees || []), id])]; // annulée à la main : le GPS ne la repose plus
   if (e.jalon) v.jalons = (v.jalons || []).filter((j) => !(j.type === e.jalon && j.source === "port"));
   if (e.sortiePort && v.sortiesPort?.[e.sortiePort] === s.date) delete v.sortiesPort[e.sortiePort];
   if (e.scanner && PORTS_PASSAGE[e.port]?.portAttente && v.scanRouge) delete v.scanRouge[PORTS_PASSAGE[e.port].portAttente];

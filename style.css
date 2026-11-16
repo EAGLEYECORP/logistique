@@ -1,3 +1,7 @@
+/* polices embarquées (vendor/fonts, licences dans LICENCES.md) */
+@font-face { font-family: "General Sans"; src: url("vendor/fonts/general-sans-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "General Sans"; src: url("vendor/fonts/general-sans-600.woff2") format("woff2"); font-weight: 600 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Noto Sans Arabic"; src: url("vendor/fonts/noto-sans-arabic.woff2") format("woff2"); font-weight: 400 700; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+200C-200E, U+FB50-FDFF, U+FE70-FEFC; }
 /* ============================================================
    Logistique Fret — système de design
    ============================================================ */
@@ -28,6 +32,11 @@
   --shadow-lg: 0 30px 80px rgba(0, 0, 0, .25);
   --sidebar: 256px;
   --glass: rgba(255, 255, 255, .72);
+  /* typographie : titres en General Sans, texte en police système (l'arabe en Noto Sans Arabic), chiffres alignés */
+  --font-titre: "General Sans", "Noto Sans Arabic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-texte: "Noto Sans Arabic", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+  /* espacements */
+  --esp-1: 4px; --esp-2: 8px; --esp-3: 12px; --esp-4: 16px; --esp-5: 24px; --esp-6: 32px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -89,7 +98,7 @@
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+  font-family: var(--font-texte);
   letter-spacing: -.005em;
   background: var(--bg);
   color: var(--text);
@@ -137,7 +146,7 @@ svg.i { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none;
 
 main { min-width: 0; padding: 28px 32px 48px; max-width: 1240px; width: 100%; }
 .topbar { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
-.topbar h1 { margin: 0; font-size: 2rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
+.topbar h1 { margin: 0; font-family: var(--font-titre); font-size: 2rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.15; }
 .topbar p { margin: 4px 0 0; color: var(--muted); }
 
 .bottombar { display: none; }
@@ -179,8 +188,9 @@ main { min-width: 0; padding: 28px 32px 48px; max-width: 1240px; width: 100%; }
 .card h2 { margin: 0; font-size: 1.02rem; letter-spacing: -.01em; }
 .card h3 { margin: 18px 0 8px; font-size: .92rem; }
 .section-title { margin: 26px 0 12px; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
-.grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
-@media (max-width: 1000px) { .grid-2 { grid-template-columns: 1fr; } }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; }
+.grid-2 > * { min-width: 0; } /* une colonne ne s'élargit jamais au-delà de l'écran à cause d'un texte long */
+@media (max-width: 1000px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------- indicateurs ---------- */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -901,3 +911,21 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 .gps-etapes li > span { flex: 1; display: flex; flex-direction: column; }
 .gps-etapes li svg.i { width: 15px; height: 15px; flex: 0 0 15px; color: var(--muted); }
 .gps-etapes li.ok svg.i { color: var(--ok); } .gps-etapes li.encours svg.i { color: var(--warn); }
+
+/* titres : police de titre */
+.card-head h2, .modal header h2, .as-hero h1, .compte-boite h1 { font-family: var(--font-titre); font-weight: 600; letter-spacing: -.01em; }
+
+/* sections : onglets de la section en haut de la page */
+.sous-onglets { display: flex; gap: var(--esp-1); overflow-x: auto; scrollbar-width: none; margin: 0 0 var(--esp-4); padding: 3px; border-radius: 12px; background: var(--surface-2); width: fit-content; max-width: 100%; }
+.sous-onglets::-webkit-scrollbar { display: none; }
+.sous-onglets button { flex: 0 0 auto; font: inherit; font-size: .88rem; font-weight: 600; color: var(--text-2); background: none; border: 0; border-radius: 9px; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+.sous-onglets button:hover { color: var(--text); }
+.sous-onglets button.actif { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.sous-onglets button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.sous-onglets { min-width: 0; box-sizing: border-box; }
+@media (max-width: 720px) { .sous-onglets { width: 100%; } }
+
+/* message de confirmation avec « Annuler » */
+.toast.annulable { pointer-events: auto; }
+.toast-annuler { margin-left: var(--esp-2); font: inherit; font-weight: 700; color: #6cb6ff; background: none; border: 0; padding: 4px 6px; border-radius: 8px; cursor: pointer; }
+.toast-annuler:hover, .toast-annuler:focus-visible { background: rgba(255, 255, 255, .12); outline: none; }

@@ -100,7 +100,8 @@ function toast(msg, niveau = "ok") {
   const zone = $("#toasts");
   zone.append(t);
   while (zone.children.length > 3) zone.firstElementChild.remove();
-  setTimeout(() => t.remove(), 2800);
+  t._fin = setTimeout(() => t.remove(), 2800);
+  return t;
 }
 
 /** Fenêtre modale. Renvoie les valeurs du formulaire, ou null si annulée. */
@@ -170,7 +171,33 @@ const ONGLETS = [
   ["nomenclature", "Codes SH", "search", "Outils"],
   ["parametres", "Réglages", "settings", "Outils"],
 ];
-const ONGLETS_MOBILE = ["tableau", "direct", "commandes", "camions"];
+const ONGLETS_MOBILE = ["tableau", "direct", "commandes", "camions"]; // (ancien menu, gardé pour compatibilité)
+/** Six sections au lieu de 26 pages : [id, libellé, icône, pages]. Chaque page reste une adresse (#voyages, #planning…) et garde ses droits ;
+    la section n'affiche que les pages permises (profils, accès par service), en onglets en haut de la page. */
+const SECTIONS = [
+  ["aujourdhui", "Aujourd'hui", "home", ["tableau", "operations"]],
+  ["commandes", "Commandes", "box", ["commandes", "clients"]],
+  ["voyages", "Voyages", "ship", ["voyages", "planning", "passages", "direct", "gps", "itineraires", "douane", "international", "peages"]],
+  ["flotte", "Flotte", "truck", ["camions", "chauffeurs", "carburant", "tachy"]],
+  ["argent", "Argent", "receipt", ["factures", "rentabilite", "direction"]],
+  ["reglages", "Réglages", "settings", ["parametres", "utilisateurs", "acces", "journal", "nomenclature"]],
+];
+const LIB_ONGLET_COURT = { tableau: "Aujourd'hui", direct: "Carte", gps: "Traces GPS", itineraires: "Trajets", international: "Autorisations", peages: "Péages", carburant: "Gasoil", tachy: "Tachygraphe", parametres: "Réglages", nomenclature: "Codes SH", passages: "Passages douane" };
+const CLE_SECTIONS = "logistique-sections";
+/** Pages permises d'une section (dans l'ordre de la section). */
+const pagesSection = (s) => s[3].filter((id) => ONGLETS.some((o) => o[0] === id));
+const sectionDe = (onglet) => SECTIONS.find((s) => s[3].includes(onglet)) || null;
+/** Dernière page ouverte dans chaque section (on y revient en touchant la section). */
+function pageDeSection(s) {
+  const pages = pagesSection(s); let m = {}; try { m = JSON.parse(localStorage.getItem(CLE_SECTIONS) || "{}"); } catch { /* ignoré */ }
+  return pages.includes(m[s[0]]) ? m[s[0]] : pages[0];
+}
+function retenirPageSection(onglet) { const s = sectionDe(onglet); if (!s) return; try { const m = JSON.parse(localStorage.getItem(CLE_SECTIONS) || "{}"); m[s[0]] = onglet; localStorage.setItem(CLE_SECTIONS, JSON.stringify(m)); } catch { /* ignoré */ } }
+/** Onglets de la section en haut de la page (s'il y a au moins deux pages permises). */
+function sousOnglets(onglet) {
+  const s = sectionDe(onglet); if (!s) return ""; const pages = pagesSection(s); if (pages.length < 2) return "";
+  return `<nav class="sous-onglets" aria-label="${esc(s[1])}">${pages.map((id) => { const o = ONGLETS.find((x) => x[0] === id); return `<button type="button" data-tab="${id}" class="${id === onglet ? "actif" : ""}" ${id === onglet ? 'aria-current="page"' : ""}>${esc(LIB_ONGLET_COURT[id] || o[1])}</button>`; }).join("")}</nav>`;
+}
 
 function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   if (typeof modeChauffeurActif === "function") {
@@ -182,19 +209,21 @@ function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   const v = VUES[onglet];
   const y = window.scrollY;
   const nbUrgent = alertes().filter((a) => a.niveau === "danger").length;
-  const item = ([id, lib, icone]) =>
-    `<button class="nav-item ${id === onglet ? "active" : ""}" data-tab="${id}" ${id === onglet ? 'aria-current="page"' : ""}>${ic(icone)}<span>${lib}</span>${id === "tableau" && nbUrgent ? `<span class="count">${nbUrgent}</span>` : ""}</button>`;
-  let groupe = null;
-  $("#nav").innerHTML = ONGLETS.map((o) => { const t = o[3] !== groupe && o[3] ? `<div class="nav-group">${o[3]}</div>` : ""; groupe = o[3]; return t + item(o); }).join("");
-  const horsBarre = !ONGLETS_MOBILE.includes(onglet);
-  $("#bottombar").innerHTML = ONGLETS.filter(([id]) => ONGLETS_MOBILE.includes(id)).map(item).join("") +
-    `<button class="nav-item ${horsBarre ? "active" : ""}" data-act-global="plus">${ic("more")}<span>${horsBarre ? ONGLETS.find(([id]) => id === onglet)?.[1] ?? "Menu" : "Plus"}</span></button>`;
+  retenirPageSection(onglet);
+  const sCourante = sectionDe(onglet), sections = SECTIONS.filter((s) => pagesSection(s).length);
+  const item = (s) => { const actif = sCourante?.[0] === s[0];
+    return `<button class="nav-item ${actif ? "active" : ""}" data-tab="${actif ? pagesSection(s)[0] : pageDeSection(s)}" ${actif ? 'aria-current="page"' : ""}>${ic(s[2])}<span>${s[1]}</span>${s[0] === "aujourdhui" && nbUrgent ? `<span class="count">${nbUrgent}</span>` : ""}</button>`; };
+  $("#nav").innerHTML = sections.map(item).join("");
+  const barre = sections.slice(0, 4), horsBarre = !barre.some((s) => s[0] === sCourante?.[0]);
+  $("#bottombar").innerHTML = barre.map(item).join("") +
+    `<button class="nav-item ${horsBarre ? "active" : ""}" data-act-global="plus">${ic(horsBarre && sCourante ? sCourante[2] : "more")}<span>${horsBarre && sCourante ? sCourante[1] : "Plus"}</span></button>`;
   if (location.hash.slice(1) !== onglet) history.replaceState(null, "", "#" + onglet);
   const titre = typeof v.titre === "function" ? v.titre() : v.titre;
   $("#titre").textContent = titre;
   $("#soustitre").textContent = typeof v.sous === "function" ? v.sous() : v.sous;
   $("#actions").innerHTML = v.actions?.() || "";
-  $("#app").innerHTML = v.rendu();
+  $("#app").innerHTML = sousOnglets(onglet) + v.rendu();
+  const ongletActuel = document.querySelector(".sous-onglets .actif"); if (ongletActuel) ongletActuel.parentElement.scrollLeft = ongletActuel.offsetLeft - 8; // l'onglet ouvert reste visible sur téléphone
   document.title = `${titre} · Logistique Fret`;
   etiqueterTableaux();
   v.apres?.();
@@ -1050,10 +1079,9 @@ setInterval(() => { if (["tableau", "chauffeurs", "chauffeur"].includes(ongletAc
 
 function menuPlus() {
   const d = $("#modale");
-  const groupes = {};
-  ONGLETS.filter(([id]) => !ONGLETS_MOBILE.includes(id)).forEach((o) => (groupes[o[3]] ||= []).push(o));
-  modale({ titre: "Menu", valider: "Fermer", annuler: "", corps: Object.entries(groupes).map(([g, os]) =>
-    `<div class="section-title" style="margin-top:4px">${g}</div><div class="sheet-grid">${os.map(([id, lib, icone]) => `<button type="button" class="sheet-item" data-tab="${id}">${ic(icone)}<span>${lib}</span></button>`).join("")}</div>`).join("") });
+  const sections = SECTIONS.filter((s) => pagesSection(s).length);
+  modale({ titre: "Toutes les pages", valider: "Fermer", annuler: "", corps: sections.map((s) =>
+    `<div class="section-title" style="margin-top:4px">${esc(s[1])}</div><div class="sheet-grid">${pagesSection(s).map((id) => { const [, lib, icone] = ONGLETS.find((o) => o[0] === id); return `<button type="button" class="sheet-item" data-tab="${id}">${ic(icone)}<span>${esc(LIB_ONGLET_COURT[id] || lib)}</span></button>`; }).join("")}</div>`).join("") });
   d.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => { d.close(); afficher(b.dataset.tab); }));
 }
 

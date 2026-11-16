@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.0.0 — Nouvelle navigation : six sections
+
+- **Six sections au lieu de 26 pages** dans le menu : **Aujourd'hui** (accueil, opérations), **Commandes** (commandes, clients), **Voyages** (voyages, planning, passages douane, carte, traces GPS, trajets, douane, autorisations, péages), **Flotte** (camions, chauffeurs, gasoil, tachygraphe), **Argent** (factures, rentabilité, direction), **Réglages** (réglages, utilisateurs, accès, journal, codes SH).
+  - Les pages d'une section s'affichent en **onglets** en haut de la page ; toucher une section rouvre la **dernière page** ouverte dedans.
+  - Chaque page garde son adresse (`#planning`, `#factures`…) et ses droits : une section n'affiche que les pages permises par le profil ou les accès par service, et disparaît s'il n'en reste aucune.
+  - Sur téléphone : Aujourd'hui, Commandes, Voyages, Flotte et « Plus » (toutes les sections et leurs pages).
+- **« Annuler » dans le message de confirmation** pendant 6 secondes, plutôt qu'une question avant d'agir : étape d'un voyage ou d'un port, commande avancée, devis accepté, facture encaissée, étapes du chauffeur et arrivée au quai.
+- **Polices embarquées**, qui marchent hors ligne : General Sans pour les titres (Fontshare, licence ITF gratuite pour usage commercial), Noto Sans Arabic pour l'arabe (licence OFL, téléchargée seulement quand un texte arabe s'affiche) ; le texte courant garde la police du système. Jetons de typographie et d'espacement.
+- **Écrans vides** : un bouton pour la suite là où il manquait (aucune facture, aucune activité, aucun chauffeur, pages multi-utilisateur sans relais).
+- Correction : sur téléphone, les cartes de l'accueil pouvaient déborder de l'écran à cause d'un texte long (colonnes de grille bornées).
+
 ## 4.15.0 — Étapes de port posées par le GPS
 
 - **Sans rien apprendre**, en plus de l'entrée au port, de l'embarquement, du débarquement et de la sortie d'Algeciras déjà reconnus : **arrivée au port d'Algeciras au retour** (entrée dans le port avant l'embarquement) et **mainlevée / sortie de Tanger Med au retour** (sortie du port après le débarquement, qui pose aussi l'étape du voyage).

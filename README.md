@@ -165,6 +165,7 @@ Automatique et sans action de votre part.
 | `plein.js`, `plein_ui.js` | Consigne de plein par pays : trajet découpé (Maroc, Espagne, France), arrêts au prix du jour, économie, écart d'après la carte carburant (testé) |
 | `relances.js`, `envoi_facture_ui.js` | Facture envoyée avec CMR signé et preuve de livraison (relais, partage du téléphone ou messagerie), relances programmées dans la langue du client (testé) |
 | `relais_ui.js`, `serveur/installer.sh`, `serveur/demarrer-windows.cmd`, `serveur/Dockerfile` | Brancher et tester le relais depuis les Réglages, préparer une installation ; installation Linux en une commande, lancement Windows, image Docker complète ; guide `docs/12-heberger-le-relais.md` |
+| `app.js` (SECTIONS), `annuler_ui.js`, `vendor/fonts/` | Six sections au lieu de 26 pages (onglets de section, droits conservés), « Annuler » dans les messages de confirmation, polices embarquées (General Sans, Noto Sans Arabic) |
 | `jalons_notifications.js`, `comptes.js` | Routage et rédaction des notifications par étape ; rôles et droits partagés avec le relais (testés) |
 | `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Accès par service, Journal) |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |

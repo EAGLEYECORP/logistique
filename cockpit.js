@@ -133,7 +133,7 @@ VUES.rentabilite = {
     const avert = [a.camionsSansFixe ? `${a.camionsSansFixe} camion(s) sans charges fixes : le coût complet est sous-estimé` : "", a.sansFraisGeneraux ? "frais généraux non renseignés" : "", a.carburantEstime ? `${a.carburantEstime} voyage(s) dont le carburant est estimé d'après les pleins` : "", a.sansKm ? `${a.sansKm} voyage(s) sans kilomètres` : "", a.sansPrix ? `${a.sansPrix} voyage(s) sans prix de vente` : ""].filter(Boolean);
     const retours = retoursACombler();
     return `${segments}
-    ${!t.nb ? `<div class="card">${vide("gauge", "Aucune activité sur cette période", "Enregistrez vos voyages (avec leurs kilomètres, leur prix et leurs coûts) pour voir ici le coût complet au kilomètre et la marge réelle.")}</div>` : `
+    ${!t.nb ? `<div class="card">${vide("gauge", "Aucune activité sur cette période", "Enregistrez vos voyages (avec leurs kilomètres, leur prix et leurs coûts) pour voir ici le coût complet au kilomètre et la marge réelle.", btn("aller", "Aller aux voyages", { id: "voyages", icone: "ship" }))}</div>` : `
     <div class="kpis">
       <div class="kpi"><div class="l">${ic("receipt")} Chiffre d'affaires</div><div class="v">${fmt(t.ca)} <small>MAD</small></div><div class="s">${t.nb} voyage(s) et commande(s)</div></div>
       <div class="kpi"><div class="l">Coût complet</div><div class="v">${fmt(t.cout)} <small>MAD</small></div><div class="s">directs ${fmt(t.variable)} · entretien ${fmt(t.entretien)} · fixes ${fmt(t.fixes)}</div></div>

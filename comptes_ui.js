@@ -361,7 +361,7 @@ VUES.utilisateurs = {
   titre: "Utilisateurs", sous: "Comptes de l'équipe et rôles (droits appliqués par le serveur)",
   actions: () => btn("ajouter", "Nouveau compte", { icone: "plus" }),
   rendu() {
-    if (!multiActif()) return `<div class="card">${vide("users", "Mode multi-utilisateur inactif", "Démarrez le relais avec MULTI_UTILISATEUR=true et ouvrez son adresse dans un navigateur (voir docs/10-multi-utilisateur.md).")}</div>`;
+    if (!multiActif()) return `<div class="card">${vide("users", "Mode multi-utilisateur inactif", "Démarrez le relais avec MULTI_UTILISATEUR=true et ouvrez son adresse dans un navigateur (voir docs/10-multi-utilisateur.md).", btn("aller", "Brancher le relais", { id: "parametres", icone: "settings" }))}</div>`;
     if (!listeComptes) { api("GET", "/api/utilisateurs").then((r) => { listeComptes = r.utilisateurs; rafraichir(); }).catch((e) => toast(e.message, "danger")); return `<div class="card"><p class="hint">Chargement…</p></div>`; }
     return `<div class="card"><div class="table-wrap"><table><thead><tr><th>Nom</th><th>Rôle</th><th>Bureau</th><th>Double auth.</th><th>Dernier accès</th><th></th></tr></thead><tbody>
       ${listeComptes.map((u) => `<tr class="${u.cloture ? "inactif" : ""}"><td><strong>${esc(u.nom)}</strong><span class="sub">${esc(u.email)}${u.cloture ? " · clôturé" : ""}</span></td><td>${esc(libDe(ROLES_COMPTES, u.role))}${u.chauffeurId ? `<span class="sub">${esc(nomChauffeur(u.chauffeurId))}</span>` : ""}</td><td>${esc(libDe(optsBureaux, u.office || ""))}</td>
@@ -386,7 +386,7 @@ VUES.acces = {
   titre: "Accès par service", sous: "Ce que chaque service voit et modifie — appliqué par le serveur",
   actions: () => (multiActif() ? btn("acces-defaut", "Tout remettre par défaut", { cls: "btn ghost", icone: "x" }) : ""),
   rendu() {
-    if (!multiActif()) return `<div class="card">${vide("shield", "Mode multi-utilisateur inactif", "Les accès par service sont appliqués par le relais en mode multi-utilisateur. Sur un appareil seul, réglez les pages de chaque profil dans Réglages → Appareil.")}</div>`;
+    if (!multiActif()) return `<div class="card">${vide("shield", "Mode multi-utilisateur inactif", "Les accès par service sont appliqués par le relais en mode multi-utilisateur. Sur un appareil seul, réglez les pages de chaque profil dans Réglages → Appareil.", btn("aller", "Brancher le relais", { id: "parametres", icone: "settings" }))}</div>`;
     if (!droitsCharges) { api("GET", "/api/droits").then((r) => { droitsCharges = r; rafraichir(); }).catch((e) => toast(e.message, "danger")); return `<div class="card"><p class="hint">Chargement…</p></div>`; }
     const roles = droitsCharges.roles.filter(([k]) => k !== "chef_entreprise");
     const cellule = (role, g) => {
@@ -423,7 +423,7 @@ VUES.journal = {
   titre: "Journal", sous: "Qui a fait quoi : chaque écriture (avant / après), connexions, refus — 24 mois",
   actions: () => (multiActif() ? `<a class="btn ghost" href="/api/journal?${esc(requeteJournal())}&format=csv" download>${ic("download")}Exporter (CSV)</a>` : ""),
   rendu() {
-    if (!multiActif()) return `<div class="card">${vide("file", "Mode multi-utilisateur inactif", "Le journal est tenu par le relais en mode multi-utilisateur.")}</div>`;
+    if (!multiActif()) return `<div class="card">${vide("file", "Mode multi-utilisateur inactif", "Le journal est tenu par le relais en mode multi-utilisateur.", btn("aller", "Brancher le relais", { id: "parametres", icone: "settings" }))}</div>`;
     if (!journalCharge) { api("GET", `/api/journal?${requeteJournal()}`).then((r) => { journalCharge = r.journal; rafraichir(); }).catch((e) => toast(e.message, "danger")); return `<div class="card"><p class="hint">Chargement…</p></div>`; }
     const sel = (name, opts) => `<label class="f">${{ utilisateur: "Utilisateur", collection: "Données", action: "Action" }[name]}<select name="${name}">${[["", "Tous"], ...opts].map(([k, l]) => `<option value="${esc(k)}" ${filtreJournal[name] === k ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
     return `<div class="card"><form id="f-journal"><div class="form-grid">${sel("utilisateur", multi.utilisateurs.map((u) => [u.id, u.nom]))}${sel("collection", COLLECTIONS_SERVEUR.map((c) => [c, c]))}${sel("action", Object.entries(LIB_ACTIONS))}

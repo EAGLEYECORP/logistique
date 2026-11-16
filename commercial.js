@@ -269,7 +269,7 @@ VUES.factures = {
           <td><div class="actions">${typeof actionsEnvoiFacture === "function" ? actionsEnvoiFacture(f) : ""}${f.statut !== "payee" ? btn("payer", "Encaisser", { id: f.id, icone: "check", cls: "btn ghost sm" }) : ""}${f.statut !== "payee" && e.code === "retard" ? btn("relance", "Relance", { id: f.id, icone: "mail", cls: "btn ghost sm" }) : ""}
             ${iconBtn("imprimer", "print", "Imprimer / PDF", f.id)}${iconBtn("suppr", "trash", "Supprimer", f.id, true)}</div></td></tr>`;
       }).join("")}</tbody></table></div>` : vide("check", "Rien ici", "Aucune facture dans cette vue.")}</div>`
-      : `<div class="card">${vide("receipt", "Aucune facture", "Les commandes livrées se facturent en un clic depuis l'onglet Commandes.")}</div>`}
+      : `<div class="card">${vide("receipt", "Aucune facture", "Un voyage livré se facture en un geste depuis sa fiche ; une commande livrée, depuis la page Commandes.", btn("aller", "Voir les voyages", { id: "voyages", icone: "ship" }))}</div>`}
     ${!S.entreprise.nom ? `<p class="hint">Renseignez votre raison sociale, ICE et RIB dans Réglages → Entreprise : ils apparaissent sur les factures imprimées.</p>` : ""}`;
   },
   async agir(act, id) {

@@ -335,7 +335,7 @@ VUES.international = {
       <p class="hint" style="margin:0 0 8px">${e.utilise} jour(s) utilisé(s) sur les 180 derniers jours${e.dedans ? " · actuellement en Europe" : ""}${c.visa ? ` · visa jusqu'au ${dateFr(c.visa)}` : ""}</p>
       ${(c.sejours || []).length ? `<div class="table-wrap"><table class="plain"><tbody>${[...c.sejours].sort((a, b) => b.entree.localeCompare(a.entree)).map((s, i) => `<tr><td>${dateFr(s.entree)} → ${s.sortie ? dateFr(s.sortie) : "<strong>en cours</strong>"}</td><td class="r"><div class="actions">${s.sortie ? "" : btn("sortie-sejour", "Marquer la sortie", { id: `${c.id}|${s.entree}`, cls: "btn ghost sm" })}${iconBtn("suppr-sejour", "trash", "Supprimer ce séjour", `${c.id}|${s.entree}`, true)}</div></td></tr>`).join("")}</tbody></table></div>` : ""}
       <div class="row">${btn("ajout-sejour", "Ajouter un séjour", { id: c.id, icone: "plus", cls: "btn ghost sm" })}</div></div>`).join("")
-      : `<div class="card">${vide("users", "Aucun chauffeur", "Ajoutez des chauffeurs pour suivre leurs jours Schengen.")}</div>`}
+      : `<div class="card">${vide("users", "Aucun chauffeur", "Ajoutez des chauffeurs pour suivre leurs jours Schengen.", btn("aller", "Ajouter un chauffeur", { id: "chauffeurs", icone: "plus" }))}</div>`}
     <p class="hint">Les jours d'entrée et de sortie comptent. Ce compteur est une aide : le décompte officiel est celui des contrôles aux frontières (système EES).</p>`;
   },
   async agir(act, id) {

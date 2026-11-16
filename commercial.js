@@ -157,6 +157,8 @@ const champsClient = (c = {}) => [
   { name: "ville", label: "Ville", value: c.ville },
   { name: "pays", label: "Pays", type: "select", options: optsPays, value: c.pays || "Maroc" },
   { name: "delai", label: "Délai de paiement (jours)", type: "number", value: c.delai ?? S.params.delaiPaiement, min: 0, step: 1 },
+  { name: "chargeurRetour", label: "Chargeur de fret de retour (proposé quand un camion livre près de ses villes)", type: "checkbox", full: true, value: c.chargeurRetour },
+  { name: "villesRetour", label: "Villes où il charge pour le Maroc (séparées par des virgules)", value: c.villesRetour, full: true, placeholder: "Perpignan, Le Boulou, Murcie" },
   { name: "franchiseAttenteH", label: "Attente gratuite à chaque quai (heures)", type: "number", value: c.franchiseAttenteH ?? S.params.franchiseAttenteH ?? 2, min: 0, step: 0.5 },
   { name: "tarifAttente", label: "Tarif d'attente au-delà (par heure, 0 = à fixer)", type: "number", value: c.tarifAttente ?? "", min: 0, step: 5 },
   { name: "deviseAttente", label: "Devise du tarif d'attente", type: "select", options: optsDevise, value: c.deviseAttente || "EUR" },

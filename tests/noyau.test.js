@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "fret_retour.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2180,6 +2180,39 @@ test("ports : quatre passages (aller et retour), étapes détaillées, contrôle
   assert.strictEqual(new Set(Object.values(N.PORTS_PASSAGE).flatMap((p) => p.etapes.map((e) => e.id))).size, Object.values(N.PORTS_PASSAGE).reduce((n, p) => n + p.etapes.length, 0), "identifiants uniques");
   assert.ok(N.etapesApplicables(v, "alg_entree").some((e) => e.id === "alg_pcf"), "frais : contrôle sanitaire à Algeciras"); assert.ok(!N.etapesApplicables({ ...v, tempMin: undefined, tempMax: undefined }, "alg_entree").some((e) => e.id === "alg_pcf"), "sec : pas de contrôle sanitaire");
 });
+const etatRetour = () => { N.S.params = { ...N.S.params, tauxEUR: 11 }; N.S.factures = []; N.S.trajets = []; N.S.interventions = []; N.S.chargesGenerales = []; N.S.entreprise = { nom: "Atlas Fret" };
+  N.S.camions = [{ id: "c1", immat: "111-A-1" }]; N.S.chauffeurs = [{ id: "h1", nom: "Youssef", sejours: [] }];
+  N.S.clients = [{ id: "k1", nom: "Souss Agrumes", pays: "Maroc" },
+    { id: "k2", nom: "Roussillon Emballages", pays: "France", ville: "Perpignan", chargeurRetour: true, tel: "+33 6 11 22 33 44", contact: "Marie" },
+    { id: "k3", nom: "Frutas Levante", pays: "Espagne", ville: "Murcia", villesRetour: "Murcie", chargeurRetour: true, email: "logistica@levante.es" },
+    { id: "k4", nom: "Cartonnerie du Boulou", pays: "France", villesRetour: "Le Boulou", chargeurRetour: false },
+    { id: "k5", nom: "Lyon Pièces", pays: "France", ville: "Lyon", chargeurRetour: true }];
+  N.S.commandes = [{ id: "o1", ref: "CMD-1", clientId: "k1", origine: "Agadir", paysOrigine: "Maroc", destination: "Perpignan", paysDest: "France", prix: 3000, devise: "EUR", tempMin: 2, tempMax: 6, statut: "transit", jalons: [] },
+    { id: "h1", ref: "CMD-0", clientId: "k4", origine: "Le Boulou", paysOrigine: "France", destination: "Casablanca", paysDest: "Maroc", prix: 1350, devise: "EUR", dateChargement: "2026-10-02", statut: "livre", jalons: [] }];
+  N.S.voyages = [{ id: "v1", ref: "V-1", statut: "en_cours", clientId: "k1", commandeId: "o1", origine: "Agadir", destination: "Perpignan", dateDepart: "2026-11-15", livraisonPrevue: "2026-11-18T12:00", camionId: "c1", prix: 3000, devise: "EUR", kmAller: 2300, kmRetourVide: 2300, fraisRouteMad: 9000, autresMad: 30000, jalons: [], traversees: [] }]; };
+test("fret de retour : voyage sans retour repéré, livraison et prix plancher, alerte à J-3 puis urgente, éteinte par un retour ou « à vide »", () => {
+  etatRetour(); const v = N.S.voyages[0];
+  assert.ok(N.chercheRetour(v)); assert.strictEqual(N.livraisonAller(v), "2026-11-18");
+  const p = N.plancherRetour(v); assert.ok(p.mad > 0 && !p.couvert); assert.strictEqual(p.eur, Math.round(p.mad / 11));
+  assert.strictEqual(N.alertesRetour("2026-11-14").length, 0, "J-4 : rien");
+  let a = N.alertesRetour("2026-11-15"); assert.strictEqual(a.length, 1); assert.strictEqual(a[0].niveau, "warn"); assert.ok(/livre dans 3 j à Perpignan, pas encore de retour \(prix plancher/.test(a[0].texte));
+  assert.strictEqual(N.alertesRetour("2026-11-17")[0].niveau, "danger");
+  v.jalons.push({ type: "livre", date: "2026-11-18T10:00:00Z" }); assert.ok(/livré/.test(N.alertesRetour("2026-11-18")[0].texte));
+  v.retourAVide = true; assert.strictEqual(N.alertesRetour("2026-11-18").length, 0, "à vide décidé"); delete v.retourAVide;
+  v.commandeRetourId = "x"; assert.ok(!N.chercheRetour(v), "retour chargé"); delete v.commandeRetourId;
+  assert.ok(!N.chercheRetour({ ...v, destination: "Casablanca", commandeId: "" }), "un voyage vers le Maroc ne cherche pas de retour");
+});
+test("fret de retour : chargeurs proches de la livraison (rayon, historique, dernier prix, dernier contact) et message dans leur langue", () => {
+  etatRetour(); const v = N.S.voyages[0];
+  const l = N.chargeursPour(v); assert.deepStrictEqual([...l.map((x) => x.client.id)], ["k4", "k2"], "Le Boulou (déjà un retour) puis Perpignan, même zone ; Murcie et Lyon trop loin");
+  assert.strictEqual(l[0].nb, 1); assert.strictEqual(l[0].dernierPrix, 1350); assert.strictEqual(l[0].ville, "Le Boulou"); assert.ok(l[0].km > 10 && l[0].km < 40);
+  const large = N.chargeursPour(v, { rayonKm: 900 }).map((x) => x.client.id); assert.ok(large.includes("k5") && large.includes("k3"), "rayon élargi : Lyon et Murcie apparaissent");
+  N.noterContactRetour(N.S.clients[1], v); assert.ok(N.chargeursPour(v).find((x) => x.client.id === "k2").dernierContact.startsWith("20"));
+  let m = N.messageDisponibilite(v, N.S.clients[1]); assert.strictEqual(m.langue, "fr"); assert.ok(/^Bonjour Marie,/.test(m.texte)); assert.ok(/camion frigorifique disponible à Perpignan le 18\/11\/2026, retour vers le Maroc \(Tanger Med → Agadir\)/.test(m.texte)); assert.ok(/Atlas Fret$/.test(m.texte));
+  m = N.messageDisponibilite(v, N.S.clients[2]); assert.strictEqual(m.langue, "es"); assert.ok(/camión frigorífico disponible en Perpignan/.test(m.texte));
+  assert.strictEqual(N.messageDisponibilite(v).langue, "fr", "message de groupe : langue du pays de livraison");
+});
+
 const etatQuais = () => { N.S.params = { ...N.S.params, tauxEUR: 11, tvaDefaut: 0, delaiPaiement: 30, franchiseAttenteH: 2, tarifAttente: 0, deviseAttente: "EUR" }; N.S.factures = []; N.S.voyages = []; N.S.trajets = [];
   N.S.clients = [{ id: "k1", nom: "Souss Agrumes", tarifAttente: 35, deviseAttente: "EUR" }, { id: "k2", nom: "Sans tarif" }];
   N.S.commandes = [{ id: "o1", ref: "CMD-1", clientId: "k1", origine: "Agadir", destination: "Perpignan", prix: 3000, devise: "EUR", statut: "confirme", jalons: [] }, { id: "o2", ref: "CMD-2", clientId: "k2", origine: "Perpignan", destination: "Agadir", prix: 1400, devise: "EUR", statut: "confirme", jalons: [] }]; };

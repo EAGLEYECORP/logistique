@@ -310,6 +310,7 @@ function alertes() {
     if (e.code === "retard") ajouter("danger", "factures", `Facture ${f.numero} (${nomClient(f.clientId)}) — ${e.texte}, ${fmtDevise(totauxFacture(f).ttc, f.devise)}`, "factures", `fac:${f.id}`);
   }
   for (const { voyage: v, depuis } of voyagesAFacturer()) if (depuis >= 1) ajouter(depuis > 7 ? "danger" : "warn", "voyages", `Voyage ${v.ref || ""}${v.clientId ? " (" + nomClient(v.clientId) + ")" : ""} fait depuis ${depuis} j : pas encore facturé`, "factures", `voy:${v.id}:facturer`);
+  if (typeof alertesRetour === "function") for (const a of alertesRetour()) ajouter(a.niveau, "voyages", a.texte, "commandes", a.cle); // fret_retour.js
   if (typeof alertesDocuments === "function") for (const a of alertesDocuments()) ajouter(a.niveau, "commandes", a.texte, "commandes", a.cle); // documents_commande.js
   for (const c of S.commandes) {
     if (c.statut === "livre" && !(typeof factureDeCommande === "function" ? factureDeCommande(c) : c.factureId)) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`, "commandes", `cmd:${c.id}:facturer`);

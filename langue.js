@@ -48,6 +48,8 @@ const AR = {
   "Passages terminés": "عبور منتهٍ", "Tous les ports": "كل الموانئ", "Tanger Med": "طنجة المتوسط", "Algeciras": "الجزيرة الخضراء",
   "Retirer cette commande du voyage (elle redevient une commande libre)": "سحب هذه الطلبية من الرحلة (تصبح طلبية حرة)", "Facturer le retour": "فوترة العودة", "Nouvelle commande de retour": "طلبية عودة جديدة", "Commande existante": "طلبية موجودة", "Chargement de retour": "شحن العودة", "Planifier": "برمجة", "En retour": "في العودة", "Facturation de l'aller": "فوترة الذهاب",
   "Nouvelle commande d'après le message": "طلبية جديدة حسب الرسالة", "Client inconnu : le créer ?": "زبون غير معروف: إنشاؤه؟",
+  "Message pour vos groupes WhatsApp": "رسالة لمجموعات واتساب", "Retours à trouver": "رحلات عودة للبحث", "Copier le message": "نسخ الرسالة", "Rentrer à vide": "العودة فارغًا", "Reprendre la recherche": "استئناف البحث", "Trouver un retour": "إيجاد شحنة عودة", "Trouver": "بحث",
+  "Plus d'alerte pour ce voyage": "لا تنبيه بعد الآن لهذه الرحلة",
   "Attente aux quais": "الانتظار في الأرصفة", "Attente aux quais · 30 jours": "الانتظار في الأرصفة · 30 يومًا", "Noter": "تسجيل", "Arrivé au quai de chargement": "وصلت إلى رصيف الشحن", "Arrivé chez le destinataire": "وصلت عند المرسل إليه",
   "Documents du client": "وثائق الزبون", "Envoyer au client": "إرسال إلى الزبون", "Mettre à jour": "تحديث", "Non requis": "غير مطلوب",
   "Coller une demande de transport": "لصق طلب نقل", "Coller un message": "لصق رسالة", "À chiffrer": "للتسعير", "Lire le message": "قراءة الرسالة",

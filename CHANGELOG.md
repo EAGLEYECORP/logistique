@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.10.0 — Trouver le fret de retour avant de rentrer à vide
+
+- **Alerte dès J-3 de la livraison** quand un camion parti vers l'Europe n'a pas de retour (urgente la veille et après livraison), avec le **prix plancher** du retour : en dessous, l'aller-retour perd de l'argent.
+- **Bloc « Retours à trouver »** sur l'accueil : camions concernés, jours avant livraison, prix plancher, chargeurs à proximité.
+- **« Trouver un retour »** sur la fiche du voyage :
+  - vos **chargeurs de retour** à moins de 300 km de la livraison (fiche du client : « Chargeur de fret de retour » et ses villes de chargement), classés par zone puis par fidélité : retours déjà faits, dernier prix payé, dernier contact ;
+  - un message de disponibilité prêt (« camion frigorifique disponible à Perpignan le 18/11, retour vers le Maroc… »), **dans la langue de chacun** (français, espagnol, anglais), par WhatsApp ou e-mail ; chaque contact est noté sur la fiche du client ;
+  - un **message à coller dans vos groupes WhatsApp**, « Copier le message » ;
+  - « Nouvelle commande de retour » quand un chargeur dit oui ; « Rentrer à vide » éteint les alertes de ce voyage.
+- Les clients déjà chargés au retour (commandes Europe → Maroc) apparaissent même sans être marqués.
+
 ## 4.9.0 — Attente aux quais mesurée et facturée
 
 - **Mode chauffeur** : « Arrivé au quai de chargement », puis « Arrivé chez le destinataire » ; le temps sur place s'affiche, orange au-delà de la franchise ; l'étape « Chargée » ou « Livrée » arrête le compteur.

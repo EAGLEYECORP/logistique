@@ -859,3 +859,13 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 .chf-quai.sur-place.au-dela { background: var(--warn-soft); }
 .chf-quai.sur-place > svg.i { width: 20px; height: 20px; flex: 0 0 20px; margin-top: 2px; }
 .chf-quai.sur-place span { display: flex; flex-direction: column; gap: 2px; }
+
+/* recherche du fret de retour */
+.retour-tete { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--primary-soft); }
+.retour-tete > div { display: flex; flex-direction: column; gap: 2px; }
+.retour-liste { display: flex; flex-direction: column; }
+.retour-chargeur { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.retour-chargeur:last-child { border-bottom: 0; }
+.retour-chargeur > div:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 220px; }
+.retour-chargeur .r { display: flex; gap: 6px; }
+#retour-message { width: 100%; box-sizing: border-box; font: inherit; }

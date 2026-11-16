@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "fret_retour.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2180,6 +2180,42 @@ test("ports : quatre passages (aller et retour), étapes détaillées, contrôle
   assert.strictEqual(new Set(Object.values(N.PORTS_PASSAGE).flatMap((p) => p.etapes.map((e) => e.id))).size, Object.values(N.PORTS_PASSAGE).reduce((n, p) => n + p.etapes.length, 0), "identifiants uniques");
   assert.ok(N.etapesApplicables(v, "alg_entree").some((e) => e.id === "alg_pcf"), "frais : contrôle sanitaire à Algeciras"); assert.ok(!N.etapesApplicables({ ...v, tempMin: undefined, tempMax: undefined }, "alg_entree").some((e) => e.id === "alg_pcf"), "sec : pas de contrôle sanitaire");
 });
+const etatDevis = () => { N.S.params = { ...N.S.params, tauxEUR: 10, prixGasoil: 12, consoDefaut: 30, margeVisee: 15, fretDetroitEur: 0 }; delete N.S.params.prixGasoilJour; N.S.factures = []; N.S.trajets = []; N.S.interventions = []; N.S.chargesGenerales = []; N.S.pleins = [];
+  N.S.camions = [{ id: "c1", immat: "111-A-1" }]; N.S.chauffeurs = [{ id: "h1", nom: "Y" }]; N.S.clients = [{ id: "k1", nom: "Souss", contact: "Karim", langueNotif: "en", delai: 45, tarifAttente: 35 }]; N.S.voyages = []; N.S.commandes = []; N.S.entreprise = { nom: "Atlas Fret" }; };
+const cmdDevis = (plus = {}) => ({ id: "o9", ref: "CMD-9", clientId: "k1", origine: "Agadir", paysOrigine: "Maroc", destination: "Perpignan", paysDest: "France", dateChargement: "2026-11-19", devise: "EUR", camionId: "c1", statut: "devis", palettes: 26, tempMin: 2, tempMax: 6, jalons: [], ...plus });
+test("devis : coût de l'aller-retour estimé (km par le détroit, gasoil, traversées) avec ce qui manque, puis tiré de vos voyages passés", () => {
+  etatDevis(); const c = cmdDevis();
+  const k = N.kmEstimes(c); assert.ok(k.traverse); assert.ok(k.km > 1900 && k.km < 2500, `${k.km} km Agadir → Perpignan par le détroit`);
+  let e = N.coutAllerRetour(c, "2026-11-16"); assert.strictEqual(e.source, "estimation"); assert.ok(e.manques.some((m) => /fret du détroit/.test(m)) && e.manques.some((m) => /péages/.test(m)) && e.manques.some((m) => /gasoil estimé/.test(m)));
+  assert.ok(e.mad >= ((2 * k.km * 30) / 100) * 12, "le gasoil est compté");
+  N.S.params.fretDetroitEur = 700; assert.ok(!N.coutAllerRetour(c, "2026-11-16").manques.some((m) => /fret du détroit/.test(m)), "fret du détroit réglé"); assert.ok(N.coutAllerRetour(c, "2026-11-16").mad > e.mad + 2 * 700 * 10 - 1);
+  N.S.voyages = [1, 2, 3].map((i) => ({ id: `v${i}`, ref: `V-${i}`, statut: "termine", origine: "Agadir", destination: "Perpignan", dateDepart: `2026-0${i + 6}-10`, camionId: "c1", prix: 3000, devise: "EUR", carburantMad: 18000 + i * 1000, autresMad: 6000, jalons: [], traversees: [] }));
+  e = N.coutAllerRetour(c, "2026-11-16"); assert.strictEqual(e.source, "historique"); assert.strictEqual(e.n, 3); assert.strictEqual(e.mad, 26000, "médiane : 18 000 + 2 000 + 6 000");
+});
+test("devis : prix conseillé = coût ÷ (1 − marge) − retour attendu, plancher, variantes ; chance de retour et prix de retour d'après l'historique", () => {
+  etatDevis(); N.S.voyages = [1, 2, 3, 4].map((i) => ({ id: `v${i}`, ref: `V-${i}`, statut: "termine", origine: "Agadir", destination: i === 4 ? "Le Boulou" : "Perpignan", dateDepart: `2026-0${i + 5}-10`, camionId: "c1", prix: 3000, devise: "EUR", carburantMad: 20000, autresMad: 6000, jalons: [], traversees: [], ...(i <= 3 ? { commandeRetourId: `r${i}` } : {}) }));
+  N.S.commandes = [1, 2, 3].map((i) => ({ id: `r${i}`, ref: `R-${i}`, origine: "Perpignan", paysOrigine: "France", destination: "Casablanca", paysDest: "Maroc", prix: 1000 + i * 200, devise: "EUR", statut: "livre", jalons: [] }));
+  const r = N.chanceRetour(cmdDevis(), "2026-11-16"); assert.strictEqual(r.n, 4); assert.strictEqual(r.proba, 0.75); assert.strictEqual(r.prixRetourEur, 1400); assert.ok(!r.defaut);
+  const p = N.prixConseille(cmdDevis(), { aujourdhui: "2026-11-16" });
+  assert.strictEqual(p.cout.source, "historique"); assert.strictEqual(p.cout.montant, 2600, "26 000 MAD à 10 MAD/€");
+  assert.strictEqual(p.retour.attendu, 1050); assert.strictEqual(p.conseille, Math.round((2600 / 0.85 - 1050) / 10) * 10); assert.strictEqual(p.plancher, 1550); assert.strictEqual(p.sansRetour, Math.round(2600 / 0.85 / 10) * 10);
+  assert.deepStrictEqual([...p.variantes.map((x) => x.marge)], [0.1, 0.2]); assert.ok(p.fiable);
+  etatDevis(); assert.ok(N.chanceRetour(cmdDevis(), "2026-11-16").defaut, "moins de 3 voyages : 50 % par défaut");
+});
+test("devis : historique de prix du client et du corridor ; envoyé, expiré, accepté (commande confirmée), perdu (motif) ; taux de devis gagnés ; texte dans la langue du client", () => {
+  etatDevis();
+  N.S.commandes = [{ id: "a", ref: "A", clientId: "k1", origine: "Agadir", destination: "Perpignan", prix: 3100, devise: "EUR", dateChargement: "2026-09-01", statut: "livre", jalons: [] }, { id: "b", ref: "B", clientId: "k2", origine: "Agadir", destination: "Perpignan", prix: 3300, devise: "EUR", dateChargement: "2026-10-01", statut: "livre", jalons: [] }, { id: "x", ref: "X", clientId: "k1", origine: "Tanger", destination: "Madrid", prix: 1800, devise: "EUR", statut: "livre", jalons: [] }];
+  const c = cmdDevis(); N.S.commandes.push(c);
+  const h = N.historiquePrix(c); assert.deepStrictEqual([...h.client.map((x) => x.ref)], ["A"]); assert.strictEqual(h.corridor.mediane, 3200); assert.strictEqual(h.corridor.n, 2);
+  assert.strictEqual(N.etatDevis(c, "2026-11-16"), "a_chiffrer");
+  N.noterDevis(c, { prix: 3250, validiteJours: 7, date: "2026-11-16" }); assert.strictEqual(c.prix, 3250); assert.strictEqual(c.devis.validite, "2026-11-23"); assert.strictEqual(N.etatDevis(c, "2026-11-20"), "envoye"); assert.strictEqual(N.etatDevis(c, "2026-11-24"), "expire");
+  const t = N.texteDevis(c); assert.strictEqual(t.langue, "en"); assert.ok(/^Hello Karim,/.test(t.texte)); assert.ok(/3[\s\u202f\u00a0]?250 € HT, ferry and tolls included\. Waiting time beyond 2 h per dock: 35 €\/h\./.test(t.texte), t.texte); assert.ok(/valid until 23\/11\/2026/.test(t.texte));
+  const d = { ...cmdDevis({ id: "o10", ref: "CMD-10" }) }; N.S.commandes.push(d); N.noterDevis(d, { prix: 3600, date: "2026-11-10" }); N.devisPerdu(d, { motif: "prix", prixConcurrent: 3100 });
+  assert.strictEqual(N.etatDevis(d), "perdu");
+  N.devisAccepte(c); assert.strictEqual(c.statut, "confirme"); assert.strictEqual(N.etatDevis(c), "gagne");
+  const r = N.tauxDevis("2026-11-01", "2026-11-16"); assert.deepStrictEqual([r.envoyes, r.gagnes, r.perdus, r.taux, r.motifs.prix], [2, 1, 1, 50, 1]);
+});
+
 const etatRetour = () => { N.S.params = { ...N.S.params, tauxEUR: 11 }; N.S.factures = []; N.S.trajets = []; N.S.interventions = []; N.S.chargesGenerales = []; N.S.entreprise = { nom: "Atlas Fret" };
   N.S.camions = [{ id: "c1", immat: "111-A-1" }]; N.S.chauffeurs = [{ id: "h1", nom: "Youssef", sejours: [] }];
   N.S.clients = [{ id: "k1", nom: "Souss Agrumes", pays: "Maroc" },

@@ -55,8 +55,8 @@ VUES.commandes = {
         S.clients.length ? btn("ajouter", "Nouvelle commande", { icone: "plus" }) : btn("aller", "Ajouter un client", { id: "clients", icone: "plus" }))}</div>`;
     }
     const filtres = {
-      chiffrer: ["À chiffrer", (c) => c.statut === "devis"],
-      actives: ["En cours", (c) => c.statut !== "livre"],
+      chiffrer: ["Devis", (c) => c.statut === "devis" && !c.perdu],
+      actives: ["En cours", (c) => c.statut !== "livre" && !c.perdu],
       facturer: ["À facturer", (c) => c.statut === "livre" && !factureDeCommande(c)],
       toutes: ["Toutes", () => true],
     };
@@ -79,10 +79,10 @@ VUES.commandes = {
             <td>${dateFr(c.dateChargement)}${c.statut === "devis" || c.statut === "confirme" ? (jc === 0 ? " " + badge("Aujourd'hui", "warn") : jc < 0 ? " " + badge("En retard", "danger") : "") : ""}<span class="sub">→ ${dateFr(c.dateLivraison)}</span></td>
             <td>${c.chauffeurId ? esc(nomChauffeur(c.chauffeurId)) : badge("À affecter", "warn")}<span class="sub">${c.camionId ? esc(nomCamion(c.camionId)) : ""}</span></td>
             <td class="r num fin">${fmtDevise(c.prix, c.devise)}<span class="sub ${m.marge < 0 ? "neg" : ""}">${c.trajetId || coutCommande(c) ? `marge ${fmt(m.marge)} MAD · ${fmt(m.taux)} %${c.trajetId ? "" : " · hors gasoil"}` : "coûts non saisis"}</span></td>
-            <td>${badge(libStatutCmd(c.statut), niveauStatut[c.statut])}${typeof puceDocuments === "function" ? puceDocuments(c) : ""}${typeof puceAttente === "function" ? puceAttente(c) : ""}${lien ? `<span class="sub">${lien.sens === "aller" ? "Aller" : "Retour"} du voyage ${esc(lien.v.ref)}</span>` : ""}${facture ? `<span class="sub">${esc(facture.numero)}</span>` : ""}</td>
+            <td>${badge(libStatutCmd(c.statut), niveauStatut[c.statut])}${typeof puceDevis === "function" ? puceDevis(c) : ""}${typeof puceDocuments === "function" ? puceDocuments(c) : ""}${typeof puceAttente === "function" ? puceAttente(c) : ""}${lien ? `<span class="sub">${lien.sens === "aller" ? "Aller" : "Retour"} du voyage ${esc(lien.v.ref)}</span>` : ""}${facture ? `<span class="sub">${esc(facture.numero)}</span>` : ""}</td>
             <td><div class="actions">
-              ${lien ? btn("ouvrir-voyage", lien.v.ref, { id: c.id, icone: "ship", cls: "btn ghost sm", titre: "Suivie par son voyage : ouvrir le voyage" })
-                : `${["devis", "confirme"].includes(c.statut) ? btn("planifier", "Planifier", { id: c.id, icone: "ship", cls: "btn sm", titre: "Créer le voyage de cette commande (client, villes, dates, prix, équipe repris)" }) + btn("en-retour", "En retour", { id: c.id, cls: "btn ghost sm", titre: "Charger cette commande au retour d'un voyage" }) : ""}${nx ? btn("avancer", libStatutCmd(nx), { id: c.id, icone: "arrow", cls: "btn ghost sm", titre: `Passer à l'étape « ${libStatutCmd(nx)} »` }) : ""}`}
+              ${typeof actionsDevis === "function" ? actionsDevis(c) : ""}${lien ? btn("ouvrir-voyage", lien.v.ref, { id: c.id, icone: "ship", cls: "btn ghost sm", titre: "Suivie par son voyage : ouvrir le voyage" })
+                : c.statut === "devis" ? "" : `${["devis", "confirme"].includes(c.statut) ? btn("planifier", "Planifier", { id: c.id, icone: "ship", cls: "btn sm", titre: "Créer le voyage de cette commande (client, villes, dates, prix, équipe repris)" }) + btn("en-retour", "En retour", { id: c.id, cls: "btn ghost sm", titre: "Charger cette commande au retour d'un voyage" }) : ""}${nx ? btn("avancer", libStatutCmd(nx), { id: c.id, icone: "arrow", cls: "btn ghost sm", titre: `Passer à l'étape « ${libStatutCmd(nx)} »` }) : ""}`}
               ${c.statut === "livre" && !facture ? btn("facturer", "Facturer", { id: c.id, icone: "receipt", cls: "btn sm" }) : ""}
               ${!c.trajetId ? iconBtn("trajet", "route", "Créer le trajet (coût gasoil et péages)", c.id) : ""}
               ${iconBtn("imprimer-ordre", "print", "Imprimer l'ordre de transport", c.id)}${boutonPhotos("commande:" + c.id, `Photos — ${c.ref} (CMR, livraison, dommages)`)}${iconBtn("suivi", "clock", "Suivi des étapes", c.id)}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}

@@ -869,3 +869,11 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 .retour-chargeur > div:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 220px; }
 .retour-chargeur .r { display: flex; gap: 6px; }
 #retour-message { width: 100%; box-sizing: border-box; font: inherit; }
+
+/* devis et prix conseillé */
+.devis-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.devis-case { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; }
+.devis-case strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.devis-case.principal { background: var(--primary-soft); border-color: transparent; }
+.devis-case.principal strong { font-size: 1.5rem; color: var(--primary); }
+.devis-histo { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 3px; }

@@ -31,6 +31,8 @@ const PARAMS_DEFAUT = {
   franchiseAttenteH: 2,    // heures d'attente gratuites à chaque quai (chargement, livraison), si le client n'en a pas
   tarifAttente: 0,         // tarif par heure au-delà de la franchise, si le client n'en a pas (0 = à fixer)
   deviseAttente: "EUR",
+  margeVisee: 15,          // % de marge nette visée pour le prix conseillé des devis
+  fretDetroitEur: 0,       // fret du détroit par traversée (€), si vos traversées passées ne le donnent pas (0 = à saisir)
 };
 
 /** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones · 6 = + gares de péage et relevés Jawaz · 7 = + lignes de coût des voyages, charges fixes détaillées, charges générales, échéances · 8 = + notifications par étape (routage, fil de l'application, rappels annulés ou reportés). */
@@ -313,6 +315,7 @@ function alertes() {
   if (typeof alertesRetour === "function") for (const a of alertesRetour()) ajouter(a.niveau, "voyages", a.texte, "commandes", a.cle); // fret_retour.js
   if (typeof alertesDocuments === "function") for (const a of alertesDocuments()) ajouter(a.niveau, "commandes", a.texte, "commandes", a.cle); // documents_commande.js
   for (const c of S.commandes) {
+    if (c.perdu) continue; // devis perdu : plus rien à faire
     if (c.statut === "livre" && !(typeof factureDeCommande === "function" ? factureDeCommande(c) : c.factureId)) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`, "commandes", `cmd:${c.id}:facturer`);
     const jc = joursAvant(c.dateChargement);
     if (["devis", "confirme"].includes(c.statut) && jc !== null && jc <= 1 && (!c.chauffeurId || !c.camionId)) {

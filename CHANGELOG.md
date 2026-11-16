@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.11.0 — Prix conseillé et devis
+
+- **« Chiffrer »** sur chaque demande (filtre « Devis » de la page Commandes) :
+  - **coût complet de l'aller-retour** : médiane de vos voyages sur le même trajet (12 derniers mois) ; sans historique, estimation (kilomètres par Tanger Med ⇄ Algeciras, gasoil, traversées, per diem, charges fixes) qui **dit ce qui lui manque** (fret du détroit, péages…) ;
+  - **chance de charger un retour** près de la livraison et prix moyen de ces retours, d'après votre historique (50 % par défaut sous 3 voyages) ;
+  - **prix conseillé** = coût ÷ (1 − marge visée) − retour attendu, avec les variantes à 10 % et 20 %, **prix plancher** (en dessous, vous perdez de l'argent) ;
+  - **prix passés** du client sur ce trajet (gagnés, perdus) et médiane tous clients.
+- **Devis imprimable** (PDF) : client, transport, prix « traversée et péages inclus », paiement, conditions d'attente aux quais (franchise et tarif du client), validité, bon pour accord. **Envoi par WhatsApp ou e-mail** dans la langue du client (français, anglais, espagnol).
+- **« Accepté »** confirme la commande (prête à planifier) ; **« Perdu »** garde le motif (trop cher, délai, pas de camion) et le prix du concurrent. **Taux de devis gagnés** sur 90 jours, motifs de perte, prix moyen gagné et perdu.
+- Réglages : marge nette visée (15 % par défaut), fret du détroit par traversée quand vos traversées passées ne le donnent pas.
+
 ## 4.10.0 — Trouver le fret de retour avant de rentrer à vide
 
 - **Alerte dès J-3 de la livraison** quand un camion parti vers l'Europe n'a pas de retour (urgente la veille et après livraison), avec le **prix plancher** du retour : en dessous, l'aller-retour perd de l'argent.

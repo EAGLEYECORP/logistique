@@ -59,7 +59,7 @@ function noterDocument(c, id, { recu = null, ref, nonRequis } = {}) {
 function alertesDocuments(aujourdhui = today()) {
   const r = [];
   for (const c of S.commandes || []) {
-    if (!["devis", "confirme"].includes(c.statut) || !c.dateChargement) continue;
+    if (!["devis", "confirme"].includes(c.statut) || !c.dateChargement || c.perdu) continue;
     const j = joursEntre(aujourdhui, c.dateChargement); if (j > 3) continue;
     const e = etatDocuments(c); if (!e.bloquantsManquants.length) continue;
     r.push({ niveau: j <= 1 ? "danger" : "warn", commandeId: c.id, cle: `cmd:${c.id}:docs`, texte: `Commande ${c.ref} — chargement ${j < 0 ? "en retard" : j === 0 ? "aujourd'hui" : j === 1 ? "demain" : `dans ${j} j`}, documents manquants : ${e.bloquantsManquants.map((x) => x.lib).join(", ")}` });

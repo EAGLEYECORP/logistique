@@ -877,3 +877,10 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 .devis-case.principal { background: var(--primary-soft); border-color: transparent; }
 .devis-case.principal strong { font-size: 1.5rem; color: var(--primary); }
 .devis-histo { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 3px; }
+
+/* consigne de plein */
+.plein-liste { margin: 0 0 4px; padding-left: 1.2em; display: flex; flex-direction: column; gap: 3px; }
+.plein-ecart { color: var(--warn); }
+.chf-plein { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--ok-soft); margin: 4px 0; }
+.chf-plein > svg.i { width: 20px; height: 20px; flex: 0 0 20px; margin-top: 2px; color: var(--ok); }
+.chf-plein > div { display: flex; flex-direction: column; gap: 4px; }

@@ -161,6 +161,7 @@ Automatique et sans action de votre part.
 | `quais.js`, `quais_ui.js` | Attente aux quais de chargement et de livraison : arrivée notée par le chauffeur, franchise et tarif du client, lignes de facture par demi-heure entamée (testé) |
 | `fret_retour.js`, `fret_retour_ui.js` | Recherche du fret de retour : voyages sans retour, prix plancher, chargeurs proches classés (distance, historique, dernier contact), message de disponibilité dans leur langue, alerte à J-3 (testé) |
 | `devis.js`, `devis_ui.js` | Prix conseillé (coût de l'aller-retour d'après vos voyages passés ou estimé, chance de retour, marge visée), historique des prix, devis imprimable et envoyé, accepté ou perdu, taux de devis gagnés (testé) |
+| `plein.js`, `plein_ui.js` | Consigne de plein par pays : trajet découpé (Maroc, Espagne, France), arrêts au prix du jour, économie, écart d'après la carte carburant (testé) |
 | `jalons_notifications.js`, `comptes.js` | Routage et rédaction des notifications par étape ; rôles et droits partagés avec le relais (testés) |
 | `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Accès par service, Journal) |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |
@@ -187,7 +188,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 230 tests (200 application, 30 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 232 tests (202 application, 30 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

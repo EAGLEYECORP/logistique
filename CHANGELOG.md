@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.12.0 — Consigne de plein par pays
+
+- **Sur chaque voyage vers l'Espagne ou la France** : où faire le plein et combien, d'après les prix du jour (Maroc : vos pleins ; Espagne et France : prix officiels, Algeciras et Pyrénées-Orientales en priorité). Par exemple Agadir → Lyon : plein complet au Maroc avant Tanger Med, 132 L en Espagne avant La Jonquera, 426 L en Espagne au retour — rien en France ; Agadir → Madrid : tout l'aller-retour sur le gasoil marocain.
+- **Règle** : à chaque arrêt, on ne prend que de quoi atteindre un pays moins cher à portée (le Maroc au retour compris), ou le prochain arrêt au même prix ; sinon le plein. Réserve de 10 %. Réservoir par camion (fiche du camion, 700 L par défaut), consommation réelle du camion.
+- **Économie estimée** par rapport à des pleins pris au fil de la route (≈ 370 à 500 € par aller-retour vers la France aux prix du 16/11/2026).
+- **« Envoyer au chauffeur »** par WhatsApp, et la consigne sur la mission en **mode chauffeur**.
+- **Après coup** : litres achetés par pays d'après la carte carburant ; litres pris en France hors consigne et surcoût.
+- Rappel affiché : le gasoil des réservoirs d'origine entre dans l'Union en franchise ; pas de jerricans.
+
 ## 4.11.0 — Prix conseillé et devis
 
 - **« Chiffrer »** sur chaque demande (filtre « Devis » de la page Commandes) :

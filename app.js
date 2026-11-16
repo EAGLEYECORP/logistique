@@ -356,6 +356,7 @@ const champsCamion = (c = {}) => [
   { name: "fixeMensuel", label: "Charges fixes par mois (MAD) : crédit ou amortissement, assurance, taxes, salaire", type: "number", min: 0, value: c.fixeMensuel, full: true },
   { name: "balise", label: "Identifiant de la balise GPS (IMEI ou nom dans la plateforme)", value: c.balise, full: true, placeholder: "ex. 865432100123456" },
   { name: "carteCarburant", label: "Numéro de la carte carburant (pour rattacher les relevés)", value: c.carteCarburant, full: true, placeholder: "les derniers chiffres suffisent" },
+  { name: "reservoirL", label: "Réservoir de gasoil (litres)", type: "number", step: 10, min: 100, value: c.reservoirL, placeholder: "700" },
   { name: "essieux", label: "Essieux (tracteur + semi-remorque)", type: "number", step: 1, min: 2, value: c.essieux, placeholder: "5" },
   { name: "hauteurBasse", label: "Hauteur de l'essieu avant ≤ 1,30 m (rare : véhicule léger)", type: "checkbox", value: c.hauteurBasse, full: true },
 ];
@@ -365,7 +366,7 @@ function lireCamion(v) {
     kmVidange: num(v.kmVidange, num(v.km)), intervalleVidange: num(v.intervalleVidange, S.params.intervalleVidange),
     kmPneus: num(v.kmPneus, num(v.km)), intervallePneus: num(v.intervallePneus, S.params.intervallePneus),
     ...Object.fromEntries(DOCS_CAMION.map(([k]) => [k, v[k]])),
-    essieux: num(v.essieux) || undefined, hauteurBasse: !!v.hauteurBasse, balise: (v.balise || "").trim() || undefined, carteCarburant: (v.carteCarburant || "").trim() || undefined, fixeMensuel: v.fixeMensuel === "" ? undefined : num(v.fixeMensuel),
+    reservoirL: num(v.reservoirL) || undefined, essieux: num(v.essieux) || undefined, hauteurBasse: !!v.hauteurBasse, balise: (v.balise || "").trim() || undefined, carteCarburant: (v.carteCarburant || "").trim() || undefined, fixeMensuel: v.fixeMensuel === "" ? undefined : num(v.fixeMensuel),
   };
 }
 

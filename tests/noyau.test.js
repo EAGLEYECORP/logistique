@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2180,6 +2180,29 @@ test("ports : quatre passages (aller et retour), étapes détaillées, contrôle
   assert.strictEqual(new Set(Object.values(N.PORTS_PASSAGE).flatMap((p) => p.etapes.map((e) => e.id))).size, Object.values(N.PORTS_PASSAGE).reduce((n, p) => n + p.etapes.length, 0), "identifiants uniques");
   assert.ok(N.etapesApplicables(v, "alg_entree").some((e) => e.id === "alg_pcf"), "frais : contrôle sanitaire à Algeciras"); assert.ok(!N.etapesApplicables({ ...v, tempMin: undefined, tempMax: undefined }, "alg_entree").some((e) => e.id === "alg_pcf"), "sec : pas de contrôle sanitaire");
 });
+const etatPlein = () => { N.S.params = { ...N.S.params, tauxEUR: 10.91, prixGasoil: 12.5, consoDefaut: 32, reservoirL: 700, prixGasoilJour: { maj: Date.parse("2026-11-16T08:00:00Z"), MA: { prix: 12.5 }, ES: { prix: 1.869, algeciras: 1.867 }, FR: { prix: 2.149, pyreneesOrientales: 2.109 } } }; N.S.camions = [{ id: "c1", immat: "111-A-1" }]; N.S.voyages = []; N.S.commandes = []; N.S.pleins = []; N.S.chauffeurs = []; };
+const voyagePlein = (destination, plus = {}) => ({ id: "v", ref: "V-1", origine: "Agadir", destination, camionId: "c1", statut: "en_cours", jalons: [], ...plus });
+test("plein par pays : trajet découpé (Maroc, Espagne, France), plein complet au Maroc, Espagne avant la frontière et au retour, jamais en France", () => {
+  etatPlein();
+  const t = N.trajetParPays(voyagePlein("Lyon")); assert.strictEqual(t.paysDest, "France"); assert.ok(/Jonquera/.test(t.frontiere)); assert.ok(t.kmES > 1100 && t.kmES < 1400 && t.kmFR > 400 && t.kmFR < 600, JSON.stringify(t));
+  assert.ok(/Irun/.test(N.trajetParPays(voyagePlein("Bordeaux")).frontiere), "ouest de la France : par Irun");
+  const p = N.planPlein(voyagePlein("Lyon"));
+  assert.deepStrictEqual([...p.achats.map((a) => a.pays + ":" + a.lieu.split(" (")[0])], ["MA:avant Tanger Med", "ES:avant la frontière", "ES:après la frontière"]);
+  assert.strictEqual(p.achats[0].litres, 700, "plein complet au Maroc, le moins cher"); assert.ok(!p.achats.some((a) => a.pays === "FR"), "rien en France");
+  assert.ok(p.economieEuros > 300, `économie ${p.economieEuros} €`); assert.strictEqual(p.prix.ES, 1.867, "prix d'Algeciras"); assert.strictEqual(p.prix.FR, 2.109, "prix des Pyrénées-Orientales");
+  const m = N.planPlein(voyagePlein("Madrid")); assert.deepStrictEqual([...m.achats.map((a) => a.pays)], ["MA"], "Madrid : tout l'aller-retour sur le gasoil marocain"); assert.ok(m.achats[0].litres < 700);
+  assert.strictEqual(N.planPlein(voyagePlein("Casablanca")), null, "trajet national : pas de consigne");
+  const txt = N.texteConsignePlein(voyagePlein("Lyon")); assert.ok(/^Consigne de plein — V-1 \(Agadir → Lyon\)\n1\. Maroc, avant Tanger Med : plein complet \(12,50 MAD\/L\)/.test(txt), txt); assert.ok(/Ne pas faire le plein en France/.test(txt));
+});
+test("plein par pays : petit réservoir (un complément en France devient nécessaire), consommation du camion, écart après coup d'après la carte carburant", () => {
+  etatPlein(); N.S.camions[0].reservoirL = 400;
+  const p = N.planPlein(voyagePlein("Rungis")); assert.strictEqual(p.reservoir, 400); assert.ok(p.achats.some((a) => a.pays === "FR"), "400 L ne suffisent pas pour l'aller-retour en France");
+  N.S.camions[0].reservoirL = 700;
+  const v = voyagePlein("Perpignan", { lignesCout: [{ type: "carburant", litres: 300, pays: "FR", montant: 640, devise: "EUR" }, { type: "carburant", litres: 200, pays: "ES", montant: 374, devise: "EUR" }] });
+  const e = N.ecartPlein(v); assert.strictEqual(e.reelFR, 300); assert.strictEqual(e.prevuFR, 0); assert.strictEqual(e.surcoutEuros, Math.round(300 * (2.109 - 1.867)));
+  assert.strictEqual(N.ecartPlein(voyagePlein("Perpignan")), null, "pas de ligne carburant : pas d'écart");
+});
+
 const etatDevis = () => { N.S.params = { ...N.S.params, tauxEUR: 10, prixGasoil: 12, consoDefaut: 30, margeVisee: 15, fretDetroitEur: 0 }; delete N.S.params.prixGasoilJour; N.S.factures = []; N.S.trajets = []; N.S.interventions = []; N.S.chargesGenerales = []; N.S.pleins = [];
   N.S.camions = [{ id: "c1", immat: "111-A-1" }]; N.S.chauffeurs = [{ id: "h1", nom: "Y" }]; N.S.clients = [{ id: "k1", nom: "Souss", contact: "Karim", langueNotif: "en", delai: 45, tarifAttente: 35 }]; N.S.voyages = []; N.S.commandes = []; N.S.entreprise = { nom: "Atlas Fret" }; };
 const cmdDevis = (plus = {}) => ({ id: "o9", ref: "CMD-9", clientId: "k1", origine: "Agadir", paysOrigine: "Maroc", destination: "Perpignan", paysDest: "France", dateChargement: "2026-11-19", devise: "EUR", camionId: "c1", statut: "devis", palettes: 26, tempMin: 2, tempMax: 6, jalons: [], ...plus });

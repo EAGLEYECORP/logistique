@@ -32,7 +32,8 @@ const PARAMS_DEFAUT = {
   tarifAttente: 0,         // tarif par heure au-delà de la franchise, si le client n'en a pas (0 = à fixer)
   deviseAttente: "EUR",
   margeVisee: 15,          // % de marge nette visée pour le prix conseillé des devis
-  fretDetroitEur: 0,       // fret du détroit par traversée (€), si vos traversées passées ne le donnent pas (0 = à saisir)
+  fretDetroitEur: 0,
+  reservoirL: 700,         // litres du réservoir, si le camion n'en a pas (consigne de plein par pays)       // fret du détroit par traversée (€), si vos traversées passées ne le donnent pas (0 = à saisir)
 };
 
 /** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones · 6 = + gares de péage et relevés Jawaz · 7 = + lignes de coût des voyages, charges fixes détaillées, charges générales, échéances · 8 = + notifications par étape (routage, fil de l'application, rappels annulés ou reportés). */

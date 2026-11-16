@@ -33,7 +33,9 @@ const PARAMS_DEFAUT = {
   deviseAttente: "EUR",
   margeVisee: 15,          // % de marge nette visée pour le prix conseillé des devis
   fretDetroitEur: 0,
-  reservoirL: 700,         // litres du réservoir, si le camion n'en a pas (consigne de plein par pays)       // fret du détroit par traversée (€), si vos traversées passées ne le donnent pas (0 = à saisir)
+  reservoirL: 700,
+  relancesJours: "-3,7,15,30", // relances des factures : jours par rapport à l'échéance (négatif = avant)
+  relancesAuto: false,     // envoyer aussi les relances par e-mail au client (relais avec SMTP)         // litres du réservoir, si le camion n'en a pas (consigne de plein par pays)       // fret du détroit par traversée (€), si vos traversées passées ne le donnent pas (0 = à saisir)
 };
 
 /** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones · 6 = + gares de péage et relevés Jawaz · 7 = + lignes de coût des voyages, charges fixes détaillées, charges générales, échéances · 8 = + notifications par étape (routage, fil de l'application, rappels annulés ou reportés). */

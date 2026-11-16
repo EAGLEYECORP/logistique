@@ -179,6 +179,30 @@ test("e-mail : dialogue SMTP complet (authentification, sujet accentué, texte e
   } finally { await f.fermer(); }
 });
 
+test("e-mail avec pièces jointes : facture (HTML) et photo du CMR en multipart/mixed, noms de fichiers sûrs ; route du relais (types, taille, adresse, sans SMTP)", async () => {
+  const { composer } = require("../serveur/courriel.js"), f = await fauxSmtp();
+  try {
+    const d0 = composer({ de: "compta@atlas.example", a: "achats@primeurs.example", sujet: "Facture", texte: "Ci-joint.", pieces: [{ nom: "Facture FAC-2026-0001.html", type: "text/html", base64: Buffer.from("<h1>Facture</h1>").toString("base64") }, { nom: "CMR signé.jpg", type: "image/jpeg", base64: Buffer.from([0xff, 0xd8, 0xff]).toString("base64") }] });
+    assert.ok(/^Content-Type: multipart\/mixed; boundary=/m.test(d0) && /multipart\/alternative/.test(d0));
+    assert.ok(d0.includes('Content-Disposition: attachment; filename="Facture FAC-2026-0001.html"') && d0.includes('filename="CMR signe.jpg"'), "nom sans accent");
+    assert.ok(d0.includes(Buffer.from("<h1>Facture</h1>").toString("base64")));
+    assert.throws(() => composer({ de: "a@b.example", a: "x@y.example", sujet: "s", texte: "t", pieces: [{ nom: "x.exe", type: "application/x-msdownload", base64: "AA==" }] }), /refusé/);
+    const smtp = { hote: "127.0.0.1", port: f.port, securite: "aucune", de: "compta@atlas.example" };
+    const s1 = await demarrer(null, { smtp });
+    try {
+      const envoi = (corps, jeton = "lit") => fetch(`${s1.base}/api/notifications/document?token=${jeton}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corps) });
+      let r = await envoi({ a: "achats@primeurs.example", sujet: "Facture FAC-2026-0001", texte: "Bonjour, ci-joint.", pieces: [{ nom: "FAC-2026-0001.html", type: "text/html", base64: Buffer.from("<p>ok</p>").toString("base64") }] });
+      assert.strictEqual(r.status, 200, await r.clone().text()); assert.ok(f.recu.donnees.includes('filename="FAC-2026-0001.html"'));
+      assert.strictEqual((await envoi({ a: "pas-une-adresse", pieces: [] })).status, 400);
+      assert.strictEqual((await envoi({ a: "x@y.example", pieces: [{ nom: "a.js", type: "text/javascript", base64: "AA==" }] })).status, 400);
+      assert.strictEqual((await envoi({ a: "x@y.example", pieces: Array.from({ length: 9 }, () => ({ nom: "a.png", type: "image/png", base64: "AA==" })) })).status, 400);
+      assert.strictEqual((await envoi({ a: "x@y.example", pieces: [] }, "mauvais")).status, 401);
+    } finally { await s1.arreter(); }
+    const s2 = await demarrer(null, {});
+    try { assert.strictEqual((await fetch(`${s2.base}/api/notifications/document?token=lit`, { method: "POST", body: JSON.stringify({ a: "x@y.example" }) })).status, 503, "sans SMTP"); } finally { await s2.arreter(); }
+  } finally { await f.fermer(); }
+});
+
 test("notifications programmées : plan, envoi à l'heure (ntfy, e-mail), périmées, annulation, persistance après redémarrage", async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), "relais-notif-")), appels = [], mails = [];
   const http_ = async (url, o) => { appels.push({ url, corps: o.body, titre: o.headers?.Title }); return { ok: true, status: 200 }; };

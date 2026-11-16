@@ -87,15 +87,17 @@ async function ouvrirPreuve(voyageId) {
   if (!(v.jalons || []).some((j) => j.type === "livre")) (v.jalons ||= []).push({ type: "livre", date: v.pod.date, source: "preuve" });
   sauver(); toast(`Livraison enregistrée${f.reserves ? " avec réserves" : ""}`); if (typeof partagesSynchroniser === "function") partagesSynchroniser(true); rafraichir();
 }
-function imprimerPreuve(v) {
-  const p = v.pod; if (!p) return;
+function imprimerPreuve(v) { if (v.pod) ouvrirImpression(`Preuve de livraison ${v.ref}`, corpsPreuve(v)); }
+/** Corps HTML de la preuve de livraison (impression, pièce jointe). */
+function corpsPreuve(v) {
+  const p = v.pod; if (!p) return "";
   const cl = parId(S.clients, v.clientId) || {};
-  ouvrirImpression(`Preuve de livraison ${v.ref}`, `${enteteDoc("Preuve de livraison", [`Voyage <strong style="color:#0f172a">${l(v.ref)}</strong>`, `Édité le ${dateFr(dateISO(Date.now()))}`])}
+  return `${enteteDoc("Preuve de livraison", [`Voyage <strong style="color:#0f172a">${l(v.ref)}</strong>`, `Édité le ${dateFr(dateISO(Date.now()))}`])}
     <h2>Livraison</h2>
     <div class="grille">${champDoc("Itinéraire", `${v.origine} → ${v.destination}`)}${champDoc("Client", cl.nom)}${champDoc("Marchandise", v.marchandise)}${champDoc("Date et heure", dateHeureFr(p.date))}${champDoc("Position relevée", p.lat ? `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)} (± ${p.precision} m)` : "non disponible")}${champDoc("Reçu par", p.signataire)}</div>
     <h2>Réserves</h2><div class="cadre">${p.reserves ? l(p.reserves).replace(/\n/g, "<br>") : "Aucune réserve formulée à la livraison."}</div>
     <h2>Signature du destinataire</h2><div class="cadre" style="min-height:90px">${p.signature ? `<img src="${p.signature}" alt="Signature" style="max-height:120px">` : "Non signée."}</div>
-    <p style="font-size:11px;color:#64748b;margin-top:14px">Document de preuve établi par l'application. Il ne remplace pas le CMR : la valeur juridique d'un CMR électronique n'est pas confirmée au Maroc ni en Espagne. Conservez le CMR papier signé.</p>${piedDoc()}`);
+    <p style="font-size:11px;color:#64748b;margin-top:14px">Document de preuve établi par l'application. Il ne remplace pas le CMR : la valeur juridique d'un CMR électronique n'est pas confirmée au Maroc ni en Espagne. Conservez le CMR papier signé.</p>${piedDoc()}`;
 }
 
 /* ---------- lettre de voiture CMR (impression préremplie) ---------- */

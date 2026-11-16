@@ -10,7 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { charger } = require("./moteur.js");
-const { envoyerCourriel, adresseValide, motEntete } = require("./courriel.js");
+const { envoyerCourriel, adresseValide, motEntete, TYPES_PIECES, nomFichierSur } = require("./courriel.js");
 const { creerCoffre, chargerCoffre, ecrireAtomique } = require("./coffre.js");
 const { planPurge, appliquerPurge } = require("./purge-photos.js");
 const { creerMulti } = require("./multi.js");
@@ -375,7 +375,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           const r = await diffuserAlerte({ texte, niveau, cle }); noterAlerte({ t: maintenant, texte, niveau, cle, envoyes: r.envoyes });
           return json(res, 200, { ok: true, ...r });
         }
-        const mpn = p.match(/^\/api\/notifications\/(plan|scheduler|manuelle|test)(?:\/(.+))?$/);
+        const mpn = p.match(/^\/api\/notifications\/(plan|scheduler|manuelle|test|document)(?:\/(.+))?$/);
         if (mpn) {
           if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
           const [, quoi, idn] = mpn, maintenant = Date.now();
@@ -404,6 +404,19 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
             }
             if (notifsVues.size > 2000) for (const [k, t] of notifsVues) if (t < maintenant - 6 * 3600000) notifsVues.delete(k);
             return json(res, 200, { ok: true, journal });
+          }
+          if (quoi === "document" && req.method === "POST") { // un e-mail avec pièces jointes : facture, CMR signé, preuve de livraison
+            if (!smtp) return json(res, 503, { erreur: "Aucun serveur SMTP configuré sur le relais (SMTP_HOTE, SMTP_DE…)." });
+            let b; try { b = JSON.parse(await corps(req, 12 * 1024 * 1024)); } catch { return json(res, 400, { erreur: "JSON invalide ou trop gros (12 Mo au plus)." }); }
+            const a = String(b.a || "").trim(), pieces = Array.isArray(b.pieces) ? b.pieces : [];
+            if (!adresseValide(a)) return json(res, 400, { erreur: "Adresse e-mail invalide." });
+            if (pieces.length > 8) return json(res, 400, { erreur: "8 pièces jointes au plus." });
+            let total = 0; for (const x of pieces) { if (!TYPES_PIECES.includes(x?.type)) return json(res, 400, { erreur: `Type de pièce jointe refusé : ${x?.type}` }); total += Math.floor(String(x.base64 || "").length * 0.75); }
+            if (total > 8 * 1024 * 1024) return json(res, 400, { erreur: "Pièces jointes : 8 Mo au plus." });
+            if (!quotaNotif(maintenant)) return json(res, 429, { erreur: "Trop d'envois cette heure-ci." });
+            try { await courriel_(smtp, { a, sujet: String(b.sujet || "Logistique Fret").slice(0, 200).replace(/[\r\n]+/g, " "), texte: String(b.texte || "").slice(0, 20000), pieces: pieces.map((x) => ({ nom: nomFichierSur(x.nom), type: x.type, base64: String(x.base64 || "") })) }); }
+            catch (e) { return json(res, 502, { erreur: e.message }); }
+            return json(res, 200, { ok: true, a, pieces: pieces.length });
           }
           if (quoi === "test" && req.method === "POST") {
             let b = {}; try { b = JSON.parse((await corps(req)) || "{}"); } catch { /* corps vide */ }

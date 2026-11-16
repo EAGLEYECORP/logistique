@@ -159,6 +159,7 @@ const champsClient = (c = {}) => [
   { name: "delai", label: "Délai de paiement (jours)", type: "number", value: c.delai ?? S.params.delaiPaiement, min: 0, step: 1 },
   { name: "chargeurRetour", label: "Chargeur de fret de retour (proposé quand un camion livre près de ses villes)", type: "checkbox", full: true, value: c.chargeurRetour },
   { name: "villesRetour", label: "Villes où il charge pour le Maroc (séparées par des virgules)", value: c.villesRetour, full: true, placeholder: "Perpignan, Le Boulou, Murcie" },
+  { name: "sansRelance", label: "Pas de relance automatique des factures pour ce client", type: "checkbox", full: true, value: c.sansRelance },
   { name: "franchiseAttenteH", label: "Attente gratuite à chaque quai (heures)", type: "number", value: c.franchiseAttenteH ?? S.params.franchiseAttenteH ?? 2, min: 0, step: 0.5 },
   { name: "tarifAttente", label: "Tarif d'attente au-delà (par heure, 0 = à fixer)", type: "number", value: c.tarifAttente ?? "", min: 0, step: 5 },
   { name: "deviseAttente", label: "Devise du tarif d'attente", type: "select", options: optsDevise, value: c.deviseAttente || "EUR" },
@@ -264,8 +265,8 @@ VUES.factures = {
           <td>${esc(nomClient(f.clientId))}</td>
           <td>${dateFr(f.date)}<span class="sub">échéance ${dateFr(f.echeance)}</span></td>
           <td class="r num">${fmtDevise(t.ttc, f.devise)}<span class="sub">HT ${fmt(t.ht, 2)} · TVA ${fmt(f.tva)} %</span></td>
-          <td>${badge(e.code === "payee" ? "Payée" : e.code === "retard" ? "En retard" : "À encaisser", e.niveau)}<span class="sub">${esc(e.texte)}</span></td>
-          <td><div class="actions">${f.statut !== "payee" ? btn("payer", "Encaisser", { id: f.id, icone: "check", cls: "btn ghost sm" }) : ""}${f.statut !== "payee" && e.code === "retard" ? btn("relance", "Relance", { id: f.id, icone: "mail", cls: "btn ghost sm" }) : ""}
+          <td>${badge(e.code === "payee" ? "Payée" : e.code === "retard" ? "En retard" : "À encaisser", e.niveau)}<span class="sub">${esc(e.texte)}</span>${typeof infoEnvoiFacture === "function" ? infoEnvoiFacture(f) : ""}</td>
+          <td><div class="actions">${typeof actionsEnvoiFacture === "function" ? actionsEnvoiFacture(f) : ""}${f.statut !== "payee" ? btn("payer", "Encaisser", { id: f.id, icone: "check", cls: "btn ghost sm" }) : ""}${f.statut !== "payee" && e.code === "retard" ? btn("relance", "Relance", { id: f.id, icone: "mail", cls: "btn ghost sm" }) : ""}
             ${iconBtn("imprimer", "print", "Imprimer / PDF", f.id)}${iconBtn("suppr", "trash", "Supprimer", f.id, true)}</div></td></tr>`;
       }).join("")}</tbody></table></div>` : vide("check", "Rien ici", "Aucune facture dans cette vue.")}</div>`
       : `<div class="card">${vide("receipt", "Aucune facture", "Les commandes livrées se facturent en un clic depuis l'onglet Commandes.")}</div>`}

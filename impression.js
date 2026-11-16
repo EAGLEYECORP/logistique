@@ -79,18 +79,20 @@ function ouvrirImpression(titre, corps) {
 }
 
 /* ---------- facture ---------- */
-function imprimerFacture(f) {
+function imprimerFacture(f) { ouvrirImpression(f.numero, corpsFacture(f)); }
+/** Corps HTML d'une facture (impression, pièce jointe). */
+function corpsFacture(f) {
   const c = parId(S.clients, f.clientId) || {};
   const t = totauxFacture(f);
   const client = [`<strong>${l(c.nom)}</strong>`, c.adresse && l(c.adresse).replace(/\n/g, "<br>"), [c.ville, c.pays].filter(Boolean).map(l).join(", "), c.ice && `ICE / TVA : ${l(c.ice)}`].filter(Boolean).join("<br>");
-  ouvrirImpression(f.numero, `${enteteDoc("Facture", [`N° <strong style="color:#0f172a">${l(f.numero)}</strong>`, `Date : ${dateFr(f.date)}`, `Échéance : ${dateFr(f.echeance)}`])}
+  return `${enteteDoc("Facture", [`N° <strong style="color:#0f172a">${l(f.numero)}</strong>`, `Date : ${dateFr(f.date)}`, `Échéance : ${dateFr(f.echeance)}`])}
     <div class="cadre" style="max-width:340px;margin-left:auto"><div class="k">Facturé à</div>${client}</div>
     <table style="margin-top:24px"><thead><tr><th>Désignation</th><th class="r">Montant HT</th></tr></thead><tbody>
       ${(f.lignes || []).map((x) => `<tr><td>${l(x.designation)}</td><td class="r">${fmtDevise(x.montant, f.devise)}</td></tr>`).join("")}</tbody></table>
     <div class="tot"><div><span>Total HT</span><span>${fmtDevise(t.ht, f.devise)}</span></div><div><span>TVA ${fmt(f.tva)} %</span><span>${fmtDevise(t.tva, f.devise)}</span></div><div class="g"><span>Total TTC</span><span>${fmtDevise(t.ttc, f.devise)}</span></div></div>
     <div class="lettres">Arrêtée la présente facture à la somme de : <strong>${l(montantEnLettres(t.ttc, f.devise))}</strong> toutes taxes comprises.</div>
     ${f.statut === "payee" ? `<div class="paye">Payée le ${dateFr(f.datePaiement)}</div>` : ""}
-    ${piedDoc({ banque: true, mentions: true })}`);
+    ${piedDoc({ banque: true, mentions: true })}`;
 }
 
 /* ---------- ordre de transport ---------- */

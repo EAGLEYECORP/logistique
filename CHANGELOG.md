@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.13.0 — Factures envoyées avec leurs justificatifs, relances programmées
+
+- **« Envoyer »** sur chaque facture (et proposé dès qu'une facture est créée) : e-mail au client, dans sa langue, avec **la facture, la preuve de livraison (signature, réserves) et les photos du voyage** (CMR signé, livraison), le RIB dans le message. Trois chemins, sans coût :
+  - par le **relais** (serveur d'e-mail de l'entreprise) : envoyé depuis l'adresse de l'entreprise, pièces jointes comprises ;
+  - sinon par le **partage du téléphone** : Gmail, Outlook ou WhatsApp s'ouvrent avec les fichiers ;
+  - sinon la messagerie s'ouvre et la facture s'ouvre en PDF, à joindre.
+- **Relances programmées** : rappel 3 jours avant l'échéance, puis J+7, J+15, J+30 (réglables), de plus en plus fermes, en français, anglais ou espagnol. L'équipe est prévenue dans le fil à chaque date ; avec « envoi automatique » (Réglages → Rappels), le relais envoie aussi l'e-mail au client, application fermée. Une facture payée sort des relances ; « Suspendre les relances » sur une facture, « Pas de relance » sur un client.
+- Sur la ligne de chaque facture : date d'envoi et prochaine relance.
+- Relais : route `POST /api/notifications/document` (e-mail avec pièces jointes, PDF, HTML, JPEG, PNG, 8 Mo au plus).
+
 ## 4.12.0 — Consigne de plein par pays
 
 - **Sur chaque voyage vers l'Espagne ou la France** : où faire le plein et combien, d'après les prix du jour (Maroc : vos pleins ; Espagne et France : prix officiels, Algeciras et Pyrénées-Orientales en priorité). Par exemple Agadir → Lyon : plein complet au Maroc avant Tanger Med, 132 L en Espagne avant La Jonquera, 426 L en Espagne au retour — rien en France ; Agadir → Madrid : tout l'aller-retour sur le gasoil marocain.

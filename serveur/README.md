@@ -126,6 +126,7 @@ Routes (jeton de lecture) :
 | `GET /api/notifications/scheduler?debut=&fin=` | Messages programmés et leur état (`a_venir`, `envoye`, `erreur`, `annule`, `perime`). |
 | `DELETE /api/notifications/scheduler/<id>` | Annule un message. |
 | `POST /api/notifications/manuelle` | Envoie tout de suite (bouton « Notifier »). Un même message envoyé par deux appareils dans les 6 h ne part qu'une fois. |
+| `POST /api/notifications/document` | E-mail avec pièces jointes `{ a, sujet, texte, pieces: [{ nom, type, base64 }] }` : facture, preuve de livraison, photos du CMR. Types : PDF, HTML, JPEG, PNG ; 8 pièces et 8 Mo au plus ; serveur SMTP requis. |
 | `POST /api/notifications/test` | Essaie chaque canal configuré et dit ce qui est arrivé. |
 
 Le plan est enregistré dans `donnees/scheduler.json` ; il survit à un redémarrage. Un message en retard de plus de 6 h (relais arrêté) n'est plus envoyé. 300 messages par heure au plus.

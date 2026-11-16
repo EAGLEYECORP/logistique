@@ -18,16 +18,23 @@ const base64Lignes = (s) => Buffer.from(String(s), "utf8").toString("base64").re
 const echapper = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const enHtml = (texte) => `<!doctype html><html><body style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1d1d1f">${echapper(texte).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/\n/g, "<br>")}</body></html>`;
 
-/** Message complet prêt à envoyer (en-têtes + corps). */
-function composer({ de, a, sujet, texte, html = null, date = new Date() }) {
+/** Types de pièces jointes acceptés. */
+const TYPES_PIECES = ["application/pdf", "text/html", "image/jpeg", "image/png"];
+/** Nom de fichier sûr (ASCII simple) pour une pièce jointe. */
+const nomFichierSur = (n) => String(n || "piece").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.\- ]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 80) || "piece";
+/** Message complet prêt à envoyer (en-têtes + corps). pieces : [{ nom, type, base64 }] (facture, photos…) → multipart/mixed. */
+function composer({ de, a, sujet, texte, html = null, date = new Date(), pieces = [] }) {
   const destinataires = (Array.isArray(a) ? a : [a]).map((x) => String(x).trim());
   if (!adresseValide(de) || !destinataires.length || !destinataires.every(adresseValide)) throw new Error("Adresse e-mail invalide.");
   const frontiere = `=_lf_${crypto.randomBytes(12).toString("hex")}`, id = `<${crypto.randomBytes(12).toString("hex")}@${de.split("@")[1]}>`;
-  return [
-    `From: ${de}`, `To: ${destinataires.join(", ")}`, `Subject: ${motEntete(sujet)}`, `Date: ${date.toUTCString().replace("GMT", "+0000")}`, `Message-ID: ${id}`, "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${frontiere}"`, "", `--${frontiere}`, "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64", "", base64Lignes(texte),
-    `--${frontiere}`, "Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: base64", "", base64Lignes(html || enHtml(texte)), `--${frontiere}--`, "",
-  ].join("\r\n");
+  const entetes = [`From: ${de}`, `To: ${destinataires.join(", ")}`, `Subject: ${motEntete(sujet)}`, `Date: ${date.toUTCString().replace("GMT", "+0000")}`, `Message-ID: ${id}`, "MIME-Version: 1.0"];
+  const alternative = [`--${frontiere}`, "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64", "", base64Lignes(texte),
+    `--${frontiere}`, "Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: base64", "", base64Lignes(html || enHtml(texte)), `--${frontiere}--`];
+  if (!pieces.length) return [...entetes, `Content-Type: multipart/alternative; boundary="${frontiere}"`, "", ...alternative, ""].join("\r\n");
+  const mixte = `=_lfm_${crypto.randomBytes(12).toString("hex")}`;
+  const parties = pieces.map((p) => { if (!TYPES_PIECES.includes(p.type)) throw new Error(`Type de pièce jointe refusé : ${p.type}`); const nom = nomFichierSur(p.nom);
+    return [`--${mixte}`, `Content-Type: ${p.type}; name="${nom}"`, "Content-Transfer-Encoding: base64", `Content-Disposition: attachment; filename="${nom}"`, "", String(p.base64).replace(/[^A-Za-z0-9+/=]/g, "").replace(/.{1,76}/g, "$&\r\n")].join("\r\n"); });
+  return [...entetes, `Content-Type: multipart/mixed; boundary="${mixte}"`, "", `--${mixte}`, `Content-Type: multipart/alternative; boundary="${frontiere}"`, "", ...alternative, ...parties, `--${mixte}--`, ""].join("\r\n");
 }
 
 /**
@@ -36,7 +43,7 @@ function composer({ de, a, sujet, texte, html = null, date = new Date() }) {
  */
 function envoyerCourriel(cfg, msg, { delai = 20000 } = {}) {
   const port = Number(cfg.port) || (cfg.securite === "tls" ? 465 : 587), securite = cfg.securite || (port === 465 ? "tls" : "starttls");
-  const donnees = composer({ de: cfg.de, a: msg.a, sujet: msg.sujet, texte: msg.texte, html: msg.html });
+  const donnees = composer({ de: cfg.de, a: msg.a, sujet: msg.sujet, texte: msg.texte, html: msg.html, pieces: msg.pieces || [] });
   const destinataires = (Array.isArray(msg.a) ? msg.a : [msg.a]).map((x) => String(x).trim());
   return new Promise((ok, ko) => {
     let socket, tampon = "", attente = null, fini = false;
@@ -87,4 +94,4 @@ function envoyerCourriel(cfg, msg, { delai = 20000 } = {}) {
   });
 }
 
-module.exports = { envoyerCourriel, composer, adresseValide, motEntete };
+module.exports = { envoyerCourriel, composer, adresseValide, motEntete, TYPES_PIECES, nomFichierSur };

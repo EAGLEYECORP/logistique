@@ -52,6 +52,7 @@ const AR = {
   "Plus d'alerte pour ce voyage": "لا تنبيه بعد الآن لهذه الرحلة",
   "Prix passés": "الأسعار السابقة", "Transport": "النقل", "Prix": "السعر", "Conditions": "الشروط", "Devis · 90 jours": "عروض الأسعار · 90 يومًا", "Devis et prix conseillé": "عروض الأسعار والسعر المقترح", "Rouvrir": "إعادة فتح", "Accepté": "مقبول", "Perdu": "خاسر", "Imprimer le devis (PDF)": "طباعة عرض السعر (PDF)", "Chiffrer": "تسعير", "Devis": "عرض سعر", "Enregistrer le devis": "حفظ عرض السعر",
   "Consigne de plein": "تعليمات التزود بالوقود", "Envoyer au chauffeur": "إرسال إلى السائق", "Où faire le plein": "أين تتزود بالوقود",
+  "Pièces jointes": "المرفقات", "Relances des factures": "تذكيرات الفواتير", "Envoyer": "إرسال", "Renvoyer": "إعادة الإرسال", "Suspendre les relances": "إيقاف التذكيرات", "Reprendre les relances": "استئناف التذكيرات",
   "Attente aux quais": "الانتظار في الأرصفة", "Attente aux quais · 30 jours": "الانتظار في الأرصفة · 30 يومًا", "Noter": "تسجيل", "Arrivé au quai de chargement": "وصلت إلى رصيف الشحن", "Arrivé chez le destinataire": "وصلت عند المرسل إليه",
   "Documents du client": "وثائق الزبون", "Envoyer au client": "إرسال إلى الزبون", "Mettre à jour": "تحديث", "Non requis": "غير مطلوب",
   "Coller une demande de transport": "لصق طلب نقل", "Coller un message": "لصق رسالة", "À chiffrer": "للتسعير", "Lire le message": "قراءة الرسالة",

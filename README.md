@@ -158,6 +158,7 @@ Automatique et sans action de votre part.
 | `aller_retour.js`, `aller_retour_ui.js` | Un dossier par voyage : commande → voyage, retour chargé (seconde commande), suivi unique, recette et rentabilité réparties, facturation sans doublon (testé) |
 | `lecture_commande.js`, `lecture_commande_ui.js` | « Coller un message » : demande reçue par e-mail ou WhatsApp lue sur l'appareil (villes, dates, palettes, poids, température, prix, référence, client), commande pré-remplie (testé) |
 | `documents_commande.js`, `documents_commande_ui.js` | Documents attendus du client par commande (selon le sens et la marchandise), reçus ou manquants, alerte avant chargement, demande au client dans sa langue (testé) |
+| `quais.js`, `quais_ui.js` | Attente aux quais de chargement et de livraison : arrivée notée par le chauffeur, franchise et tarif du client, lignes de facture par demi-heure entamée (testé) |
 | `jalons_notifications.js`, `comptes.js` | Routage et rédaction des notifications par étape ; rôles et droits partagés avec le relais (testés) |
 | `marge.js`, `depenses.js`, `direction.js`, `operations.js`, `notifier.js`, `comptes_ui.js` | Interfaces : marge et dépenses, capture, page Direction et simulateur, Opérations et accueils, notifications, mode multi-utilisateur (connexion, Utilisateurs, Accès par service, Journal) |
 | `synchro.js` | Synchronisation entre appareils (relais, chiffrement, fusion à trois voies) |
@@ -184,7 +185,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 223 tests (193 application, 30 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 225 tests (195 application, 30 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

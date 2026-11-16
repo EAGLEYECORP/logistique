@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.9.0 — Attente aux quais mesurée et facturée
+
+- **Mode chauffeur** : « Arrivé au quai de chargement », puis « Arrivé chez le destinataire » ; le temps sur place s'affiche, orange au-delà de la franchise ; l'étape « Chargée » ou « Livrée » arrête le compteur.
+- **Franchise et tarif par client** (fiche du client : 2 h gratuites par quai par défaut, tarif par heure en € ou MAD) ; au-delà, l'attente se facture **par demi-heure entamée**.
+- **Lignes ajoutées seules à la facture** — celle du voyage pour l'aller, celle de la commande pour le retour — avec le détail (« Attente au chargement — Agadir, 16/11 : 3 h 45 sur place, franchise 2 h → 2 h × 35 € »), converties dans la devise de la facture, jamais deux fois. Commande déjà facturée : « Facturer l'attente » crée une facture d'attente à part.
+- **Fiche du voyage** : bloc « Attente aux quais » (aller et retour), correction des heures au bureau ; **page Commandes** : pastille « 1 h 45 d'attente · 70 € » ; **page Factures** : l'attente des 30 derniers jours, facturable, facturée, et les heures sans tarif à aller chercher au contrat.
+- Correction : quand le chauffeur marque « Livrée » (aller) ou « Chargée » (retour) sur une commande liée, le voyage reçoit l'étape correspondante.
+
 ## 4.8.0 — Documents attendus du client
 
 - **Pastille « Docs 4/7 »** sur chaque commande (verte : tout est là ; orange : il en manque ; rouge : un document bloquant manque à 3 jours du chargement). Elle ouvre la liste.

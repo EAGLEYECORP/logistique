@@ -851,3 +851,11 @@ table.acces select[data-niveau=aucun] { color: var(--danger, #c0392b); }
 @media (max-width: 560px) { .doc-ligne { grid-template-columns: minmax(0, 1fr) auto; } .doc-ligne input[type=text] { grid-column: 1 / -1; grid-row: 2; } }
 .docs-voyage.danger strong { color: var(--danger); }
 .doc-ligne:not(:has(input[name^="recu__"]:checked)) input[type=text] { display: none; } /* la référence n'apparaît qu'une fois le document reçu */
+
+/* attente aux quais */
+.puce-docs.neutre { background: var(--border); color: var(--muted); }
+.chf-quai { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 2px; }
+.chf-quai.sur-place { flex-direction: row; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--info-soft); }
+.chf-quai.sur-place.au-dela { background: var(--warn-soft); }
+.chf-quai.sur-place > svg.i { width: 20px; height: 20px; flex: 0 0 20px; margin-top: 2px; }
+.chf-quai.sur-place span { display: flex; flex-direction: column; gap: 2px; }

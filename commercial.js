@@ -79,7 +79,7 @@ VUES.commandes = {
             <td>${dateFr(c.dateChargement)}${c.statut === "devis" || c.statut === "confirme" ? (jc === 0 ? " " + badge("Aujourd'hui", "warn") : jc < 0 ? " " + badge("En retard", "danger") : "") : ""}<span class="sub">→ ${dateFr(c.dateLivraison)}</span></td>
             <td>${c.chauffeurId ? esc(nomChauffeur(c.chauffeurId)) : badge("À affecter", "warn")}<span class="sub">${c.camionId ? esc(nomCamion(c.camionId)) : ""}</span></td>
             <td class="r num fin">${fmtDevise(c.prix, c.devise)}<span class="sub ${m.marge < 0 ? "neg" : ""}">${c.trajetId || coutCommande(c) ? `marge ${fmt(m.marge)} MAD · ${fmt(m.taux)} %${c.trajetId ? "" : " · hors gasoil"}` : "coûts non saisis"}</span></td>
-            <td>${badge(libStatutCmd(c.statut), niveauStatut[c.statut])}${typeof puceDocuments === "function" ? puceDocuments(c) : ""}${lien ? `<span class="sub">${lien.sens === "aller" ? "Aller" : "Retour"} du voyage ${esc(lien.v.ref)}</span>` : ""}${facture ? `<span class="sub">${esc(facture.numero)}</span>` : ""}</td>
+            <td>${badge(libStatutCmd(c.statut), niveauStatut[c.statut])}${typeof puceDocuments === "function" ? puceDocuments(c) : ""}${typeof puceAttente === "function" ? puceAttente(c) : ""}${lien ? `<span class="sub">${lien.sens === "aller" ? "Aller" : "Retour"} du voyage ${esc(lien.v.ref)}</span>` : ""}${facture ? `<span class="sub">${esc(facture.numero)}</span>` : ""}</td>
             <td><div class="actions">
               ${lien ? btn("ouvrir-voyage", lien.v.ref, { id: c.id, icone: "ship", cls: "btn ghost sm", titre: "Suivie par son voyage : ouvrir le voyage" })
                 : `${["devis", "confirme"].includes(c.statut) ? btn("planifier", "Planifier", { id: c.id, icone: "ship", cls: "btn sm", titre: "Créer le voyage de cette commande (client, villes, dates, prix, équipe repris)" }) + btn("en-retour", "En retour", { id: c.id, cls: "btn ghost sm", titre: "Charger cette commande au retour d'un voyage" }) : ""}${nx ? btn("avancer", libStatutCmd(nx), { id: c.id, icone: "arrow", cls: "btn ghost sm", titre: `Passer à l'étape « ${libStatutCmd(nx)} »` }) : ""}`}
@@ -157,6 +157,9 @@ const champsClient = (c = {}) => [
   { name: "ville", label: "Ville", value: c.ville },
   { name: "pays", label: "Pays", type: "select", options: optsPays, value: c.pays || "Maroc" },
   { name: "delai", label: "Délai de paiement (jours)", type: "number", value: c.delai ?? S.params.delaiPaiement, min: 0, step: 1 },
+  { name: "franchiseAttenteH", label: "Attente gratuite à chaque quai (heures)", type: "number", value: c.franchiseAttenteH ?? S.params.franchiseAttenteH ?? 2, min: 0, step: 0.5 },
+  { name: "tarifAttente", label: "Tarif d'attente au-delà (par heure, 0 = à fixer)", type: "number", value: c.tarifAttente ?? "", min: 0, step: 5 },
+  { name: "deviseAttente", label: "Devise du tarif d'attente", type: "select", options: optsDevise, value: c.deviseAttente || "EUR" },
   { name: "adresse", label: "Adresse", type: "textarea", full: true, value: c.adresse },
   { name: "notificationsClientAutorisees", label: "Le client accepte d'être prévenu aux étapes de ses voyages (WhatsApp ou e-mail)", type: "checkbox", full: true, value: c.notificationsClientAutorisees },
   { name: "canalNotifPrefere", label: "Canal préféré du client", type: "select", options: [["whatsapp", "WhatsApp"], ["email", "E-mail"], ["sms", "SMS"]], value: c.canalNotifPrefere || "whatsapp" },
@@ -222,9 +225,10 @@ function facturerCommandes(cmds) {
     devise: c0.devise || "MAD", tva: S.params.tvaDefaut, statut: "emise",
     lignes: cmds.map((c) => ({ designation: `Transport ${lieu(c.origine, c.paysOrigine)} → ${lieu(c.destination, c.paysDest)}${c.marchandise ? " — " + c.marchandise : ""} · ${c.ref}${c.cmr ? " · CMR " + c.cmr : ""}${c.refClient ? " · réf. " + c.refClient : ""}`, montant: num(c.prix) })),
   };
+  const nAttente = typeof ajouterAttentesFacture === "function" ? ajouterAttentesFacture(f, cmds) : 0; // attente aux quais (quais.js)
   S.factures.push(f);
   cmds.forEach((c) => { c.factureId = f.id; });
-  sauver(); toast(`Facture ${f.numero} créée · ${fmtDevise(totauxFacture(f).ttc, f.devise)}`);
+  sauver(); toast(`Facture ${f.numero} créée · ${fmtDevise(totauxFacture(f).ttc, f.devise)}${nAttente ? ` · ${nAttente} ligne(s) d'attente` : ""}`);
   rafraichir();
   return f;
 }

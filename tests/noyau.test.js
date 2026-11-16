@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2180,6 +2180,36 @@ test("ports : quatre passages (aller et retour), étapes détaillées, contrôle
   assert.strictEqual(new Set(Object.values(N.PORTS_PASSAGE).flatMap((p) => p.etapes.map((e) => e.id))).size, Object.values(N.PORTS_PASSAGE).reduce((n, p) => n + p.etapes.length, 0), "identifiants uniques");
   assert.ok(N.etapesApplicables(v, "alg_entree").some((e) => e.id === "alg_pcf"), "frais : contrôle sanitaire à Algeciras"); assert.ok(!N.etapesApplicables({ ...v, tempMin: undefined, tempMax: undefined }, "alg_entree").some((e) => e.id === "alg_pcf"), "sec : pas de contrôle sanitaire");
 });
+const etatQuais = () => { N.S.params = { ...N.S.params, tauxEUR: 11, tvaDefaut: 0, delaiPaiement: 30, franchiseAttenteH: 2, tarifAttente: 0, deviseAttente: "EUR" }; N.S.factures = []; N.S.voyages = []; N.S.trajets = [];
+  N.S.clients = [{ id: "k1", nom: "Souss Agrumes", tarifAttente: 35, deviseAttente: "EUR" }, { id: "k2", nom: "Sans tarif" }];
+  N.S.commandes = [{ id: "o1", ref: "CMD-1", clientId: "k1", origine: "Agadir", destination: "Perpignan", prix: 3000, devise: "EUR", statut: "confirme", jalons: [] }, { id: "o2", ref: "CMD-2", clientId: "k2", origine: "Perpignan", destination: "Agadir", prix: 1400, devise: "EUR", statut: "confirme", jalons: [] }]; };
+test("attente aux quais : arrivée, départ, franchise du client, demi-heure entamée, quai en cours non facturé, sans tarif compté quand même", () => {
+  etatQuais(); const [o1, o2] = N.S.commandes, T = (h) => `2026-11-17T${h}:00.000Z`;
+  N.arriveeQuai(o1, "chargement", T("08:00")); assert.strictEqual(N.arriveeQuai(o1, "chargement", T("09:00")).arrivee, T("08:00"), "une arrivée notée ne bouge pas");
+  let a = N.attenteQuai(o1, "chargement", Date.parse(T("11:00"))); assert.ok(a.enCours); assert.strictEqual(a.minutes, 180); assert.strictEqual(a.heuresFacturees, 0, "en cours : rien de facturable");
+  N.departQuai(o1, "chargement", T("12:10")); a = N.attenteQuai(o1, "chargement");
+  assert.strictEqual(a.minutes, 250); assert.strictEqual(a.auDelaMin, 130); assert.strictEqual(a.heuresFacturees, 2.5, "2 h 10 au-delà → 2,5 h (demi-heure entamée)"); assert.strictEqual(a.montant, 87.5); assert.strictEqual(a.devise, "EUR");
+  assert.throws(() => N.departQuai(o1, "chargement", T("07:00")), /avant l'arrivée/);
+  N.arriveeQuai(o2, "livraison", T("08:00")); N.departQuai(o2, "livraison", T("13:00")); a = N.attenteQuai(o2, "livraison"); assert.strictEqual(a.auDelaMin, 180); assert.strictEqual(a.montant, 0, "sans tarif : 0");
+  const s = N.syntheseAttentes(); assert.strictEqual(s.auDelaMin, 310); assert.strictEqual(s.sansTarifMin, 180); assert.strictEqual(s.facturableMad, 87.5 * 11);
+  N.S.clients[1].franchiseAttenteH = 6; assert.strictEqual(N.attenteQuai(o2, "livraison").auDelaMin, 0, "franchise du client");
+});
+test("attente aux quais : « Chargée » / « Livrée » ferment le quai ; lignes ajoutées à la facture (commande ou voyage), converties, jamais deux fois ; le voyage suit le chauffeur", () => {
+  etatQuais(); const [o1, o2] = N.S.commandes, T = (h) => `2026-11-17T${h}:00.000Z`;
+  N.arriveeQuai(o1, "chargement", T("08:00")); N.appliquerEtape(o1, "charge", new Date(T("11:30"))); assert.strictEqual(o1.quais.chargement.depart, T("11:30"));
+  const v = { id: "v1", ref: "V-1", statut: "en_cours", clientId: "k1", commandeId: "o1", commandeRetourId: "o2", prix: 3000, devise: "EUR", jalons: [], traversees: [] }; N.S.voyages.push(v);
+  N.arriveeQuai(o1, "livraison", T("06:00")); v.jalons.push({ type: "douane_export", date: T("15:00") }); o1.statut = "confirme"; o1.quais.chargement.depart = undefined; delete o1.quais.chargement.depart;
+  N.synchroCommandesVoyage(v); assert.ok(!o1.quais.chargement.depart, "la douane export ne date pas le départ du quai de chargement");
+  o1.quais.chargement.depart = T("11:30"); v.jalons.push({ type: "livre", date: T("09:15") }); N.synchroCommandesVoyage(v); assert.strictEqual(o1.quais.livraison.depart, T("09:15"), "« Livré » du voyage ferme le quai de livraison");
+  const f = N.creerFactureVoyages([v]); assert.strictEqual(f.lignes.length, 3, "prix + attente au chargement + attente à la livraison");
+  assert.ok(/^Attente au chargement — Agadir, 17\/11\/2026 : 3 h 30 sur place, franchise 2 h → 1,5 h × 35 €/.test(f.lignes[1].designation), f.lignes[1].designation); assert.strictEqual(f.lignes[1].montant, 52.5);
+  assert.strictEqual(o1.quais.chargement.facture, f.id); assert.strictEqual(N.lignesAttente(o1).length, 0, "jamais deux fois");
+  N.S.clients[1].tarifAttente = 300; N.S.clients[1].deviseAttente = "MAD"; N.arriveeQuai(o2, "chargement", T("10:00")); N.departQuai(o2, "chargement", T("13:00"));
+  const g = { id: "g", devise: "EUR", lignes: [] }; assert.strictEqual(N.ajouterAttentesFacture(g, [o2]), 1); assert.strictEqual(g.lignes[0].montant, 27.27, "300 MAD convertis en euros, arrondis au centime");
+  const o3 = { id: "o3", ref: "CMD-3", clientId: "k1", statut: "transit", jalons: [] }; N.S.commandes.push(o3); const v3 = { id: "v3", ref: "V-3", statut: "en_cours", commandeId: "o3", jalons: [] }; N.S.voyages.push(v3);
+  N.appliquerEtape(o3, "livre"); assert.strictEqual(N.jalonDepuisCommande(o3), "livre"); assert.ok(v3.jalons.some((j) => j.type === "livre" && j.source === "chauffeur")); assert.strictEqual(N.jalonDepuisCommande(o3), null, "pas deux fois");
+});
+
 const etatDocs = () => { N.S.clients = [{ id: "k1", nom: "Souss Agrumes", contact: "M. Bennani", tel: "+212 661 22 33 44", email: "achats@souss.ma", langueNotif: "es" }]; N.S.entreprise = { nom: "Atlas Fret" };
   N.S.commandes = [{ id: "o1", ref: "CMD-1", clientId: "k1", marchandise: "Clémentines, 26 palettes", origine: "Agadir", paysOrigine: "Maroc", destination: "Perpignan", paysDest: "France", dateChargement: "2026-11-18", statut: "confirme", refClient: "PO-88412" },
     { id: "o2", ref: "CMD-2", clientId: "k1", marchandise: "Emballages vides", origine: "Perpignan", paysOrigine: "France", destination: "Agadir", paysDest: "Maroc", dateChargement: "2026-11-25", statut: "confirme" },

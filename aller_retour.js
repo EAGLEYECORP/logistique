@@ -96,11 +96,20 @@ function synchroCommandesVoyage(v) {
     const jalons = (v.jalons || []).filter((j) => JALON_VERS_CMD[sens][j.type]).sort((a, b) => String(a.date).localeCompare(String(b.date)));
     for (const j of jalons) {
       const cible = JALON_VERS_CMD[sens][j.type];
-      if (ORDRE_CMD.indexOf(cible) > ORDRE_CMD.indexOf(c.statut)) { const d = new Date(j.date); appliquerEtape(c, cible, Number.isFinite(d.getTime()) ? d : new Date()); n++; }
+      if (ORDRE_CMD.indexOf(cible) > ORDRE_CMD.indexOf(c.statut)) { const d = new Date(j.date); appliquerEtape(c, cible, Number.isFinite(d.getTime()) ? d : new Date(), { fermerQuai: (sens === "aller" && cible === "livre") || (sens === "retour" && cible === "charge") }); n++; } // seules ces étapes du voyage datent bien le départ du quai
     }
     if (sens === "aller" && c.statut === "devis") { appliquerEtape(c, "confirme"); n++; }
   }
   return n;
+}
+/** Étape du voyage posée quand le chauffeur fait avancer une commande liée (livrée à l'aller, chargée au retour). Renvoie le type posé ou null. */
+function jalonDepuisCommande(c, date = new Date().toISOString()) {
+  const l = voyageDeCommande(c); if (!l) return null;
+  const type = l.sens === "aller" && c.statut === "livre" ? "livre" : l.sens === "retour" && c.statut === "charge" ? "charge_retour" : null;
+  if (!type || (l.v.jalons || []).some((j) => j.type === type)) return null;
+  (l.v.jalons ||= []).push({ type, date, source: "chauffeur" }); l.v.jalons.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (l.v.statut === "prevu") l.v.statut = "en_cours";
+  return type;
 }
 /** Retire les liens vers des commandes supprimées, puis fait suivre toutes les commandes à leurs voyages. */
 function synchroToutesCommandes() {

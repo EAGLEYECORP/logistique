@@ -28,6 +28,9 @@ const PARAMS_DEFAUT = {
   tvaDefaut: 14,           // % — à vérifier avec votre comptable (export, transport international…)
   delaiPaiement: 30,       // jours, si le client n'en a pas
   rappelSauvegarde: 7,     // jours sans sauvegarde avant rappel
+  franchiseAttenteH: 2,    // heures d'attente gratuites à chaque quai (chargement, livraison), si le client n'en a pas
+  tarifAttente: 0,         // tarif par heure au-delà de la franchise, si le client n'en a pas (0 = à fixer)
+  deviseAttente: "EUR",
 };
 
 /** Version du schéma des données. 1 = flotte · 2 = + clients, commandes, factures · 3 = + assistant de démarrage, rappels, photos · 4 = + voyages, autorisations bilatérales, séjours Schengen · 5 = + traces GPS et zones · 6 = + gares de péage et relevés Jawaz · 7 = + lignes de coût des voyages, charges fixes détaillées, charges générales, échéances · 8 = + notifications par étape (routage, fil de l'application, rappels annulés ou reportés). */
@@ -618,9 +621,10 @@ function finDeService(ch, maintenant = Date.now()) {
 }
 
 /** Fait avancer une commande à l'étape nx : jalon horodaté, trajet lié démarré/terminé, kilométrage du camion. */
-function appliquerEtape(c, nx, maintenant = new Date()) {
+function appliquerEtape(c, nx, maintenant = new Date(), { fermerQuai = true } = {}) {
   c.statut = nx;
   (c.jalons ||= []).push({ statut: nx, date: maintenant.toISOString() });
+  if (fermerQuai && typeof departQuai === "function") { const q = nx === "charge" ? "chargement" : nx === "livre" ? "livraison" : ""; if (q && c.quais?.[q]?.arrivee && !c.quais[q].depart) try { departQuai(c, q, maintenant.toISOString()); } catch { /* départ avant l'arrivée : laissé à corriger */ } } // quais.js
   const t = c.trajetId && parId(S.trajets, c.trajetId);
   if (nx === "charge" && t && t.statut === "planifie") t.statut = "encours";
   if (nx === "livre") {
@@ -725,6 +729,7 @@ function creerFactureVoyages(voyages, opts = {}) {
     echeance: dateISO(Date.parse(date + "T00:00:00Z") + (client?.delai ?? S.params.delaiPaiement) * 86400000), devise, tva: opts.tva ?? S.params.tvaDefaut, statut: "emise",
     lignes: voyages.map((v, i) => ({ designation: (i === 0 && opts.designation) || designationVoyage(v), montant: i === 0 && opts.montant !== undefined ? num(opts.montant) : (v.devise || "MAD") === devise ? num(v.prix) : versMAD(v.prix, v.devise) })) };
   S.factures.push(f); for (const v of voyages) v.factureId = f.id;
+  if (typeof ajouterAttentesFacture === "function" && typeof commandeAller === "function") ajouterAttentesFacture(f, voyages.map(commandeAller).filter(Boolean)); // attente aux quais de l'aller (quais.js)
   return f;
 }
 /** Relie un voyage à une facture existante (du même client), en ajoutant sa ligne si demandé. */

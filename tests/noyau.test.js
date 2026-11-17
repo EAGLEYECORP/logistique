@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js", "liens_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js", "liens_ui.js", "itineraire_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2766,6 +2766,24 @@ test("lien transitaire : étapes des deux sens avec ce qui est fait ; les étape
   const g = N.appliquerEvenementsTransit(v, [{ n: 5, etape: "alg_police", annule: true, date: "x" }, { n: 6, etape: "tme_douane", annule: true, date: "x" }]);
   assert.deepStrictEqual([...g.map((x) => [x.etape, x.annule])], [["tme_douane", true]], "une annulation n'efface que ce que le transitaire avait noté"); assert.ok(!v.etapesPort.tme_douane && v.etapesPort.alg_police);
   assert.ok(N.messageLienTransit(v, "https://r/transit/x").includes("V-1 (camion 111-A-1, remorque R-44)"));
+});
+
+/* ---------- itinéraire poids lourd (itineraire.js) ---------- */
+test("itinéraire : tronçons routiers (détroit à part, sens import, même rive, ville inconnue, autre ligne), somme, application sans écraser une saisie, plein et devis repris", () => {
+  etatFiche(); const v = N.S.voyages[0];
+  let t = N.tronconsRoute(v); assert.deepStrictEqual([...t.map((x) => x.lib)], ["Agadir → Tanger Med", "Algeciras → Perpignan"]); assert.deepStrictEqual([...t[0].points[1]], [...N.PORT_TMED]); assert.deepStrictEqual([...t[1].points[0]], [...N.PORT_ALG]);
+  t = N.tronconsRoute({ origine: "Perpignan", destination: "Agadir" }); assert.deepStrictEqual([...t.map((x) => x.lib)], ["Perpignan → Algeciras", "Tanger Med → Agadir"]);
+  assert.strictEqual(N.tronconsRoute({ origine: "Perpignan", destination: "Lyon" }).length, 1); assert.ok(/Ville inconnue : Trifouilly/.test(N.tronconsRoute({ origine: "Trifouilly", destination: "Lyon" }).erreur));
+  assert.ok(/seul le détroit/.test(N.tronconsRoute({ ...v, traversees: [{ sens: "aller", ligne: "tmed-sete" }] }).erreur));
+  assert.strictEqual(N.lienGoogleMaps([[30.42, -9.6], [35.889, -5.5]]), "https://www.google.com/maps/dir/?api=1&origin=30.42,-9.6&destination=35.889,-5.5&travelmode=driving");
+  const it = N.sommeTroncons(N.tronconsRoute(v), [{ km: 812, heures: 10.2, kmPays: { MA: 812 }, kmPeage: 700, source: "openrouteservice (service public)", calcule: "2026-11-17T10:00:00.000Z" }, { km: 1012, heures: 11.6, kmPays: { ES: 984, FR: 28 }, kmPeage: 900 }]);
+  assert.deepStrictEqual([it.km, it.heures, { ...it.kmPays }, it.kmPeage], [1824, 21.8, { MA: 812, ES: 984, FR: 28 }, 1600]); assert.strictEqual(N.texteKmPays(it.kmPays), "ES 984, FR 28");
+  let a = N.appliquerItineraire(v, it); assert.deepStrictEqual([a.kmAller, a.kmPays, v.kmAller, v.kmPays], ["rempli", "rempli", 1824, "ES 984, FR 28"]);
+  const avant = { kmAller: v.kmAller, kmPays: v.kmPays }; v.kmPays = "ES 1000, FR 30"; N.noterSaisieKm(v, avant); assert.ok(!v.kmPaysAuto && v.kmAllerAuto, "le champ modifié à la main n'est plus automatique");
+  a = N.appliquerItineraire(v, { ...it, km: 1830 }); assert.deepStrictEqual([a.kmAller, a.kmPays, v.kmAller, v.kmPays], ["rempli", "garde", 1830, "ES 1000, FR 30"], "une saisie n'est jamais écrasée");
+  N.S.commandes[0].paysDest = "France"; const p = N.trajetParPays(v); assert.deepStrictEqual([p.kmMA, p.kmES, p.kmFR, p.source, p.paysDest], [812, 984, 28, "itineraire", "France"], "la consigne de plein suit les km réels");
+  const c = { origine: "Agadir", destination: "Perpignan", paysOrigine: "Maroc", paysDest: "France" }; assert.ok(N.kmEstimes(c).km > 1500 && !N.kmEstimes(c).source, "sans itinéraire : estimation");
+  c.itineraire = it; assert.deepStrictEqual([N.kmEstimes(c).km, N.kmEstimes(c).source], [1824, "itineraire"]);
 });
 
 (async () => {

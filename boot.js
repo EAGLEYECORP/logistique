@@ -119,6 +119,7 @@ function demarrageModules() {
   if (typeof notifDemarrer === "function") notifDemarrer();
   if (typeof demarrageInstallation === "function") demarrageInstallation();
   if (typeof boiteDemarrer === "function") boiteDemarrer(); // boîte des demandes : message partagé, relève par le relais
+  if (typeof itineraireDemarrer === "function") itineraireDemarrer(); // service d'itinéraire poids lourd du relais
   if (typeof liensDemarrer === "function") liensDemarrer(); // liens de dépôt et liens transitaire : fichiers et étapes reçus
 }
 

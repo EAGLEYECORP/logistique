@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.4.0 — Itinéraire poids lourd : kilomètres réels par pays, liens Google Maps
+
+- **Fiche du voyage → Suivi → Itinéraire poids lourd** : le trajet découpé en tronçons routiers (Agadir → Tanger Med, Algeciras → Perpignan ; la traversée du détroit à part), chacun avec son **lien Google Maps** pour le chauffeur ou le bureau.
+- **« Calculer l'itinéraire réel »** quand le relais a un service d'itinéraire : kilomètres et heures de conduite d'un camion (gabarit, tonnage), **kilomètres par pays** et **à péage**. Ils remplissent les kilomètres du voyage et les « km par pays » : **péages d'Europe recalculés**, **consigne de plein** sur les vrais kilomètres d'Espagne et de France, coût au km. **Une valeur saisie à la main n'est jamais écrasée.**
+- **Devis** : l'itinéraire réel est calculé avant le prix conseillé quand le service est branché ; le détail dit si la distance est calculée ou estimée (à vol d'oiseau × 1,25).
+- **Relais** : `ITINERAIRE_URL` (votre propre serveur openrouteservice, logiciel libre) ou `ITINERAIRE_CLE` (service public d'openrouteservice) ; profil camion, ferries évités, résultats gardés 60 jours, quota quotidien. **Conditions à vérifier** : la formule gratuite du service public semble réservée à un usage non commercial ; Réglages → Général → Itinéraire poids lourd l'explique. Sans service, l'estimation reste, signalée comme telle.
+- Google Maps n'a pas de mode poids lourd (hauteurs, tonnages, interdictions à vérifier) ; Mappy n'est pas relié : son format d'adresse n'a pas pu être vérifié.
+
 ## 5.3.0 — Liens sans compte : le client dépose ses documents, le transitaire marque les étapes de douane
 
 - **Lien de dépôt pour le client** (fiche du voyage → Documents, pour l'aller et pour le retour) : le client ouvre le lien sur son téléphone, voit la liste des documents attendus **dans sa langue** (français, anglais, espagnol ; arabe au choix sur la page) et les envoie **en photo ou en PDF**, sans compte. Les photos sont réduites sur son téléphone avant l'envoi.

@@ -155,6 +155,7 @@ Automatique et sans action de votre part.
 | `optimisation.js`, `journal.js`, `prevision.js` | Conseils et tableau des opérations ; historique des voyages ; attentes aux ports et arrivée estimée (testés) |
 | `planning.js`, `calendrier.js` | Disponibilités, conflits d'affectation, ressources libres, duplication, programme du chauffeur (testé) ; page Planning |
 | `passages.js`, `passages_ui.js` | Événements de passage, suite de chaque étape, alertes, routage des messages (testé) ; page Passages douane |
+| `itineraire.js`, `itineraire_ui.js`, `serveur/itineraire.js` | Itinéraire poids lourd : tronçons routiers (détroit à part), liens Google Maps, km et heures réels par pays et à péage par le relais (openrouteservice), repris dans les péages d'Europe, le plein et le devis sans écraser une saisie (testé) |
 | `liens.js`, `liens_ui.js`, `serveur/liens.js`, `serveur/page-lien.js` | Liens sans compte servis par le relais : dépôt des documents par le client (photo ou PDF, rangés dans les photos du voyage, documents marqués reçus) et étapes de douane notées par le transitaire, appliquées au voyage (testé) |
 | `boite.js`, `boite_ui.js`, `serveur/imap.js`, `serveur/mime.js` | Boîte des demandes : e-mails relevés par le relais (IMAP en lecture seule, lecture MIME sans dépendance) et messages partagés depuis WhatsApp, lus, triés en commande, devis ou ignorés (testé) |
 | `fiche.js`, `fiche_ui.js` | Fiche du voyage : frise, prochaine action, points d'attention (logique pure, testée) ; en-tête, quatre onglets (Suivi, Documents, Argent, Équipe) et registre des blocs (`enregistrerBlocVoyage`, dans `voyages.js`) |
@@ -195,7 +196,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 249 tests (213 application, 36 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 251 tests (214 application, 37 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

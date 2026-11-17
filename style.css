@@ -1077,3 +1077,4 @@ pre.bloc-code { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; backg
 .vignette.fichier svg.i { width: 26px; height: 26px; color: var(--primary); }
 .vignette.fichier span { font-size: .72rem; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .trav.lien-transit { border-style: dashed; }
+.itineraire-resume { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 10px; } .itineraire-resume svg.i { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--ok); } .itineraire-resume strong { color: var(--text); }

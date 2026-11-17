@@ -20,6 +20,8 @@ function trajetParPays(v) {
   if (!d) return null;
   const pays = aller?.paysDest || (d[1] > -1.8 && d[0] > 42.5 ? "France" : d[0] > 36 ? "Espagne" : "Maroc");
   if (!["Espagne", "France"].includes(pays)) return null;
+  const it = typeof kmPleinItineraire === "function" ? kmPleinItineraire(v) : null; // itinéraire poids lourd calculé : kilomètres réels par pays
+  if (it) return { ...it, frontiere: it.kmFR ? (d[1] < 0.5 ? FRONTIERE_OUEST : FRONTIERE_EST).nom : null, paysDest: it.kmFR ? "France" : pays, source: "itineraire" };
   const kmMA = o ? Math.round(kmEntre(o, TANGERMED_C) * DETOUR_PLEIN) : 0;
   if (pays === "Espagne") return { kmMA, kmES: Math.round(kmEntre(ALGECIRAS_C, d) * DETOUR_PLEIN), kmFR: 0, frontiere: null, paysDest: pays };
   const f = d[1] < 0.5 ? FRONTIERE_OUEST : FRONTIERE_EST;

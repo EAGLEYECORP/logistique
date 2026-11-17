@@ -940,6 +940,35 @@ test("lien transitaire : étapes marquées par le transitaire (référence, note
   } finally { if (s.serveur.listening) await s.arreter(); }
 });
 
+/* ---------- itinéraire poids lourd ---------- */
+test("itinéraire poids lourd : appel openrouteservice (profil camion, ferries évités, gabarit), km par pays et à péage, cache, quota, erreurs ; route du relais", async () => {
+  const { creerItineraire, lireReponse } = require("../serveur/itineraire.js");
+  const appels = [];
+  const reponse = { features: [{ geometry: { coordinates: [[-9.6, 30.42], [-5.5, 35.88]] }, properties: { summary: { distance: 812400, duration: 36720 }, extras: { countryinfo: { values: [[0, 1, 134]], summary: [{ value: 134, distance: 812400, amount: 100 }] }, tollways: { values: [[0, 1, 1]], summary: [{ value: 1, distance: 700100, amount: 86 }, { value: 0, distance: 112300, amount: 14 }] } } } }] };
+  const http_ = async (u, o) => { appels.push({ u, o, corps: JSON.parse(o.body) }); return { ok: true, status: 200, json: async () => reponse }; };
+  const it = creerItineraire({ cle: "cle-essai", quotaJour: 2, http_ });
+  const r = await it.calculer({ points: [[30.42, -9.6], [35.88, -5.5]], camion: { poids: 44 } });
+  assert.deepStrictEqual([r.km, r.heures, r.kmPays, r.kmPeage, r.source], [812, 10.2, { MA: 812 }, 700, "openrouteservice (service public)"]);
+  const a = appels[0]; assert.strictEqual(a.u, "https://api.openrouteservice.org/v2/directions/driving-hgv/geojson"); assert.strictEqual(a.o.headers.Authorization, "cle-essai");
+  assert.deepStrictEqual(a.corps.coordinates, [[-9.6, 30.42], [-5.5, 35.88]], "longitude puis latitude"); assert.deepStrictEqual(a.corps.options.avoid_features, ["ferries"]); assert.strictEqual(a.corps.options.vehicle_type, "hgv");
+  assert.deepStrictEqual(a.corps.options.profile_params.restrictions, { weight: 44, height: 4, length: 16.5, width: 2.55, axleload: 11.5 }); assert.deepStrictEqual(a.corps.extra_info, ["countryinfo", "tollways"]);
+  assert.strictEqual((await it.calculer({ points: [[30.4201, -9.6001], [35.88, -5.5]], camion: { poids: 44 } })).cache, true, "mêmes points à 100 m près : pas de nouvel appel"); assert.strictEqual(appels.length, 1);
+  await it.calculer({ points: [[36.14, -5.45], [42.69, 2.89]] }); await assert.rejects(it.calculer({ points: [[36.14, -5.45], [48.85, 2.35]] }), /Quota du jour atteint \(2 calculs\)/);
+  // sans résumé : km par pays recalculés sur le tracé (Algeciras → frontière → Perpignan)
+  const t = lireReponse({ features: [{ geometry: { coordinates: [[-5.45, 36.14], [2.87, 42.42], [2.89, 42.69]] }, properties: { summary: { distance: 1100000, duration: 40000 }, extras: { countryinfo: { values: [[0, 1, 187], [1, 2, 70]] } } } }] });
+  assert.ok(t.kmPays.ES > 950 && t.kmPays.ES < 1000 && t.kmPays.FR > 25 && t.kmPays.FR < 35, JSON.stringify(t.kmPays));
+  await assert.rejects(creerItineraire({}).calculer({ points: [[1, 1], [2, 2]] }), /non configuré/);
+  await assert.rejects(it.calculer({ points: [[1, 1]] }), /De 2 à 10 points/);
+  const refus = creerItineraire({ url: "http://ors.local:8080/ors/", http_: async () => ({ ok: false, status: 403, json: async () => ({ error: "Quota exceeded" }) }) });
+  await assert.rejects(refus.calculer({ points: [[1, 1], [2, 2]] }), /Clé refusée ou quota du service atteint \(réponse 403\)/);
+  const s = await demarrer(null, { itineraire: { cle: "k" }, http_ });
+  try { assert.strictEqual((await s.appel("/api/itineraire", { methode: "POST", corps: { points: [[30.42, -9.6], [35.88, -5.5]] } })).code, 401);
+    const x = await s.appel("/api/itineraire", { methode: "POST", jeton: "lit", corps: { points: [[30.42, -9.6], [35.88, -5.5]] } }); assert.strictEqual(x.code, 200); assert.strictEqual(x.json.kmPays.MA, 812);
+    assert.deepStrictEqual((await s.appel("/api/etat", { jeton: "lit" })).json.itineraire.actif, true); }
+  finally { await s.arreter(); }
+  const s2 = await demarrer(null); try { assert.strictEqual((await s2.appel("/api/itineraire", { methode: "POST", jeton: "lit", corps: { points: [[1, 1], [2, 2]] } })).code, 503); } finally { await s2.arreter(); }
+});
+
 (async () => {
   let ok = 0;
   for (const [n, f] of tests) { try { await f(); ok++; console.log("✓", n); } catch (e) { console.error("✗", n, "\n ", e.message); process.exitCode = 1; } }

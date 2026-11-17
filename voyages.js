@@ -217,7 +217,7 @@ VUES.voyages = {
     if (!v) return;
     if (act === "modifier") {
       const f = await formulaire(`Modifier ${v.ref}`, champsVoyage(v));
-      if (f) { Object.assign(v, lireVoyage(f)); sauver(); toast("Voyage mis à jour"); rafraichir(); }
+      if (f) { const avant = { kmAller: v.kmAller, kmPays: v.kmPays }; Object.assign(v, lireVoyage(f)); if (typeof noterSaisieKm === "function") noterSaisieKm(v, avant); sauver(); toast("Voyage mis à jour"); rafraichir(); }
     }
     if (act === "trav") {
       const sens = extra;

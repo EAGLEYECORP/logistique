@@ -17,6 +17,7 @@ const mediane2 = (l) => { const t = l.filter(Number.isFinite).sort((a, b) => a -
 function kmEstimes(c) {
   const o = coordsVille(c.origine), d = coordsVille(c.destination); if (!o || !d) return null;
   const maroc = (p) => p === "Maroc", traverse = maroc(c.paysOrigine || "Maroc") !== maroc(c.paysDest || "");
+  if (num(c.itineraire?.km) > 0) return { km: c.itineraire.km, traverse, source: "itineraire" }; // itinéraire poids lourd calculé par le relais
   const km = traverse ? (maroc(c.paysOrigine || "Maroc") ? kmEntre(o, PORT_TMED) + kmEntre(PORT_ALG, d) : kmEntre(o, PORT_ALG) + kmEntre(PORT_TMED, d)) : kmEntre(o, d);
   return { km: Math.round(km * DETOUR_ROUTE), traverse };
 }
@@ -48,7 +49,7 @@ function coutAllerRetour(c, aujourdhui = today()) {
   const m = margeVoyage(v), carbCompte = m.couts_directs.filter((l) => l.type === "carburant").reduce((s, l) => s + l.montant, 0);
   let carbAjout = 0; // sans pleins ni prix du jour, le modèle ne compte pas le gasoil : kilomètres × consommation × votre prix du gasoil
   if (!(carbCompte > 0)) { const conso = (cam && typeof consoMoyenne === "function" && consoMoyenne(cam.id)) || num(S.params.consoDefaut, 33); carbAjout = ((2 * k.km * conso) / 100) * num(S.params.prixGasoil, 12); manques.push("gasoil estimé au prix marocain de vos réglages (prix européens du jour non chargés)"); }
-  return { mad: Math.round(m.total_direct + m.total_structure + carbAjout), source: "estimation", n: 0, km: k.km, jours, manques, detail: `${fmt(2 * k.km)} km aller-retour${k.traverse ? " par Tanger Med ⇄ Algeciras" : ""}, ${jours} jours` };
+  return { mad: Math.round(m.total_direct + m.total_structure + carbAjout), source: "estimation", n: 0, km: k.km, jours, manques, detail: `${fmt(2 * k.km)} km aller-retour${k.source === "itineraire" ? " (itinéraire poids lourd calculé)" : " (à vol d'oiseau × 1,25 : estimation)"}${k.traverse ? " par Tanger Med ⇄ Algeciras" : ""}, ${jours} jours` };
 }
 const nouvelleTraverseeDevis = (sens, ligne) => ({ sens, ligne, ml: 16.5, statut: "a_reserver", ...LIGNES_TRAVERSEE[ligne].defauts });
 /** Chance de charger un retour près de la livraison, et prix médian de ces retours (€) : { proba, n, defaut, prixRetourEur, nPrix }. */

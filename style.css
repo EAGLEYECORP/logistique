@@ -1088,3 +1088,21 @@ pre.bloc-code { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; backg
 .trav.coupures.warn { border-color: var(--warn); background: var(--warn-soft); } .trav.coupures.danger { border-color: var(--danger); background: var(--danger-soft); }
 .chf-coupure.danger { background: var(--danger-soft); }
 .compteur .ligne strong { white-space: nowrap; }
+
+/* ============================================================
+   Meilleur créneau au port (v5.6)
+   ============================================================ */
+.trav.creneau-port { align-items: stretch; } .trav.creneau-port > div:first-child { flex: 1 1 260px; }
+.tranches-port { display: grid; grid-template-columns: repeat(8, 22px); gap: 3px; align-items: end; height: 64px; flex: none; }
+.tranches-port span { position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+.tranches-port i { display: block; width: 100%; border-radius: 4px 4px 2px 2px; background: color-mix(in srgb, var(--text) 22%, transparent); }
+.tranches-port .meilleur i { background: var(--ok); } .tranches-port .pire i { background: var(--danger); } .tranches-port .vide i { height: 3px !important; background: var(--border); }
+.tranches-port b { font-size: .62rem; font-weight: 600; color: var(--muted); margin-top: 2px; } .tranches-port .arrivee b { color: var(--primary); text-decoration: underline; }
+table.grille-attentes { border-collapse: separate; border-spacing: 3px; width: 100%; min-width: 460px; }
+table.grille-attentes th { font-size: .74rem; font-weight: 600; color: var(--muted); padding: 2px; text-align: center; }
+table.grille-attentes th[scope=row] { text-align: start; width: 40px; }
+table.grille-attentes td { --t: .5; height: 40px; padding: 2px; border-radius: 8px; text-align: center; vertical-align: middle; font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--danger) calc(var(--t) * 55%), color-mix(in srgb, var(--ok) 45%, var(--surface))); }
+table.grille-attentes td b { display: block; font-size: .76rem; } table.grille-attentes td span { display: block; font-size: .64rem; color: var(--text-2); }
+table.grille-attentes td.vide { background: var(--surface-2); }
+.creneau-devis { display: flex; gap: 8px; align-items: flex-start; } .creneau-devis svg.i { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.table-wrap:has(> table.grille-attentes) { overflow-x: auto; }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.6.0 — Meilleur créneau au port, d'après vos propres passages
+
+- **Fiche du voyage → Suivi → Créneau au port** : pour le prochain port du voyage (Tanger Med à l'export, Algeciras, Tanger Med à l'import), l'heure d'arrivée conseillée ce jour-là et celle à éviter, avec l'attente habituelle de chacune et le nombre de passages ; pour un voyage prévu, l'**arrivée estimée** au port (départ du dépôt à 6 h, 70 km/h, pauses et repos de nuit) et ce qu'elle coûte en attente par rapport au meilleur créneau. Petit graphique des tranches de 3 heures, l'arrivée estimée soulignée.
+- **Page Planning → Attentes aux ports par jour et heure** : une grille jour × tranche de 3 heures pour chaque port (Algeciras : marchandises fraîches à part), du vert (rapide) au rouge (lent), avec le nombre de passages ; le détail au survol.
+- **Devis** : le créneau conseillé à Tanger Med le jour du chargement.
+- Tout vient de **vos attentes mesurées** (entrée au port → embarquement ou sortie, heure du Maroc ; passages au scanner écartés) ; sans assez de passages, rien n'est conseillé et c'est dit (3 passages par tranche au moins, sinon toute la semaine).
+- Pour les développeurs : un test vérifie qu'aucun nom global n'est déclaré deux fois dans les scripts de la page (la page s'arrêtait au second fichier).
+
 ## 5.5.0 — Coupures planifiées : la prochaine pause, les compteurs du chauffeur, les aires poids lourds
 
 - **Fiche du voyage → Suivi → Conduite et coupures** (voyage en cours dont la balise est suivie) : **prochaine pause de 45 min** (« dans 0 h 40, vers 17:19, ≈ 53 km »), **fin de la conduite du jour** (9 h, ou 10 h quand c'est encore permis cette semaine), arrêt en cours (« encore 15 min pour valoir une pause »), dépassements en rouge.

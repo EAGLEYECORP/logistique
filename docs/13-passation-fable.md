@@ -89,7 +89,7 @@ Chaque élément : logique pure testée, interface, passage réel sur téléphon
 2. (livré en v5.3.0 : `liens.js`, `liens_ui.js`, `serveur/liens.js`, `serveur/page-lien.js`) **Lien de dépôt des documents** pour le client et **lien transitaire** pour les étapes de douane, servis par le relais, sans compte, expirables, comme le lien de suivi.
 3. (livré en v5.4.0 : `itineraire.js`, `itineraire_ui.js`, `serveur/itineraire.js` ; service public d'openrouteservice à n'utiliser que si ses conditions le permettent, sinon serveur propre) **Itinéraire poids lourd** par le relais (openrouteservice ou équivalent gratuit, conditions vérifiées) : kilomètres et durée par pays réutilisés partout ; liens Mappy et Google Maps par tronçon.
 4. (livré en v5.5.0 : `coupures.js`, `coupures_ui.js` ; alertes envoyées tant que l'application est ouverte — les faire envoyer par le relais seul reste à faire) **Coupure planifiée** et alertes au chauffeur : prochaine pause et parkings poids lourds possibles, compteurs jour, semaine, deux semaines.
-5. **Meilleur créneau au port** d'après l'historique des attentes, au planning et au devis.
+5. (livré en v5.6.0 : `creneaux.js`, `creneaux_ui.js`) **Meilleur créneau au port** d'après l'historique des attentes, au planning et au devis.
 6. **Refonte de la fiche du voyage** (phase B) — à mener en parallèle dès le début : c'est elle que l'exploitant ouvre cinquante fois par jour.
 7. **Registre de crochets** à la place des enveloppes, puis **état dans IndexedDB**.
 8. **Facture en PDF**, arrivée au quai par géorepérage du client, mode chauffeur (phase C).

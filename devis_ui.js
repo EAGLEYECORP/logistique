@@ -29,7 +29,7 @@ async function chiffrerCommande(c) {
       <div class="devis-case"><span class="sub">Prix plancher</span><strong>${fmtPrix(p.plancher, d)}</strong><span class="sub">en dessous, vous perdez de l'argent</span></div>
       <div class="devis-case"><span class="sub">Coût de l'aller-retour</span><strong>${fmtPrix(p.cout.montant, d)}</strong><span class="sub">${esc(p.cout.detail || "")}</span></div>
       <div class="devis-case"><span class="sub">Retour chargé</span><strong>${Math.round(p.retour.proba * 100)} % de chances</strong><span class="sub">${p.retour.defaut ? "par défaut (moins de 3 voyages vers cette zone)" : `${p.retour.n} voyages vers cette zone`}${p.retour.prixRetourEur ? ` · retour moyen ${fmt(p.retour.prixRetourEur)} €` : " · aucun prix de retour connu : non déduit"}</span></div>
-    </div>
+    </div>${typeof ligneCreneauDevis === "function" ? ligneCreneauDevis(c) : ""}
     ${p.cout.manques.length ? `<p class="lecture-manque">${ic("alert")}<span>Estimation incomplète : ${p.cout.manques.map(esc).join(" ; ")}. Le prix conseillé est un plancher de réflexion, pas un tarif.</span></p>` : ""}
     <div class="section-title">Prix passés</div>${histo}${h.corridor.mediane ? `<p class="sub" style="margin:4px 0 0">Tous clients, ce trajet : médiane ${fmtPrix(h.corridor.mediane, h.corridor.devise)} (${h.corridor.n} commande${h.corridor.n > 1 ? "s" : ""}).</p>` : ""}
     <div class="form-grid" style="margin-top:12px">

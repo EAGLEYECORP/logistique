@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js", "liens_ui.js", "itineraire_ui.js", "coupures_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js", "liens_ui.js", "itineraire_ui.js", "coupures_ui.js", "creneaux_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2816,6 +2816,48 @@ test("coupures : journal par jour (jamais diminué, 21 jours gardés), compteurs
   assert.deepStrictEqual([aires[0].places, aires[0].payant, aires[0].gardee, aires[1].douches], [80, true, true, true]); assert.ok(N.requeteAiresPL([36.14, -5.45]).includes('(around:25000,36.14,-5.45)'));
   const m = N.messageCoupure("pause", 30, t("2026-11-17", "15:40"), "fr", "https://maps/x"); assert.ok(/^Pause de 45 min à prévoir dans 30 min \(vers 15:40\)\. Aires poids lourds : https:\/\/maps\/x$/.test(m), m);
   assert.ok(N.messageCoupure("finJour", 20, t("2026-11-17", "18:00"), "ar").includes("نهاية السياقة"));
+});
+
+/* ---------- meilleur créneau au port (creneaux.js) ---------- */
+const mesurePort = (portId, jour, heure, heures, plus = {}) => ({ id: N.uid(), portId, jourSemaine: jour, heureEntree: heure, dureeMs: heures * 3600000, saison: "haute", avecSPS: false, scanRouge: false, ...plus });
+test("créneau au port : grille jour × tranche (scanner écarté), meilleur et pire créneau du jour, repli sur la semaine, rien sans assez de passages", () => {
+  N.S.attentesPort = [];
+  for (const h of [1.2, 1.5, 1.4]) N.S.attentesPort.push(mesurePort("tmed_export", 2, 7, h)); // mardi 06-09 : rapide
+  for (const h of [4, 4.5, 3.8, 5]) N.S.attentesPort.push(mesurePort("tmed_export", 2, 16, h)); // mardi 15-18 : lent
+  for (const h of [2.5, 2.2, 2.4]) N.S.attentesPort.push(mesurePort("tmed_export", 2, 11, h));
+  N.S.attentesPort.push(mesurePort("tmed_export", 2, 7, 9, { scanRouge: true }), mesurePort("alg_entry", 2, 7, 6, { avecSPS: true }));
+  const g = N.grilleAttentes("tmed_export"); assert.strictEqual(g.total, 10); assert.deepStrictEqual([g.grille[2][6].n, g.grille[2][6].scans, g.grille[2][6].p50], [3, 1, 1.4 * 3600000], "le passage au scanner ne compte pas dans la médiane");
+  const c = N.meilleurCreneau("tmed_export", 2);
+  assert.deepStrictEqual([c.portee, c.meilleur.lib, c.pire.lib, c.gainMs], ["jour", "06:00–09:00", "15:00–18:00", (4.25 - 1.4) * 3600000]);
+  assert.strictEqual(N.meilleurCreneau("tmed_export", 4).portee, "semaine", "jeudi sans passages : toute la semaine");
+  assert.strictEqual(N.meilleurCreneau("tmed_import", 2), null, "aucun passage : aucun conseil");
+  assert.strictEqual(N.meilleurCreneau("alg_entry", 2, { avecSPS: false }), null, "frais et non frais jamais mélangés");
+  assert.strictEqual(N.libTranche(21), "21:00–00:00"); assert.strictEqual(N.trancheDe(23), 21); assert.strictEqual(N.trancheDe(-1), 21);
+});
+test("créneau au port : conseil pour un voyage — prochain port, arrivée estimée au port d'export (départ à 6 h, pauses), écart avec le meilleur créneau", () => {
+  etatFiche(); const v = N.S.voyages[0]; N.S.attentesPort = [];
+  // départ mardi 17/11 à 6 h d'Agadir : ≈ 12 h 50 de route estimée → 9 h (pause comprise), repos de 11 h, puis le reste : arrivée mercredi vers 6 h 30 (heure du Maroc)
+  for (const h of [1.2, 1.5, 1.4]) N.S.attentesPort.push(mesurePort("tmed_export", 3, 13, h));
+  for (const h of [4, 4.5, 3.8]) N.S.attentesPort.push(mesurePort("tmed_export", 3, 7, h));
+  const a = N.arriveePortEstimee(v), hm = N.heureMaroc(a); assert.ok(hm >= 6 && hm < 9, `arrivée vers ${hm} h`); assert.strictEqual(N.jourMaroc(a), 3, "le lendemain : repos de nuit compté");
+  v.itineraire = { troncons: [{ heures: 8.5 }] }; assert.strictEqual(N.jourMaroc(N.arriveePortEstimee(v)), 2, "itinéraire calculé de 8 h 30 : arrivée le jour même"); delete v.itineraire;
+  const k = N.conseilCreneau(v); assert.strictEqual(k.port.portId, "tmed_export");
+  assert.ok(/le mercredi : arrivée conseillée 12:00–15:00 \(attente habituelle 1 h 24, 3 passages\) ; à éviter 06:00–09:00 \(4 h 00\)\. Arrivée prévue vers 0\d:\d\d : 4 h 00 d'attente habituelle, 2 h 36 de plus qu'au meilleur créneau\./.test(k.conseil), k.conseil);
+  N.poserJalon(v, "depart", "2026-11-17T06:00:00.000Z"); N.poserJalon(v, "port_tmed", "2026-11-17T15:00:00.000Z"); N.poserJalon(v, "embarque_aller", "2026-11-17T18:00:00.000Z");
+  assert.strictEqual(N.conseilCreneau(v).port.portId, "alg_entry"); assert.ok(/pas encore assez de passages mesurés \(0\)/.test(N.conseilCreneau(v).conseil));
+  N.poserJalon(v, "debarque_alg", "2026-11-17T19:30:00.000Z"); assert.strictEqual(N.conseilCreneau(v), null, "après Algeciras, au retour seulement si un chargement est prévu");
+  N.poserJalon(v, "charge_retour", "2026-11-20T10:00:00.000Z"); assert.strictEqual(N.conseilCreneau(v).port.portId, "tmed_import");
+});
+
+/* ---------- garde-fou : deux fichiers de la page ne déclarent jamais le même nom global (sinon la page s'arrête au second) ---------- */
+test("chargement : aucun nom global déclaré deux fois dans les scripts de index.html", () => {
+  const html = fs.readFileSync(path.join(racine, "index.html"), "utf8"), fichiers = [...html.matchAll(/<script src="([^"]+\.js)"/g)].map((m) => m[1]).filter((f) => !f.startsWith("vendor/"));
+  assert.ok(fichiers.length > 60, `${fichiers.length} scripts`); const vus = new Map(), doublons = [];
+  for (const f of fichiers) for (const l of fs.readFileSync(path.join(racine, f), "utf8").split("\n")) {
+    const m = l.match(/^(?:async\s+)?(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)/); if (!m) continue;
+    if (vus.has(m[1]) && vus.get(m[1]) !== f) doublons.push(`${m[1]} : ${vus.get(m[1])} et ${f}`); else vus.set(m[1], f);
+  }
+  assert.deepStrictEqual(doublons, []);
 });
 
 (async () => {

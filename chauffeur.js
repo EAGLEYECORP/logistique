@@ -62,7 +62,7 @@ function carteService(ch) {
     titre = depasse ? "Repos obligatoire" : "En service";
     sous = depasse ? `Vous êtes en service depuis ${fmt(h, 1)} h (limite ${P.amplitudeMaxHeures} h). Arrêtez-vous dès que possible.` : `Depuis ${fmt(h, 1)} h · repos obligatoire dans ${fmt(Math.max(0, e.reste), 1)} h`;
     barre = `<div class="progress ${depasse ? "danger" : e.reste <= 1 ? "warn" : ""}"><i style="width:${pct}%"></i></div>`;
-    action = btn("chf-fin", "Fin de service", { cls: depasse ? "btn lg" : "btn lg ghost" });
+    action = typeof glissiere === "function" ? glissiere("chf-fin", "Glisser : fin de service", { ton: depasse ? "fort" : "discret" }) : btn("chf-fin", "Fin de service", { cls: depasse ? "btn lg" : "btn lg ghost" });
   } else if (e.code === "repos") {
     titre = "En repos"; sous = `Jusqu'à ${dateHeureFr(ch.reposJusqua)}`;
     action = btn("chf-service", "Prendre mon service quand même", { cls: "btn lg ghost" });
@@ -83,7 +83,7 @@ function carteMission(c, ch, principale) {
   const dates = `Chargement ${dateFr(c.dateChargement)}${c.dateLivraison ? ` · livraison ${dateFr(c.dateLivraison)}` : ""}`;
   if (!principale) return carte(`${entete}${route}<p class="sub" style="margin:0">${dates}</p>`);
   const etape = c.statut === "devis" ? `<p class="hint" style="margin:0">En attente de confirmation par le bureau.</p>`
-    : nx ? btn("chf-etape", `Marquer « ${libStatutCmd(nx)} »`, { id: c.id, icone: nx === "livre" ? "flag" : "check", cls: "btn lg" }) : "";
+    : nx ? (typeof glissiere === "function" ? glissiere("chf-etape", `Glisser : « ${libStatutCmd(nx)} »`, { id: c.id, ton: nx === "livre" ? "fort" : "" }) : btn("chf-etape", `Marquer « ${libStatutCmd(nx)} »`, { id: c.id, icone: nx === "livre" ? "flag" : "check", cls: "btn lg" })) : "";
   return carte(`${entete}${route}<p style="margin:0">${infos || ""}</p><p class="sub" style="margin:0">${dates}</p>
     ${c.notes ? `<p class="hint" style="margin:0">${esc(c.notes)}</p>` : ""}
     <div class="chf-actions">${etape}
@@ -122,8 +122,9 @@ VUES.chauffeur = {
       ${carteCamion(ch) || `<div class="card">${vide("truck", "Aucun camion", "Aucun camion ne vous est attribué : prévenez le bureau.")}</div>`}
       <div class="row" style="justify-content:center;margin-top:24px">${btn("chf-quitter", "Quitter le mode chauffeur", { cls: "btn ghost sm" })}</div>`;
   },
-  async agir(act, id) {
+  async agir(act, id, b) {
     if (!modeChauffeurActif()) return;
+    const glisse = b?.dataset?.glisse === "1"; // glisser pour confirmer : c'est déjà la confirmation
     const ch = chauffeurCourant();
     if (act === "chf-quitter") return chauffeurQuitter();
     if (!ch) return;
@@ -136,7 +137,7 @@ VUES.chauffeur = {
     };
     if (act === "chf-service") { if (await demarrerService()) { sauver(); toast("Bon service !"); rafraichir(); } }
     if (act === "chf-fin") {
-      if (!(await confirmer("Terminer le service ?", `Votre repos de ${S.params.reposMinHeures} h commence maintenant.`, "Fin de service"))) return;
+      if (!glisse && !(await confirmer("Terminer le service ?", `Votre repos de ${S.params.reposMinHeures} h commence maintenant.`, "Fin de service"))) return;
       finDeService(ch); sauver(); toast("Service terminé · bon repos"); rafraichir();
     }
     if (act === "chf-etape") {
@@ -145,7 +146,7 @@ VUES.chauffeur = {
       if (!nx || c.statut === "devis") return;
       c.camionId ||= ch.camionId;
       if (!c.camionId) return toast("Aucun camion affecté : prévenez le bureau.", "warn");
-      if (nx === "livre" && !(await confirmer("Confirmer la livraison ?", `${c.ref} · ${lieu(c.destination, c.paysDest)}`, "Livraison effectuée"))) return;
+      if (nx === "livre" && !glisse && !(await confirmer("Confirmer la livraison ?", `${c.ref} · ${lieu(c.destination, c.paysDest)}`, "Livraison effectuée"))) return;
       if (nx === "charge" && !(await demarrerService())) return;
       appliquerEtape(c, nx); sauver();
       toast(`${c.ref} : ${libStatutCmd(nx)}`); rafraichir();

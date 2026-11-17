@@ -70,6 +70,9 @@ const AR = {
   "Conduite et coupures": "السياقة والاستراحات", "Aires poids lourds": "مواقف الشاحنات", "Lister les aires": "عرض المواقف", "Prévenir le chauffeur": "إشعار السائق", "Depuis la dernière pause": "منذ آخر استراحة", "Cette semaine": "هذا الأسبوع", "Deux semaines": "أسبوعان", "Coupures et alertes au chauffeur": "الاستراحات وتنبيهات السائق", "Y aller": "الذهاب", "Pause faite": "تمت الاستراحة", "Pause dépassée": "تجاوز وقت الاستراحة",
   "Créneau au port": "التوقيت المناسب للميناء", "Attentes aux ports par jour et heure": "مدد الانتظار في الموانئ حسب اليوم والساعة", "Tanger Med export": "طنجة المتوسط تصدير", "Tanger Med import": "طنجة المتوسط استيراد", "Algeciras, frais": "الجزيرة الخضراء، بضائع طازجة", "Aucun passage mesuré": "لا يوجد عبور مقاس",
   "PDF": "PDF", "Télécharger la facture en PDF": "تحميل الفاتورة بصيغة PDF",
+  "En ligne": "متصل", "Hors ligne : tout est gardé sur le téléphone et partira au retour du réseau": "غير متصل: كل شيء محفوظ في الهاتف وسيُرسل عند عودة الشبكة", "Ma route": "طريقي", "Aires": "المواقف", "Pas de plein en France · réservoirs d'origine seulement": "لا تعبئة في فرنسا · الخزانات الأصلية فقط", "Glisser : fin de service": "اسحب: نهاية الخدمة", "Glisser : arrivé au quai de chargement": "اسحب: وصلت إلى رصيف الشحن", "Glisser : arrivé chez le destinataire": "اسحب: وصلت عند المرسل إليه", "Glisser : « Chargée »": "اسحب: « محمّلة »", "Glisser : « En route »": "اسحب: « في الطريق »", "Glisser : « Livrée »": "اسحب: « سُلّمت »", "Glisser : « Confirmée »": "اسحب: « مؤكدة »", "Glisser : « Planifiée »": "اسحب: « مبرمجة »",
+  "Glisser : « En transit »": "اسحب: « في العبور »", "Glisser : « En douane »": "اسحب: « في الجمارك »",
+  "Itinéraire": "المسار",
 };
 const LANGUES = [["fr", "Français"], ["ar", "العربية"]];
 const langueActive = () => { try { return localStorage.getItem("logistique-langue") || "fr"; } catch { return "fr"; } };

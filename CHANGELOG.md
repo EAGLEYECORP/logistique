@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.10.0 — Mode chauffeur : glisser pour confirmer, la route en tête
+
+- **Glisser pour confirmer** à la place des boutons pour les gestes qui comptent : l'étape de la mission (« Chargée », « Livrée »…), « Arrivé au quai » et la fin de service. Rien ne part par un appui accidentel dans la poche, et plus de question « Êtes-vous sûr ? » : le glissement est la confirmation (la livraison ouvre directement la preuve de livraison). À moitié glissé, rien ne se passe. En arabe, on glisse vers la gauche. Au clavier, Entrée confirme.
+- **En tête de l'écran, « Ma route »** : la prochaine pause de 45 minutes et l'heure de fin de la conduite du jour (avec les aires poids lourds), et où faire le plein (Maroc plein complet, Espagne tant de litres, pas de plein en France) — au lieu d'être cachés plus bas dans la mission.
+- **Bandeau permanent « En ligne » / « Hors ligne : tout est gardé sur le téléphone »** : le chauffeur sait que ce qu'il note n'est pas perdu sans réseau.
+- **Une vibration** quand un geste est enregistré ; boutons plus grands ; flèche du trajet dans le bon sens en arabe.
+
 ## 5.9.0 — Arrivée et départ des quais notés par le GPS
 
 - **L'attente aux quais se mesure seule** pour les camions suivis : quand le camion entre sur le site de chargement ou de livraison (300 m), l'arrivée est notée ; quand il le quitte (au-delà de 400 m, confirmé par deux positions), le départ aussi. L'attente au-delà de la franchise du client part sur la facture comme avant — sans que personne n'ait à y penser.

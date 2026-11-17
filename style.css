@@ -1106,3 +1106,35 @@ table.grille-attentes td b { display: block; font-size: .76rem; } table.grille-a
 table.grille-attentes td.vide { background: var(--surface-2); }
 .creneau-devis { display: flex; gap: 8px; align-items: flex-start; } .creneau-devis svg.i { flex: none; width: 16px; height: 16px; margin-top: 2px; }
 .table-wrap:has(> table.grille-attentes) { overflow-x: auto; }
+
+/* ============================================================
+   Mode chauffeur, phase C (v5.10) : glisser pour confirmer, route en tête, connexion, gros boutons
+   ============================================================ */
+.glissiere { --avance: 0; position: relative; display: flex; align-items: center; justify-content: center; min-height: 60px; padding: 4px; border-radius: 999px; background: var(--primary); color: var(--on-primary); overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; outline-offset: 3px; }
+.glissiere::before { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, #000 18%, transparent); transform-origin: left center; transform: scaleX(var(--avance)); transition: transform .25s; }
+[dir="rtl"] .glissiere::before { transform-origin: right center; }
+.glissiere.en-cours::before { transition: none; }
+.glissiere-texte { position: relative; z-index: 1; padding: 0 64px; font-weight: 700; font-size: 1.04rem; text-align: center; opacity: calc(1 - var(--avance) * .8); }
+.glissiere-poignee { position: absolute; z-index: 2; inset-inline-start: 4px; top: 4px; bottom: 4px; width: 52px; display: grid; place-items: center; border-radius: 999px; background: var(--on-primary); color: var(--primary); box-shadow: 0 2px 8px rgba(0, 0, 0, .25); cursor: grab; touch-action: none; transition: transform .25s; }
+.glissiere.en-cours .glissiere-poignee { transition: none; cursor: grabbing; }
+.glissiere-poignee svg.i { width: 24px; height: 24px; stroke-width: 2.6; }
+[dir="rtl"] .glissiere-poignee svg.i { transform: scaleX(-1); }
+.glissiere.discret { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); } .glissiere.discret .glissiere-poignee { background: var(--primary); color: var(--on-primary); }
+.glissiere.fort { background: var(--ok); }
+.glissiere.faite { opacity: .7; pointer-events: none; }
+.glissiere:focus-visible { outline: 3px solid var(--primary); }
+.chf-connexion { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px; margin: -8px 0 12px; padding: 8px 14px; border-radius: 12px; font-size: .9rem; font-weight: 600; }
+.chf-connexion svg.i { width: 18px; height: 18px; flex: none; }
+.chf-connexion.ok { background: color-mix(in srgb, var(--ok) 14%, var(--bg)); color: var(--ok); } .chf-connexion.hors { background: color-mix(in srgb, var(--warn) 18%, var(--bg)); color: var(--warn); }
+[dir="rtl"] .chf-route .fl { display: inline-block; transform: scaleX(-1); }
+.chf-route-carte { display: grid; gap: 10px; }
+.chf-route-titre { display: flex; align-items: center; gap: 8px; font-family: var(--font-titre); font-weight: 600; font-size: 1.05rem; } .chf-route-titre svg.i { width: 20px; height: 20px; color: var(--primary); }
+.chf-route-ligne { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.chf-route-ligne > svg.i { width: 24px; height: 24px; flex: none; color: var(--primary); }
+.chf-route-ligne > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; } .chf-route-ligne strong { font-size: 1.06rem; }
+.chf-route-ligne.warn { background: var(--warn-soft); } .chf-route-ligne.warn > svg.i { color: var(--warn); }
+.chf-route-ligne.danger { background: var(--danger-soft); } .chf-route-ligne.danger > svg.i { color: var(--danger); }
+.chf-route-ligne.plein > svg.i { color: var(--ok); }
+body.mode-chauffeur .btn.lg { min-height: 56px; font-size: 1.04rem; border-radius: 16px; }
+body.mode-chauffeur .chf-route { font-size: 1.45rem; }
+body.mode-chauffeur .chf-actions { gap: 12px; }

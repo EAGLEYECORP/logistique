@@ -94,16 +94,7 @@ surAction("voyages", "*", async function (act, id, b) {
   return PASSER;
 });
 
-/* ---------- mode chauffeur : la prochaine pause sur la mission ---------- */
-if (typeof carteMission === "function") {
-  const carteMissionAvantCoupures = carteMission;
-  carteMission = function (cmd, ch, principale) {
-    const h = carteMissionAvantCoupures(cmd, ch, principale); if (!principale || typeof voyageDeCommande !== "function") return h;
-    const l = voyageDeCommande(cmd), c = l && coupuresVoyage(l.v); if (!c) return h;
-    const txt = c.enArret ? `À l'arrêt depuis ${c.arretMin} min` : c.pause.depasse ? "Pause de 45 min dépassée : arrêtez-vous dès que possible" : `Prochaine pause dans ${dureeH(c.pause.resteH)} (vers ${hmS(c.pause.heure)})`;
-    return h.replace('<div class="chf-actions">', `<div class="chf-plein chf-coupure ${c.pause.depasse ? "danger" : ""}">${ic("clock")}<div><strong>${txt}</strong><span class="sub">Fin de la conduite du jour vers ${hmS(c.finJour.heure)} · estimation GPS, le tachygraphe fait foi</span> <a href="${esc(lienAiresPL(c.lieuPause || c.pos))}" target="_blank" rel="noopener">Aires poids lourds</a></div></div><div class="chf-actions">`);
-  };
-}
+/* ---------- mode chauffeur : la prochaine pause est en tête de l'écran (chauffeur_ui.js, « Ma route ») ---------- */
 
 /* ---------- réglages ---------- */
 enregistrerCarteReglages({

@@ -21,16 +21,7 @@ function blocPleinVoyage(v) {
 }
 if (typeof enregistrerBlocVoyage === "function") enregistrerBlocVoyage({ onglet: ongletArgentOuSuivi, ordre: 50, rendu: blocPleinVoyage });
 
-/* ---------- mode chauffeur ---------- */
-if (typeof carteMission === "function") {
-  const carteMissionAvantPlein = carteMission;
-  carteMission = function (c, ch, principale) {
-    const h = carteMissionAvantPlein(c, ch, principale); if (!principale || typeof voyageDeCommande !== "function") return h;
-    const l = voyageDeCommande(c); if (!l || l.sens !== "aller" || ["livre"].includes(c.statut)) return h;
-    const p = planPlein(l.v); if (!p) return h;
-    return h.replace('<div class="chf-actions">', `<div class="chf-plein">${ic("gauge")}<div><strong>Où faire le plein</strong><ol class="plein-liste">${lignesConsigne(p)}</ol><span class="sub">Pas de plein en France. Réservoirs d'origine seulement.</span></div></div><div class="chf-actions">`);
-  };
-}
+/* ---------- mode chauffeur : la consigne de plein est en tête de l'écran (chauffeur_ui.js, « Ma route ») ---------- */
 
 /* ---------- réglages ---------- */
 enregistrerCarteReglages({

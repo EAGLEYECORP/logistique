@@ -14,7 +14,7 @@ const hmQuai = (iso) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-dig
 function blocQuaiChauffeur(c) {
   const q = quaiCourant(c); if (!q) return "";
   const a = attenteQuai(c, q), lib = q === "chargement" ? "chargement" : "livraison";
-  if (!a) return `<div class="chf-quai">${btn("chf-quai", q === "chargement" ? "Arrivé au quai de chargement" : "Arrivé chez le destinataire", { id: `${c.id}|${q}`, icone: "pin", cls: "btn lg ghost" })}<span class="sub">Notez votre arrivée : l'attente au-delà de ${dureeQuai(conditionsAttente(c).franchiseH * 60)} est facturée au client.</span></div>`;
+  if (!a) return `<div class="chf-quai">${(typeof glissiere === "function" ? glissiere("chf-quai", q === "chargement" ? "Glisser : arrivé au quai de chargement" : "Glisser : arrivé chez le destinataire", { id: `${c.id}|${q}`, ton: "discret" }) : btn("chf-quai", q === "chargement" ? "Arrivé au quai de chargement" : "Arrivé chez le destinataire", { id: `${c.id}|${q}`, icone: "pin", cls: "btn lg ghost" }))}<span class="sub">Notez votre arrivée : l'attente au-delà de ${dureeQuai(conditionsAttente(c).franchiseH * 60)} est facturée au client.</span></div>`;
   return `<div class="chf-quai sur-place ${a.auDelaMin ? "au-dela" : ""}">${ic("clock")}<span><strong>Au quai de ${lib} depuis ${hmQuai(a.arrivee)} · ${dureeQuai(a.minutes)}</strong><span class="sub">${a.auDelaMin ? `${dureeQuai(a.auDelaMin)} au-delà de la franchise` : `franchise ${dureeQuai(a.franchiseMin)}`} · « ${q === "chargement" ? "Chargée" : "Livrée"} » arrête le compteur</span></span></div>`;
 }
 if (typeof carteMission === "function") {

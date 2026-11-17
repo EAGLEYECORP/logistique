@@ -13,9 +13,23 @@ const htmlPieceJointe = (titre, corps) => htmlImpression(titre, corps).replace(/
 const blobEnBase64 = (blob) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = () => ko(r.error); r.readAsDataURL(blob); });
 const tailleLisible = (o) => (o > 1048576 ? `${fmt(o / 1048576, 1)} Mo` : `${fmt(Math.max(1, o / 1024), 0)} Ko`);
 /** Pièces d'une facture : [{ id, nom, type, blob, taille, libelle }] — facture, preuves de livraison, photos (6 au plus). */
+/** Logo de l'entreprise en JPEG pour le PDF : { octets, largeurPx, hauteurPx } ou null (image PNG convertie sur fond blanc). */
+async function logoPourPdf() {
+  const url = typeof logoSur === "function" ? logoSur(S.entreprise) : ""; if (!url) return null;
+  try {
+    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+    const k = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.9)); return b ? { octets: new Uint8Array(await b.arrayBuffer()), largeurPx: c.width, hauteurPx: c.height } : null;
+  } catch { return null; }
+}
+/** Facture en PDF (Blob). */
+async function blobFacturePdf(f) { return new Blob([pdfFacture(f, { logo: await logoPourPdf() })], { type: "application/pdf" }); }
+async function telechargerFacturePdf(f) { const b = await blobFacturePdf(f); telecharger(`${f.numero}.pdf`, new Uint8Array(await b.arrayBuffer()), "application/pdf"); }
 async function piecesFacture(f) {
-  const r = [], fac = new Blob([htmlPieceJointe(f.numero, corpsFacture(f))], { type: "text/html" });
-  r.push({ id: "facture", nom: `${f.numero}.html`, type: "text/html", blob: fac, taille: fac.size, libelle: `Facture ${f.numero}` });
+  const r = [], pdf = await blobFacturePdf(f);
+  r.push({ id: "facture", nom: `${f.numero}.pdf`, type: "application/pdf", blob: pdf, taille: pdf.size, libelle: `Facture ${f.numero} (PDF)` });
+  if (pertesPdf(texteFacturePdf(f)).length) { const fac = new Blob([htmlPieceJointe(f.numero, corpsFacture(f))], { type: "text/html" }); r.push({ id: "facture-html", nom: `${f.numero}.html`, type: "text/html", blob: fac, taille: fac.size, libelle: `Facture ${f.numero} (page web : écritures non latines du client ou des lignes)` }); }
   for (const v of voyagesFacture(f)) if (v.pod && typeof corpsPreuve === "function") { const b = new Blob([htmlPieceJointe(`Preuve de livraison ${v.ref}`, corpsPreuve(v))], { type: "text/html" }); r.push({ id: `pod:${v.id}`, nom: `Preuve de livraison ${v.ref}.html`, type: "text/html", blob: b, taille: b.size, libelle: `Preuve de livraison ${v.ref} (signature${v.pod.reserves ? ", réserves" : ""})` }); }
   let photos = [];
   for (const cible of ciblesPhotosFacture(f)) { try { photos.push(...(await photosDe(cible)).map((p) => ({ ...p, cible }))); } catch { /* photos indisponibles */ } }
@@ -58,8 +72,9 @@ function infoEnvoiFacture(f) {
   return env || rel ? `<span class="sub">${[env, rel].filter(Boolean).map(esc).join(" · ")}</span>` : "";
 }
 function actionsEnvoiFacture(f) {
-  if (f.statut === "payee") return "";
-  return `${btn("envoyer-facture", f.envoi ? "Renvoyer" : "Envoyer", { id: f.id, icone: "upload", cls: `btn ${f.envoi ? "ghost " : ""}sm` })}${btn("relances-facture", f.sansRelance ? "Reprendre les relances" : "Suspendre les relances", { id: f.id, cls: "btn ghost sm" })}`;
+  const pdf = btn("facture-pdf", "PDF", { id: f.id, icone: "download", cls: "btn ghost sm", titre: "Télécharger la facture en PDF" });
+  if (f.statut === "payee") return pdf;
+  return `${pdf}${btn("envoyer-facture", f.envoi ? "Renvoyer" : "Envoyer", { id: f.id, icone: "upload", cls: `btn ${f.envoi ? "ghost " : ""}sm` })}${btn("relances-facture", f.sansRelance ? "Reprendre les relances" : "Suspendre les relances", { id: f.id, cls: "btn ghost sm" })}`;
 }
 
 /* ---------- branchements ---------- */
@@ -93,3 +108,6 @@ enregistrerCarteReglages({
     <p class="hint">Sans envoi automatique, l'équipe est prévenue dans le fil de l'application à chaque date. Une facture payée sort des relances ; « Suspendre les relances » sur une facture, ou « Pas de relance » sur la fiche d'un client, les arrête.</p></div>`,
   soumettre(fid, v) { if (fid !== "f-relances") return false; S.params.relancesJours = String(v.relancesJours || "").trim() || "-3,7,15,30"; S.params.relancesAuto = !!v.relancesAuto; sauver(); toast("Relances enregistrées"); rafraichir(); return true; },
 });
+
+/* ---------- facture en PDF : téléchargement depuis la page Factures et la fiche du voyage ---------- */
+surAction(["factures", "voyages"], ["facture-pdf"], async (act, id) => { const f = parId(S.factures, id); if (!f) return; try { await telechargerFacturePdf(f); toast(`${f.numero}.pdf téléchargée`); } catch (e) { toast(`PDF impossible : ${e.message}`, "danger"); } });

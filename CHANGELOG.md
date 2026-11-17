@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.8.0 — La facture en vrai PDF
+
+- **Bouton « PDF »** sur chaque facture (page Factures et fiche du voyage → Argent) : un vrai fichier PDF, prêt à archiver ou à transmettre, sans passer par l'impression du navigateur.
+- **L'e-mail de la facture joint le PDF** (au lieu d'une page web), avec la preuve de livraison et les photos du CMR comme avant.
+- Contenu identique à la facture imprimée : logo et coordonnées de l'entreprise, numéro, date, échéance, client et son ICE, lignes (les longues désignations passent à la ligne), totaux HT / TVA / TTC, somme en lettres, « Payée le », et en pied de **chaque page** les mentions, le RIB et les identifiants légaux ; une facture de nombreuses lignes continue sur les pages suivantes (« suite », 1/3, 2/3…).
+- Fabriqué sur l'appareil, sans service extérieur ni bibliothèque : polices standard des lecteurs PDF (accents, €, « » compris ; « → » écrit « – »). Les écritures non latines (un nom de client en arabe) n'existent pas dans ces polices : dans ce cas, la page web de la facture est jointe en plus, pour que rien ne soit perdu.
+
 ## 5.7.0 — Plus de limite de 5 Mo pour les données ; fondations remises d'aplomb
 
 - **Les données n'ont plus de plafond** : tant qu'elles tiennent dans le stockage rapide du navigateur (≈ 5 Mo), rien ne change ; au-delà, elles passent **automatiquement** dans la base de l'appareil (IndexedDB) au lieu d'afficher « stockage plein ». Sans perte : la base est écrite d'abord, le stockage rapide n'est vidé qu'ensuite ; les instantanés quotidiens continuent ; la protection contre l'effacement est demandée. Réglages → Données dit où elles sont enregistrées. Une flotte qui accumule deux ans de voyages, de traces et de dépenses ne bute plus sur la limite.

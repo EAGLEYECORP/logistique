@@ -69,6 +69,7 @@ const AR = {
   "Itinéraire poids lourd": "مسار الشاحنة", "Calculer l'itinéraire réel": "حساب المسار الفعلي", "Recalculer": "إعادة الحساب", "Google Maps": "Google Maps", "Serveur du relais": "خادم المرحّل", "Service public": "خدمة عامة", "Non configuré": "غير مهيأ",
   "Conduite et coupures": "السياقة والاستراحات", "Aires poids lourds": "مواقف الشاحنات", "Lister les aires": "عرض المواقف", "Prévenir le chauffeur": "إشعار السائق", "Depuis la dernière pause": "منذ آخر استراحة", "Cette semaine": "هذا الأسبوع", "Deux semaines": "أسبوعان", "Coupures et alertes au chauffeur": "الاستراحات وتنبيهات السائق", "Y aller": "الذهاب", "Pause faite": "تمت الاستراحة", "Pause dépassée": "تجاوز وقت الاستراحة",
   "Créneau au port": "التوقيت المناسب للميناء", "Attentes aux ports par jour et heure": "مدد الانتظار في الموانئ حسب اليوم والساعة", "Tanger Med export": "طنجة المتوسط تصدير", "Tanger Med import": "طنجة المتوسط استيراد", "Algeciras, frais": "الجزيرة الخضراء، بضائع طازجة", "Aucun passage mesuré": "لا يوجد عبور مقاس",
+  "PDF": "PDF", "Télécharger la facture en PDF": "تحميل الفاتورة بصيغة PDF",
 };
 const LANGUES = [["fr", "Français"], ["ar", "العربية"]];
 const langueActive = () => { try { return localStorage.getItem("logistique-langue") || "fr"; } catch { return "fr"; } };

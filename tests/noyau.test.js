@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -2847,6 +2847,41 @@ test("créneau au port : conseil pour un voyage — prochain port, arrivée esti
   assert.strictEqual(N.conseilCreneau(v).port.portId, "alg_entry"); assert.ok(/pas encore assez de passages mesurés \(0\)/.test(N.conseilCreneau(v).conseil));
   N.poserJalon(v, "debarque_alg", "2026-11-17T19:30:00.000Z"); assert.strictEqual(N.conseilCreneau(v), null, "après Algeciras, au retour seulement si un chargement est prévu");
   N.poserJalon(v, "charge_retour", "2026-11-20T10:00:00.000Z"); assert.strictEqual(N.conseilCreneau(v).port.portId, "tmed_import");
+});
+
+/* ---------- PDF (pdf.js, facture_pdf.js) ---------- */
+const lirePdf = (o) => Buffer.from(o).toString("latin1");
+test("PDF : structure valide (table des renvois exacte), accents et € en WinAnsi, largeurs, coupure des lignes, signes remplacés, écritures non latines signalées", () => {
+  const d = N.creerPdf({ titre: "Essai" }); d.texte(50, 60, "Échéance : 17/11 · 1 200,00 € — « réf. »", { taille: 12, gras: true }); d.texte(500, 80, "Total", { align: "droite" }); d.ligne(50, 90, 545, 90); d.rect(50, 100, 100, 20, { remplir: "#eef2f8", rayon: 4 }); d.nouvellePage(); d.texte(50, 60, "Page 2 (suite) \\ ok");
+  const t = lirePdf(d.octets());
+  assert.ok(t.startsWith("%PDF-1.4\n") && t.trimEnd().endsWith("%%EOF"));
+  const xref = Number(t.match(/startxref\n(\d+)/)[1]); assert.ok(t.slice(xref).startsWith("xref\n"));
+  const lignes = t.slice(xref).split("\n"), n = Number(lignes[1].split(" ")[1]);
+  for (let i = 1; i < n; i++) { const off = Number(lignes[2 + i].slice(0, 10)); assert.ok(t.slice(off).startsWith(`${i} 0 obj`), `objet ${i} à ${off}`); }
+  assert.ok(/\/Count 2/.test(t), "deux pages"); assert.ok(t.includes("(\\311ch\\351ance : 17/11 \\267 1 200,00 \\200 \\227 \\253 r\\351f. \\273) Tj"), "É é · € — « » codés en WinAnsi");
+  assert.ok(t.includes("(Page 2 \\(suite\\) \\\\ ok) Tj"), "parenthèses et barre oblique inverse échappées");
+  for (const m of t.matchAll(/<< \/Length (\d+) >>\nstream\n/g)) assert.strictEqual(t.slice(m.index + m[0].length).indexOf("\nendstream"), Number(m[1]), "longueur exacte de chaque flux");
+  assert.ok(Math.abs(N.largeurTexte("Total", 10) - 22.23) < 0.01, "T 611 + o 556 + t 278 + a 556 + l 222"); assert.ok(N.largeurTexte("é", 10) === N.largeurTexte("e", 10)); assert.ok(N.largeurTexte("Total", 10, true) > N.largeurTexte("Total", 10));
+  assert.ok(Math.abs(N.largeurTexte("1 200", 10) - N.largeurTexte("1 200", 10)) < 0.001, "espace fine insécable du format français = espace");
+  const c = N.couperTexte("Transport international Agadir → Perpignan, tomates cerises, 26 palettes", 150, 10); assert.ok(c.length >= 2 && c.every((l) => N.largeurTexte(l, 10) <= 150), c.join(" | "));
+  assert.deepStrictEqual([...N.couperTexte("abcdefghijklmnopqrstuvwxyz", 40, 10)].join(""), "abcdefghijklmnopqrstuvwxyz", "mot trop long coupé sans perte");
+  assert.deepStrictEqual([...N.pertesPdf("Agadir → Perpignan ≈ 2 000 km, 4 °C, « ok »")], [], "→ et ≈ remplacés, rien de perdu"); assert.deepStrictEqual([...N.pertesPdf("الزبون Souss")].length, 6, "l'arabe ne passe pas : signalé");
+});
+test("facture en PDF : contenu (numéro, client, lignes, totaux, somme en lettres, payée, pied), pages en plus quand les lignes débordent", () => {
+  N.S.entreprise = { nom: "Atlas Fret SARL", ville: "Agadir", ice: "001234567000089", rib: "011 780 0000123456789012 34", banque: "Banque Populaire", mentionsFacture: "Pénalités de retard : 1,5 % par mois." };
+  N.S.clients = [{ id: "k1", nom: "Primeurs du Souss", ville: "Agadir", pays: "Maroc", ice: "002345678000012" }];
+  const f = { id: "f1", numero: "FAC-2026-0112", clientId: "k1", date: "2026-11-17", echeance: "2026-12-17", devise: "EUR", tva: 20, statut: "payee", datePaiement: "2026-11-20", lignes: [{ designation: "Transport Agadir → Perpignan", montant: 3200 }, { designation: "Attente au quai", montant: 87.5 }] };
+  let t = lirePdf(N.pdfFacture(f));
+  for (const x of ["(FACTURE) Tj", "(N\\260 FAC-2026-0112) Tj", "(Primeurs du Souss) Tj", "(ICE / TVA : 002345678000012) Tj", "(Transport Agadir \\226 Perpignan) Tj", "(3 200,00) Tj", "(Total HT) Tj", "(3 287,50 \\200) Tj", "(TVA 20 %) Tj", "(657,50 \\200) Tj", "(3 945,00 \\200) Tj", "(PAY\\311E LE 20/11/2026) Tj", "RIB 011 780 0000123456789012 34", "(Facture FAC-2026-0112)"]) assert.ok(t.includes(x), x);
+  assert.ok(/trois mille neuf cent quarante-cinq euros/.test(t), "somme en lettres"); assert.ok(/\/Count 1/.test(t));
+  f.lignes = Array.from({ length: 45 }, (_, i) => ({ designation: `Transport Agadir → Lyon, voyage V-2026-${String(i).padStart(4, "0")}`, montant: 3000 })); f.statut = "emise";
+  t = lirePdf(N.pdfFacture(f)); const pages = Number(t.match(/\/Count (\d+)/)[1]); assert.ok(pages >= 2, `${pages} pages`);
+  assert.ok(t.includes("(Facture FAC-2026-0112 \\(suite\\)) Tj")); assert.ok(t.includes(`(1/${pages}) Tj`) && t.includes(`(${pages}/${pages}) Tj`), "numéros de page"); assert.ok(!t.includes("PAY\\311E"));
+  assert.ok(N.pertesPdf(N.texteFacturePdf(f)).length === 0); N.S.clients[0].nom = "شركة سوس"; assert.ok(N.pertesPdf(N.texteFacturePdf(f)).length > 0, "nom du client en arabe : la version HTML sera jointe");
+  // lecture par un vrai lecteur PDF quand il est installé (pdftotext)
+  const { spawnSync } = require("child_process"); N.S.clients[0].nom = "Primeurs du Souss";
+  const essai = spawnSync("pdftotext", ["-layout", "-", "-"], { input: Buffer.from(N.pdfFacture({ ...f, lignes: f.lignes.slice(0, 2) })) });
+  if (!essai.error && essai.status === 0) { const txt = essai.stdout.toString("utf8"); assert.ok(/FAC-2026-0112/.test(txt) && /Échéance : 17\/12\/2026/.test(txt) && /Agadir – Lyon/.test(txt) && /7 200,00 €/.test(txt), txt.slice(0, 400)); }
 });
 
 /* ---------- garde-fou : deux fichiers de la page ne déclarent jamais le même nom global (sinon la page s'arrête au second) ---------- */

@@ -157,6 +157,7 @@ Automatique et sans action de votre part.
 | `optimisation.js`, `journal.js`, `prevision.js` | Conseils et tableau des opérations ; historique des voyages ; attentes aux ports et arrivée estimée (testés) |
 | `planning.js`, `calendrier.js` | Disponibilités, conflits d'affectation, ressources libres, duplication, programme du chauffeur (testé) ; page Planning |
 | `passages.js`, `passages_ui.js` | Événements de passage, suite de chaque étape, alertes, routage des messages (testé) ; page Passages douane |
+| `pdf.js`, `facture_pdf.js` | PDF sans dépendance (texte Helvetica en WinAnsi, traits, rectangles, logo JPEG, plusieurs pages) et facture en PDF pour le téléchargement et l'e-mail (testé, relu par `pdftotext` quand il est installé) |
 | `creneaux.js`, `creneaux_ui.js` | Meilleur créneau au port d'après vos attentes mesurées : grille jour × tranche de 3 heures, conseil par voyage avec l'arrivée estimée, planning et devis (testé) |
 | `coupures.js`, `coupures_ui.js` | Coupures planifiées : prochaine pause et fin de journée d'après le GPS, compteurs jour, semaine, deux semaines (journal par chauffeur), aires poids lourds (OpenStreetMap), alerte au chauffeur, mode chauffeur (testé) |
 | `itineraire.js`, `itineraire_ui.js`, `serveur/itineraire.js` | Itinéraire poids lourd : tronçons routiers (détroit à part), liens Google Maps, km et heures réels par pays et à péage par le relais (openrouteservice), repris dans les péages d'Europe, le plein et le devis sans écraser une saisie (testé) |
@@ -200,7 +201,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 256 tests (219 application, 37 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 258 tests (221 application, 37 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

@@ -7,7 +7,7 @@
 
 /** Boutons d'une facture sur la fiche du voyage : envoyer, encaisser, voir. */
 function boutonsFactureVoyage(f) {
-  return `${f.statut !== "payee" && typeof envoyerFacture === "function" ? btn("fiche-envoyer-facture", f.envoi ? "Renvoyer" : "Envoyer", { id: f.id, icone: "upload", cls: `btn ${f.envoi ? "ghost " : ""}sm` }) : ""}${f.statut !== "payee" ? btn("fiche-encaisser", "Encaisser", { id: f.id, icone: "check", cls: "btn ghost sm" }) : ""}${btn("voir-facture", "Voir", { id: f.id, cls: "btn ghost sm" })}`;
+  return `${btn("facture-pdf", "PDF", { id: f.id, icone: "download", cls: "btn ghost sm", titre: "Télécharger la facture en PDF" })}${f.statut !== "payee" && typeof envoyerFacture === "function" ? btn("fiche-envoyer-facture", f.envoi ? "Renvoyer" : "Envoyer", { id: f.id, icone: "upload", cls: `btn ${f.envoi ? "ghost " : ""}sm` }) : ""}${f.statut !== "payee" ? btn("fiche-encaisser", "Encaisser", { id: f.id, icone: "check", cls: "btn ghost sm" }) : ""}${btn("voir-facture", "Voir", { id: f.id, cls: "btn ghost sm" })}`;
 }
 function blocFacturation(v) {
   if (v.statut === "annule") return "";

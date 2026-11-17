@@ -27,9 +27,12 @@ function etatEtapePort(v, e) {
 function resumePort(v, port, maintenant = Date.now()) {
   const etapes = etapesApplicables(v, port), etats = etapes.map((e) => ({ e, s: etatEtapePort(v, e) }));
   const dates = etats.filter((x) => x.s.fait).map((x) => Date.parse(x.s.date)).filter(Number.isFinite).sort((a, b) => a - b);
-  const faites = etats.filter((x) => x.s.fait).length, obligatoires = etats.filter((x) => !x.e.facultatif), fini = obligatoires.every((x) => x.s.fait);
+  const faites = etats.filter((x) => x.s.fait).length, obligatoires = etats.filter((x) => !x.e.facultatif);
+  // Le port est quitté dès que sa dernière étape est faite (embarquement, sortie) : les étapes intermédiaires que personne n'a notées ne le retiennent pas.
+  const fini = obligatoires.length > 0 && obligatoires[obligatoires.length - 1].s.fait;
   const debut = dates[0] ?? null, fin = fini ? dates[dates.length - 1] ?? null : null;
-  return { faites, total: etapes.length, debut, fin, dureeMs: debut === null ? 0 : (fin ?? maintenant) - debut, enCours: debut !== null && !fini, fini: fini && debut !== null, prochaine: etats.find((x) => !x.s.fait && !x.e.facultatif)?.e || null };
+  return { faites, total: etapes.length, debut, fin, dureeMs: debut === null ? 0 : (fin ?? maintenant) - debut, enCours: debut !== null && !fini, fini: fini && debut !== null,
+    prochaine: fini ? null : obligatoires.find((x) => !x.s.fait)?.e || null };
 }
 
 /**

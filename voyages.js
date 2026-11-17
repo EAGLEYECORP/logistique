@@ -56,7 +56,7 @@ function blocTraversee(voy, sens) {
       <span class="sub">${[t.armateur, t.date && dateFr(t.date) + (t.heure ? " " + t.heure : ""), t.ml && fmt(t.ml, 1) + " ml", t.ref && "réf. " + t.ref, L?.duree].filter(Boolean).map(esc).join(" · ")}</span>
       ${t.statut === "a_reserver" && detroit ? `<span class="sub">Présentation au port environ 3 h avant le départ.</span>` : ""}
     </div>
-    <div class="r"><strong class="num">${cout ? fmt(cout, 2) + " €" : "—"}</strong><span class="sub">${cout ? `≈ ${fmt(cout * S.params.tauxEUR)} MAD` : "devis à saisir"}</span>
+    <div class="r"><strong class="num fin">${cout ? fmt(cout, 2) + " €" : "—"}</strong><span class="sub fin">${cout ? `≈ ${fmt(cout * S.params.tauxEUR)} MAD` : "devis à saisir"}</span>
       ${btn("trav", "Modifier", { id: `${voy.id}|${sens}`, cls: "btn ghost sm", icone: "edit" })}</div>
   </div>`;
 }
@@ -137,39 +137,24 @@ function blocFroid(v) {
   return `<div class="section-title">Chaîne du froid</div><div class="trav"><div><strong>${String(brut.min.toFixed(1)).replace(".", ",")} à ${String(brut.max.toFixed(1)).replace(".", ",")} °C</strong><span class="sub">moyenne ${String(brut.moyenne.toFixed(1)).replace(".", ",")} °C · ${brut.nb} mesure(s)${consigne ? ` · consigne ${v.tempMin} à ${v.tempMax} °C` : ""}</span></div><div class="r">${r ? badge(r.conforme ? "Conforme" : `${r.excursions.length} excursion(s)`, r.conforme ? "ok" : "danger") : badge("Consigne non renseignée", "neutral")}</div></div>
     ${r && r.excursions.length ? `<ul class="ctl">${r.excursions.map((e) => `<li class="danger">${ic("alert")}<span>${hm(e.debut)} : ${e.sens === "haut" ? "au-dessus" : "en dessous"} de la consigne pendant ${e.dureeMin} min (extrême ${String(e.extreme).replace(".", ",")} °C)</span></li>`).join("")}</ul>` : ""}`;
 }
-/** Preuve de livraison (signature, réserves, position). */
-function blocPreuve(v) {
-  if (!v.pod) return "";
-  return `<div class="section-title">Preuve de livraison</div><div class="trav"><div><strong>Livré${v.pod.signataire ? ` à ${esc(v.pod.signataire)}` : ""}</strong><span class="sub">${dateHeureFr(v.pod.date)}${v.pod.lat ? ` · position ${v.pod.lat.toFixed(4)}, ${v.pod.lon.toFixed(4)}` : ""}${v.pod.reserves ? ` · réserves : ${esc(v.pod.reserves)}` : " · sans réserve"}</span></div><div class="r">${btn("preuve-imprimer", "Imprimer", { id: v.id, icone: "print", cls: "btn ghost sm" })}</div></div>`;
+/* ---------- Fiche du voyage : chaque fonction y inscrit son bloc, dans un des quatre onglets (l'écran est dans fiche_ui.js) ---------- */
+const BLOCS_VOYAGE = [];
+/** Inscrit un bloc de la fiche : { onglet: "suivi" | "documents" | "argent" | "equipe" (ou fonction du voyage), ordre (nombre ou fonction du voyage), rendu(v) → HTML }. */
+function enregistrerBlocVoyage(bloc) { BLOCS_VOYAGE.push(bloc); }
+const valeurBloc = (x, v) => (typeof x === "function" ? x(v) : x);
+const sansFinances = () => document.body.classList.contains("sans-finances");
+/** Attente aux quais, consigne de plein : dans « Argent », ou dans « Suivi » pour un profil qui ne voit pas les prix (l'onglet Argent ne lui est pas montré). */
+const ongletArgentOuSuivi = () => (sansFinances() ? "suivi" : "argent");
+/** Les blocs d'un onglet, dans l'ordre ; un bloc en erreur n'empêche pas les autres de s'afficher. */
+function blocsVoyage(v, onglet) {
+  return BLOCS_VOYAGE.filter((b) => valeurBloc(b.onglet, v) === onglet).map((b) => [valeurBloc(b.ordre, v), b]).sort((x, y) => x[0] - y[0])
+    .map(([, b]) => { try { return b.rendu(v) || ""; } catch (e) { console.warn("Fiche du voyage :", e); return ""; } }).join("");
 }
-function carteVoyage(v) {
-  const c = coutVoyage(v);
-  const ctl = ["prevu", "en_cours"].includes(v.statut) ? controlesVoyage(v) : [];
-  const jalons = v.jalons || [];
-  const prochain = JALONS_VOYAGE.find(([k]) => !jalons.some((j) => j.type === k));
-  const cam = parId(S.camions, v.camionId);
-  const cls = classeADM(cam);
-  const ck = ongletCheck[v.id] || "depart";
-  const items = CHECKLISTS_VOYAGE[ck];
-  const faits = items.filter((_, i) => v.coches?.[ck]?.[i]).length;
-  const dateD = v.dateDepart;
-  const interd = dateD ? interdictionsLe(dateD, INTERDICTIONS) : [];
+/** Tableau « Coût et marge » du voyage : chaque poste, le total, le prix, la marge directe puis nette. */
+function blocCoutsVoyage(v) {
+  const c = coutVoyage(v), cls = classeADM(parId(S.camions, v.camionId));
   const parts = [["Péages Maroc", c.parts.peagesMaroc], ["Péages France (VINCI)", c.parts.peagesFrance], ["Péages Europe", c.parts.peagesEurope], ["Traversées (aller + retour)", c.parts.traversees], ["Carburant", c.parts.carburant], ["Per diem, hôtel", c.parts.fraisRoute], ["Douane", c.parts.douane], ["Énergie du groupe froid", c.parts.froid], ["Amendes", c.parts.amendes], ["Dépannage, pneus en route", c.parts.maintien], ["Autres", c.parts.autres]];
-  return `<details class="card dossier" data-voyage="${v.id}" ${voyagesOuverts.has(v.id) ? "open" : ""}>
-    <summary>
-      <div><strong>${esc(v.ref)}</strong> · ${esc(v.origine)} ⇄ ${esc(v.destination)}${v.clientId ? " · " + esc(nomClient(v.clientId)) : ""}
-        <div class="meta">${[dateFr(v.dateDepart) + " → " + dateFr(v.dateRetourPrevue), v.chauffeurId && nomChauffeur(v.chauffeurId), v.camionId && nomCamion(v.camionId), v.marchandise].filter(Boolean).map(esc).join(" · ")}</div></div>
-      <div class="row">${pastilleMarge(v)}${ctl.filter((x) => x.niveau === "danger").length ? badge(`${ctl.filter((x) => x.niveau === "danger").length} blocage(s)`, "danger") : ctl.length ? badge(`${ctl.length} point(s)`, "warn") : ""}${badge(STATUTS_VOYAGE.find(([k]) => k === v.statut)?.[1], niveauStatutVoyage[v.statut])}</div>
-    </summary>
-    <div class="body">
-      <div class="section-title" style="margin-top:4px">Traversée du détroit (Tanger Med ⇄ Algeciras)</div>
-      ${blocTraversee(v, "aller")}${blocTraversee(v, "retour")}
-      ${typeof blocPorts === "function" ? blocPorts(v) : ""}
-      ${ctl.length ? `<div class="section-title">À régler avant le départ</div><ul class="ctl">${ctl.map((x) => `<li class="${niveauCtl[x.niveau]}">${ic(x.niveau === "danger" ? "alert" : "clock")}<span>${esc(x.texte)}</span></li>`).join("")}</ul>` : v.statut === "prevu" ? `<p class="hint" style="color:var(--ok)">${ic("check")} Aucun point bloquant détecté.</p>` : ""}
-      ${interd.length ? `<p class="hint">Départ un ${new Date(dateD + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long" })} : interdictions de circuler possibles (${interd.map((i) => i.pays).join(", ")}) — voir le tableau en bas de page.</p>` : ""}
-      ${typeof blocFacturation === "function" ? blocFacturation(v) : ""}${blocEta(v)}${typeof blocAttentesPort === "function" ? blocAttentesPort(v) : ""}${blocFroid(v)}${blocPreuve(v)}
-      <div class="fin"><div class="section-title">Coût et marge</div>
-      <div class="table-wrap"><table class="plain"><tbody>
+  return `<div class="table-wrap"><table class="plain"><tbody>
         ${v.kmPays && peagesEuropeVoyage(v).manquants.length ? `<tr><td colspan="2" class="sub">Péages d'Europe : tarif au km non renseigné pour ${peagesEuropeVoyage(v).manquants.join(", ")} (Réglages → calculs) — ces pays ne sont pas comptés.</td></tr>` : ""}
         ${parts.filter(([, m]) => m).map(([l, m]) => `<tr><td>${l}${l === "Péages France (VINCI)" ? `<span class="sub">${peagesFranceVoyage(v).detail.map((d) => `${esc(d.liaison)} ${fmt(d.eur, 2)} €`).join(" · ")}${v.peageFrAR ? " ×2" : ""} · classe ${peagesFranceVoyage(v).classe} · tarif officiel du ${dateFr(FR_LIAISONS_DATE)}</span>` : ""}${l === "Péages Europe" && v.peagesEurReel ? `<span class="sub">relevé de télépéage : ${Object.entries(v.peagesEurPays || {}).map(([p, m]) => `${p} ${fmt(m, 2)} €`).join(", ") || "total du relevé"}</span>` : ""}${l === "Péages Maroc" && v.peageTrajet ? `<span class="sub">${esc(ADM_TRAJETS.find((t) => t.id === v.peageTrajet)?.lib || "")}${v.peageAR ? " ×2" : ""} · ${classeTexte(cls)}</span>` : ""}</td><td class="r num">${fmt(m)} MAD</td></tr>`).join("") || `<tr><td colspan="2" class="sub">Aucun coût saisi</td></tr>`}
         <tr><td><strong>Coût total</strong></td><td class="r num"><strong>${fmt(c.total)} MAD</strong></td></tr>
@@ -179,28 +164,7 @@ function carteVoyage(v) {
         ${num(v.kmGps) ? `<tr><td>Distance mesurée par le GPS</td><td class="r num">${fmt(v.kmGps)} km</td></tr>` : ""}
         ${c.km ? `<tr><td>Coût au km (${fmt(c.km)} km)</td><td class="r num">${fmt(c.coutKm, 2)} MAD/km</td></tr>` : ""}
         ${num(v.kmRetourVide) ? `<tr><td>Retour à vide</td><td class="r num">${fmt(v.kmRetourVide)} km · ≈ ${fmt(c.coutKm * num(v.kmRetourVide))} MAD</td></tr>` : ""}
-      </tbody></table></div>${blocLignesCout(v)}</div>
-      <div class="section-title">Étapes</div>
-      <ol class="timeline">${JALONS_VOYAGE.map(([k, l]) => { const j = jalons.find((x) => x.type === k); return `<li class="${j ? "fait" : ""}"><span class="pt"></span><div><strong>${esc(l)}</strong>${j ? `<span class="sub">${dateHeureFr(j.date)}${j.source === "gps" ? " · " + badge("GPS", "ok") : ""}${(v.notifsJalons || []).includes(k) ? " · notifié" : ""}</span>` : ""}</div>${j && v.statut !== "annule" ? iconBtn("notifier-jalon", "mail", "Notifier", `${v.id}|${k}`) : ""}</li>`; }).join("")}</ol>
-      <div class="row">${prochain && v.statut !== "annule" ? btn("jalon", `Marquer : ${prochain[1]}`, { id: v.id, icone: "flag", cls: "btn sm" }) : ""}${jalons.length ? btn("annuler-jalon", "Annuler la dernière étape", { id: v.id, cls: "btn ghost sm" }) : ""}</div>
-      <div class="section-title">Listes de contrôle</div>
-      <div class="segmented">${Object.entries(LIB_CHECKLISTS_VOYAGE).map(([k, l]) => `<button type="button" data-act="onglet-check" data-id="${v.id}|${k}" aria-selected="${k === ck}">${l}</button>`).join("")}</div>
-      <div class="progress"><i style="width:${Math.round((faits / items.length) * 100)}%"></i></div>
-      <div class="checklist">${items.map((it, i) => `<label class="check"><input type="checkbox" data-coche="${v.id}" data-ck="${ck}" data-i="${i}" ${v.coches?.[ck]?.[i] ? "checked" : ""}><span>${esc(it)}</span></label>`).join("")}</div>
-      ${v.notes ? `<p class="hint">${esc(v.notes)}</p>` : ""}
-      <div class="row">
-        ${v.statut === "termine" ? "" : btn("terminer", "Terminer le voyage", { id: v.id, icone: "check", cls: "btn ghost sm" })}
-        ${v.statut === "annule" ? "" : btn("preuve", v.pod ? "Refaire la preuve de livraison" : "Preuve de livraison", { id: v.id, icone: "check", cls: "btn ghost sm" })}
-        ${btn("dupliquer", "Dupliquer", { id: v.id, icone: "plus", cls: "btn ghost sm", titre: "Nouveau voyage identique (trajet, client, prix, équipe), à une autre date" })}
-        ${v.statut === "annule" ? "" : btn("cmr", "CMR (impression)", { id: v.id, icone: "print", cls: "btn ghost sm" })}
-        ${btn("releve-eu", "Relevé péages Europe", { id: v.id, icone: "upload", cls: "btn ghost sm", titre: "Importer le relevé CSV de votre fournisseur de télépéage (DKV, UTA, Eurowag, Telepass…)" })}
-        ${btn("dossier", "Dossier complet", { id: v.id, icone: "file", cls: "btn ghost sm", titre: "Tout le voyage en un document : papiers, étapes, traversées, preuve de livraison, trace, photos" })}
-        ${btn("partager", v.partage ? "Lien client" : "Partager le suivi", { id: v.id, icone: "mail", cls: "btn ghost sm" })}
-        ${boutonPhotos("voyage:" + v.id, `Documents — ${v.ref}`, { texte: true })}
-        ${btn("modifier", "Modifier", { id: v.id, icone: "edit", cls: "btn ghost sm" })}
-        ${btn("suppr", "Supprimer", { id: v.id, cls: "btn text-danger sm" })}
-      </div>
-    </div></details>`;
+      </tbody></table></div>`;
 }
 
 VUES.voyages = {
@@ -228,7 +192,11 @@ VUES.voyages = {
     ${aideInterdictions()}`;
   },
   apres() {
-    document.querySelectorAll("details[data-voyage]").forEach((el) => el.addEventListener("toggle", () => { el.open ? voyagesOuverts.add(el.dataset.voyage) : voyagesOuverts.delete(el.dataset.voyage); }));
+    document.querySelectorAll("details[data-voyage]").forEach((el) => el.addEventListener("toggle", () => {
+      if (!el.open) return voyagesOuverts.delete(el.dataset.voyage);
+      voyagesOuverts.add(el.dataset.voyage);
+      if (typeof majFiche === "function" && !el.querySelector(":scope > .body")?.childElementCount) majFiche(el.dataset.voyage); // la fiche n'est calculée qu'à l'ouverture
+    }));
   },
   saisie(e) {
     const cb = e.target.closest("[data-coche]");
@@ -261,15 +229,10 @@ VUES.voyages = {
       sauver(); toast(`Traversée ${sens} enregistrée`); rafraichir();
     }
     if (act === "onglet-check") { ongletCheck[vid] = extra; rafraichir(); }
-    if (act === "jalon") {
-      const prochain = JALONS_VOYAGE.find(([k]) => !(v.jalons || []).some((j) => j.type === k));
-      if (!prochain) return;
-      (v.jalons ||= []).push({ type: prochain[0], date: new Date().toISOString() });
-      if (prochain[0] === "depart" && v.statut === "prevu") v.statut = "en_cours";
-      const sens = prochain[0] === "embarque_aller" ? "aller" : prochain[0] === "embarque_retour" ? "retour" : null;
-      const t = sens && traversee(v, sens); if (t) t.statut = "effectuee";
-      if (prochain[0] === "retour") v.statut = "termine";
-      sauver(); toast(prochain[1]); rafraichir();
+    if (act === "jalon") { // « id » seul : l'étape suivante ; « id|étape » : cette étape précise
+      const type = extra || JALONS_VOYAGE.find(([k]) => !(v.jalons || []).some((j) => j.type === k))?.[0];
+      if (!type || !poserJalon(v, type)) return;
+      voyagesOuverts.add(v.id); sauver(); toast(nomJalon(type)); rafraichir();
     }
     if (act === "annuler-jalon") { const j = (v.jalons || []).pop(); if (j && v.statut === "termine" && j.type === "retour") v.statut = "en_cours"; sauver(); rafraichir(); }
     if (act === "terminer") { v.statut = "termine"; sauver(); toast(`Voyage ${v.ref} terminé`); rafraichir(); }

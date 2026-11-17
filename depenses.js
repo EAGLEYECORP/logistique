@@ -85,10 +85,10 @@ VUES.voyages.agir = async function (act, id, btnEl) {
     if (act === "invite-saisir") return saisirInvite(v, cle);
     (v.invitesIgnorees ||= []).push(cle); voyagesOuverts.add(v.id); sauver(); rafraichir(); return;
   }
-  const avant = act === "jalon" ? (parId(S.voyages, String(id).split("|")[0])?.jalons || []).length : 0;
+  const avant = act === "jalon" ? new Set((parId(S.voyages, String(id).split("|")[0])?.jalons || []).map((j) => j.type)) : null;
   const r = await agirVoyagesAvantDepenses.call(this, act, id, btnEl);
   if (act === "jalon") { // l'étape qui vient d'être marquée appelle peut-être une dépense : on la demande tout de suite
-    const v = parId(S.voyages, String(id).split("|")[0]), der = v && (v.jalons || []).length > avant ? v.jalons[v.jalons.length - 1].type : "";
+    const v = parId(S.voyages, String(id).split("|")[0]), der = (v?.jalons || []).find((j) => !avant.has(j.type))?.type || "";
     if (der && invitesCout(v).some((i) => i.cle === `jalon:${der}`)) await saisirInvite(v, `jalon:${der}`);
   }
   return r;

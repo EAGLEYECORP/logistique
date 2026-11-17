@@ -49,10 +49,10 @@ L'exploitant vit dans : sa boîte e-mail et WhatsApp (commandes, documents), **M
 
 ### Dette technique et risques à traiter
 
-- **Enveloppes empilées** : 32 enveloppes d'`agir`, 14 de `rendu`, 8 de `sauver`. L'ordre de chargement décide de tout ; c'est fragile. Remplacer par un petit registre de crochets (`avant/après action`, `blocs de fiche`, `sections`) pendant la refonte de la fiche du voyage.
+- **Enveloppes empilées** : 33 enveloppes d'`agir`, 14 de `rendu`, 8 de `sauver` (les 4 enveloppes de `blocFacturation` sont remplacées par le registre des blocs de la fiche depuis la v5.1.0 : `enregistrerBlocVoyage`). L'ordre de chargement décide de tout ; c'est fragile. Remplacer par un petit registre de crochets (`avant/après action`, `blocs de fiche`, `sections`) pendant la refonte de la fiche du voyage.
 - **Tout l'état dans localStorage** (environ 5 Mo par origine selon les navigateurs) : une grosse flotte sur deux ans peut l'atteindre. Prévoir le passage de `S` vers IndexedDB (déjà utilisé pour les photos), avec migration sans perte.
 - **Poids au démarrage** : environ 1,4 Mo de JavaScript, CSS et HTML non minifiés, chargés d'un coup. Charger à la demande les pages rarement ouvertes.
-- **Fiche du voyage** : environ 5 000 px de défilement ; les blocs ajoutés ces derniers jours (retour, documents, attente aux quais, plein) l'allongent encore. C'est la priorité du design.
+- **Fiche du voyage** : refaite en v5.1.0 (frise, prochaine action, quatre onglets, contenu calculé à l'ouverture). Un nouveau bloc s'inscrit avec `enregistrerBlocVoyage({ onglet, ordre, rendu })` au lieu d'envelopper une fonction.
 
 ## 4. Design haut de gamme : direction et méthode
 
@@ -69,7 +69,7 @@ Parcours à étudier, dans cet ordre :
 
 **Principes à tenir** : une action principale par écran ; l'état se lit par la forme (pastille, frise, couleur sémantique), pas seulement par le texte ; 70 % de texte gris en moins (explications derrière un « ? ») ; formulaires courts avec « Plus de détails » ; sur téléphone, feuilles qui montent du bas ; chiffres alignés (`tabular-nums`) ; contraste suffisant dans les deux thèmes ; arabe de droite à gauche vérifié à chaque écran.
 
-### Phase B — la fiche du voyage (priorité)
+### Phase B — la fiche du voyage (livrée en v5.1.0)
 - **En-tête fixe** : référence, client, chauffeur, camion, et la **frise** aller → Tanger Med → Algeciras → livraison → retour → dépôt, l'étape en cours mise en avant.
 - **Carte « prochaine action »** : une seule chose à faire maintenant, un seul bouton (marquer l'étape suivante, réserver la traversée, demander les documents, facturer…), calculée d'après l'état du voyage.
 - **Quatre onglets** : **Suivi** (frise, ports, attentes, carte), **Documents** (client, CMR, preuve, photos, dossier), **Argent** (prix aller + retour, coûts, marge, facture, attente au quai, plein), **Équipe** (chauffeur, camion, papiers, Schengen, contrôles avant départ). Chaque onglet n'est dessiné qu'à l'ouverture.

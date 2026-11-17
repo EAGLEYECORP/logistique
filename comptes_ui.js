@@ -204,7 +204,7 @@ const agirVoyagesAvantMulti = VUES.voyages.agir;
 VUES.voyages.agir = async function (act, id, b) {
   const vid = String(id || "").split("|")[0], v = parId(S.voyages, vid);
   const prochain = v && JALONS_VOYAGE.find(([k]) => !(v.jalons || []).some((j) => j.type === k));
-  const sensible = (act === "jalon" && prochain?.[0] === "livre") || act === "preuve" || act === "supprimer";
+  const sensible = (act === "jalon" && (String(id || "").split("|")[1] || prochain?.[0]) === "livre") || act === "preuve" || act === "supprimer";
   if (sensible && !(await verrouiller("voyages", vid, act === "supprimer" ? "suppression" : "livraison"))) return;
   try { return await agirVoyagesAvantMulti.call(this, act, id, b); } finally { if (sensible) setTimeout(() => liberer("voyages", vid), 1500); }
 };

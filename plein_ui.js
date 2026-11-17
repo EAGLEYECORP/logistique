@@ -19,7 +19,7 @@ function blocPleinVoyage(v) {
       ${e ? `<span class="sub ${e.surcoutEuros ? "plein-ecart" : ""}">Carte carburant : ${Object.entries(e.parPays).map(([k, l]) => `${NOM_PAYS_PLEIN[k] || k} ${fmt(l)} L`).join(" · ")}${e.surcoutEuros ? ` — ${fmt(e.reelFR - e.prevuFR)} L pris en France hors consigne, ≈ ${fmt(e.surcoutEuros)} € de plus` : " — consigne suivie"}</span>` : ""}</div>
     <div class="r">${tel ? `<a class="btn ghost sm" href="https://wa.me/${tel}?text=${encodeURIComponent(texteConsignePlein(v, p))}" target="_blank" rel="noopener">${ic("phone")}Envoyer au chauffeur</a>` : ""}</div></div>`;
 }
-if (typeof blocFacturation === "function") { const blocFacturationAvantPlein = blocFacturation; blocFacturation = function (v) { return blocFacturationAvantPlein(v) + blocPleinVoyage(v); }; }
+if (typeof enregistrerBlocVoyage === "function") enregistrerBlocVoyage({ onglet: ongletArgentOuSuivi, ordre: 50, rendu: blocPleinVoyage });
 
 /* ---------- mode chauffeur ---------- */
 if (typeof carteMission === "function") {

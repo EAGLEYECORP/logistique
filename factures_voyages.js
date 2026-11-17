@@ -5,13 +5,17 @@
    voyages à facturer en tête de la page Factures. Logique pure dans noyau.js.
    ============================================================ */
 
+/** Boutons d'une facture sur la fiche du voyage : envoyer, encaisser, voir. */
+function boutonsFactureVoyage(f) {
+  return `${f.statut !== "payee" && typeof envoyerFacture === "function" ? btn("fiche-envoyer-facture", f.envoi ? "Renvoyer" : "Envoyer", { id: f.id, icone: "upload", cls: `btn ${f.envoi ? "ghost " : ""}sm` }) : ""}${f.statut !== "payee" ? btn("fiche-encaisser", "Encaisser", { id: f.id, icone: "check", cls: "btn ghost sm" }) : ""}${btn("voir-facture", "Voir", { id: f.id, cls: "btn ghost sm" })}`;
+}
 function blocFacturation(v) {
   if (v.statut === "annule") return "";
-  const f = factureDuVoyage(v), fait = voyageFaitLe(v);
-  if (f) { const e = etatFacture(f), t = totauxFacture(f); return `<div class="section-title fin">Facturation</div><div class="trav fin"><div><strong>Facture ${esc(f.numero)} · ${fmtDevise(t.ttc, f.devise)} TTC</strong><span class="sub">${esc(e.texte)}${v.commandeId && !v.factureId && !(f.voyageIds || []).includes(v.id) ? " · par la commande liée" : ""}</span></div><div class="r">${badge(e.code === "payee" ? "Payée" : e.code === "retard" ? "En retard" : "À encaisser", e.niveau)}${btn("voir-facture", "Voir", { id: f.id, cls: "btn ghost sm" })}</div></div>`; }
-  if (!fait) return "";
+  const f = factureDuVoyage(v), fait = voyageFaitLe(v), titre = `<div class="section-title fin">${v.commandeRetourId ? "Facturation de l'aller" : "Facturation"}</div>`;
+  if (f) { const e = etatFacture(f), t = totauxFacture(f); return `${titre}<div class="trav fin"><div><strong>Facture ${esc(f.numero)} · ${fmtDevise(t.ttc, f.devise)} TTC</strong><span class="sub">${esc(e.texte)}${v.commandeId && !v.factureId && !(f.voyageIds || []).includes(v.id) ? " · par la commande liée" : ""}</span>${typeof infoEnvoiFacture === "function" ? infoEnvoiFacture(f) : ""}</div><div class="r">${badge(e.code === "payee" ? "Payée" : e.code === "retard" ? "En retard" : "À encaisser", e.niveau)}<div class="row">${boutonsFactureVoyage(f)}</div></div></div>`; }
+  if (!fait) return v.commandeRetourId ? titre + `<div class="trav fin vide"><div><strong>Aller · ${v.prix ? fmtDevise(num(v.prix), v.devise || "MAD") : "prix non renseigné"}</strong><span class="sub">à facturer une fois livré</span></div></div>` : "";
   const autres = S.factures.filter((x) => x.statut !== "payee" && (!v.clientId || x.clientId === v.clientId));
-  return `<div class="section-title fin">Facturation</div><div class="trav fin a-facturer"><div><strong>À facturer</strong><span class="sub">Voyage fait le ${dateFr(fait)}${v.prix ? ` · ${fmtDevise(num(v.prix), v.devise || "MAD")} HT` : " · prix non renseigné"}</span></div>
+  return `${titre}<div class="trav fin a-facturer"><div><strong>À facturer</strong><span class="sub">Voyage fait le ${dateFr(fait)}${v.prix ? ` · ${fmtDevise(num(v.prix), v.devise || "MAD")} HT` : " · prix non renseigné"}</span></div>
     <div class="r">${btn("facturer-voyage", "Facturer ce voyage", { id: v.id, icone: "receipt", cls: "btn sm" })}${autres.length ? btn("rattacher-facture", "Ajouter à une facture", { id: v.id, cls: "btn ghost sm" }) : ""}</div></div>`;
 }
 async function facturerVoyage(v) {

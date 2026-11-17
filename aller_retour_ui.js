@@ -66,9 +66,18 @@ function blocRetour(v) {
   return `<div class="section-title">Chargement de retour</div><div class="trav vide"><div><strong>Pas encore de retour chargé</strong><span class="sub">${s ? (s.dejaCouvert ? "L'aller couvre déjà le coût complet de l'aller-retour." : `Prix plancher du retour : ${fmt(s.seuilEur, 0)} € (${fmt(s.seuilMad)} MAD) — en dessous, l'aller-retour perd de l'argent.`) : `Chargement à prévoir à ${esc(v.destination || "destination")} ; il aura son client, son prix, son CMR et sa facture.`}</span></div>
     <div class="r">${btn("retour-nouveau", "Nouvelle commande de retour", { id: v.id, icone: "plus", cls: "btn sm" })}${S.commandes.some((c) => !voyageDeCommande(c) && c.statut !== "livre") ? btn("retour-lier", "Commande existante", { id: v.id, cls: "btn ghost sm" }) : ""}</div></div>`;
 }
-if (typeof blocFacturation === "function") {
-  const blocFacturationAvantAR = blocFacturation;
-  blocFacturation = function (v) { return `${blocRetour(v)}${blocFacturationAvantAR(v).replace('<div class="section-title fin">Facturation</div>', v.commandeRetourId ? '<div class="section-title fin">Facturation de l\'aller</div>' : '<div class="section-title fin">Facturation</div>')}`; };
+/** Onglet Argent : la facture du retour, à côté de celle de l'aller. */
+function blocFactureRetour(v) {
+  const r = v.statut === "annule" ? null : commandeRetour(v); if (!r) return "";
+  const f = factureDeCommande(r), e = f && etatFacture(f);
+  if (f) return `<div class="trav fin"><div><strong>Retour · facture ${esc(f.numero)} · ${fmtDevise(totauxFacture(f).ttc, f.devise)} TTC</strong><span class="sub">${esc(r.ref)} · ${esc(nomClient(r.clientId))} · ${esc(e.texte)}</span>${typeof infoEnvoiFacture === "function" ? infoEnvoiFacture(f) : ""}</div>
+    <div class="r">${badge(e.code === "payee" ? "Payée" : e.code === "retard" ? "En retard" : "À encaisser", e.niveau)}<div class="row">${typeof boutonsFactureVoyage === "function" ? boutonsFactureVoyage(f) : ""}</div></div></div>`;
+  return `<div class="trav fin ${r.statut === "livre" ? "a-facturer" : ""}"><div><strong>Retour · ${esc(r.ref)} · ${fmtDevise(r.prix, r.devise)}</strong><span class="sub">${esc(nomClient(r.clientId))} · ${r.statut === "livre" ? "livré, pas encore facturé" : "à facturer une fois livré"}</span></div>
+    <div class="r">${r.statut === "livre" ? btn("retour-facturer", "Facturer le retour", { id: v.id, icone: "receipt", cls: "btn sm" }) : ""}</div></div>`;
+}
+if (typeof enregistrerBlocVoyage === "function") {
+  enregistrerBlocVoyage({ onglet: "suivi", ordre: 40, rendu: (v) => blocRetour(v) }); // appelé par son nom : fret_retour_ui.js y ajoute la recherche d'un retour
+  enregistrerBlocVoyage({ onglet: "argent", ordre: 21, rendu: blocFactureRetour });
 }
 const agirVoyagesAvantAR = VUES.voyages.agir;
 VUES.voyages.agir = async function (act, id, b) {

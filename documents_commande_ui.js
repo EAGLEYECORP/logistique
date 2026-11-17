@@ -57,6 +57,6 @@ function blocDocumentsVoyage(v) {
     return `<div class="trav docs-voyage ${n.niveau}"><div><strong>${sens === "aller" ? "Aller" : "Retour"} · ${esc(c.ref)} · ${n.e.recus}/${n.e.total} reçus</strong><span class="sub">${n.e.complet ? "Tout est là." : "Manque : " + esc(n.e.manquants.map((x) => x.lib).join(", "))}${c.demandesDocs?.length ? ` · demandé le ${dateFr(c.demandesDocs[c.demandesDocs.length - 1].date.slice(0, 10))}` : ""}</span></div>
       <div class="r">${btn("docs-voyage", n.e.complet ? "Voir" : "Mettre à jour", { id: c.id, cls: `btn ${n.e.complet ? "ghost " : ""}sm`, icone: "file" })}</div></div>`; }).join("")}`;
 }
-if (typeof blocFacturation === "function") { const blocFacturationAvantDocs = blocFacturation; blocFacturation = function (v) { return blocDocumentsVoyage(v) + blocFacturationAvantDocs(v); }; }
+if (typeof enregistrerBlocVoyage === "function") enregistrerBlocVoyage({ onglet: "documents", ordre: 10, rendu: blocDocumentsVoyage });
 const agirVoyagesAvantDocs = VUES.voyages.agir;
 VUES.voyages.agir = async function (act, id, b) { if (act === "docs-voyage") { const c = parId(S.commandes, id); if (c) { const l = voyageDeCommande(c); if (l) voyagesOuverts.add(l.v.id); return ouvrirDocuments(c); } return; } return agirVoyagesAvantDocs.call(this, act, id, b); };

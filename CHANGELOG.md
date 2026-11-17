@@ -1,5 +1,25 @@
 # Changelog
 
+## 5.1.0 — Fiche du voyage : où en est le camion, et la seule chose à faire maintenant
+
+- **La fiche du voyage est refaite.** Fermée, elle montre la référence, le client, le trajet en grand, la marge et le statut, une **frise réduite** et la ligne **« À faire »** : on sait quoi faire sur chaque voyage sans l'ouvrir.
+- **Ouverte**, elle commence par :
+  - la **frise** Départ → Tanger Med → Algeciras → Livraison → Retour → Dépôt, avec l'étape en cours (« Algeciras · depuis 1 h 20 », « en mer ») et le temps passé dans chaque port ; « Retour : à trouver » en orange tant qu'il n'y a ni chargement ni décision de rentrer à vide ;
+  - l'**arrivée estimée** quand la balise du camion est suivie ;
+  - **« À faire maintenant »** : une seule action, calculée d'après l'état du voyage, avec son bouton — affecter l'équipe, réserver la traversée, demander les documents au client, marquer le départ, l'étape de port suivante (avec les documents à présenter et qui doit agir), la livraison, charger ou trouver le retour, le retour au dépôt, puis facturer, envoyer la facture, facturer le retour, relancer, encaisser ; « Appeler » le chauffeur pendant le voyage ;
+  - les **points d'attention** qui ne sont pas l'action du moment (documents qui manquent encore, traversée retour à réserver, retour à trouver, preuve à faire signer, aller livré à facturer, attente trop longue au port), chacun avec son bouton.
+- **Quatre onglets** au lieu d'une longue page : **Suivi** (passage des ports, attentes, traversées, retour, arrivée estimée, chaîne du froid, étapes), **Documents** (documents du client, CMR, preuve de livraison, photos, dossier complet, références de douane), **Argent** (la marge nette en grand avec la part des coûts, le tableau des coûts, les dépenses, les factures de l'aller et du retour avec Envoyer et Encaisser, l'attente aux quais, la consigne de plein), **Équipe** (chauffeur et camion avec leurs papiers — touchez la pastille pour le détail —, jours Schengen, Appeler et WhatsApp, points à régler avant le départ, listes de contrôle, notes). Un voyage terminé s'ouvre sur l'onglet Argent. Les onglets Documents et Équipe portent le nombre de choses à régler.
+- **Plus rapide** : le contenu d'une fiche n'est calculé qu'à son ouverture ; changer d'onglet ne recharge pas la page.
+- **Chaque étape se marque directement** dans la liste des étapes (plus seulement « l'étape suivante ») ; le bouton principal va à l'étape qui suit la dernière faite, celles d'avant que le GPS a sautées ne bloquent plus. « Annuler » reste proposé dans le message.
+- **Sur ordinateur**, la fiche ouverte se lit sur deux colonnes : où en est le voyage et quoi faire à gauche, les onglets à droite. Sur téléphone, une colonne ; les actions moins courantes (Dupliquer, Terminer, Supprimer) sont rangées sous « ⋯ ».
+- **Profil sans accès aux prix** : pas d'onglet Argent ni d'action d'argent ; l'attente aux quais et la consigne de plein passent dans Suivi ; le coût des traversées est masqué.
+- Corrections :
+  - un port était compté « en cours » tant qu'une étape intermédiaire n'était pas notée, même après l'embarquement : il est maintenant terminé dès sa dernière étape faite ;
+  - les papiers du chauffeur et du camion d'un voyage en route sont vérifiés à la date du jour (plus à la date de départ) ;
+  - les documents du client qui bloquent en douane restent signalés après le chargement, jusqu'à la livraison ;
+  - un test du planning dépendait de la date du jour.
+- Pour les développeurs : les blocs de la fiche s'inscrivent dans un registre (`enregistrerBlocVoyage({ onglet, ordre, rendu })`, `voyages.js`) ; les quatre enveloppes de `blocFacturation` (retour, documents, quais, plein) sont remplacées par des inscriptions. Logique pure et testée dans `fiche.js` (frise, prochaine action, points d'attention, étape posée), écran dans `fiche_ui.js`.
+
 ## 5.0.0 — Nouvelle navigation : six sections
 
 - **Six sections au lieu de 26 pages** dans le menu : **Aujourd'hui** (accueil, opérations), **Commandes** (commandes, clients), **Voyages** (voyages, planning, passages douane, carte, traces GPS, trajets, douane, autorisations, péages), **Flotte** (camions, chauffeurs, gasoil, tachygraphe), **Argent** (factures, rentabilité, direction), **Réglages** (réglages, utilisateurs, accès, journal, codes SH).

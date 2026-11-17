@@ -81,7 +81,7 @@ function blocAttentesVoyage(v) {
   });
   return `<div class="section-title">Attente aux quais</div>${lignes.join("")}`;
 }
-if (typeof blocFacturation === "function") { const blocFacturationAvantQuais = blocFacturation; blocFacturation = function (v) { return blocFacturationAvantQuais(v) + blocAttentesVoyage(v); }; }
+if (typeof enregistrerBlocVoyage === "function") enregistrerBlocVoyage({ onglet: ongletArgentOuSuivi, ordre: 45, rendu: blocAttentesVoyage });
 for (const vue of [VUES.commandes, VUES.voyages]) {
   if (!vue) continue;
   const agirAvantQuais = vue.agir;

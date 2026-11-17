@@ -152,7 +152,7 @@ function synchroPlanifier() { // envoi différé 15 s après une modification
   if (syncEnCours.applique || !synchroCfg().auto || !synchroActive() || (typeof multiActif === "function" && multiActif())) return;
   clearTimeout(syncEnCours.minuteur); syncEnCours.minuteur = setTimeout(() => synchroniser(), 15000);
 }
-if (typeof sauver === "function") { const sauverSansSynchro = sauver; sauver = function () { const r = sauverSansSynchro.apply(this, arguments); synchroPlanifier(); return r; }; }
+apresSauver("synchronisation entre appareils", () => synchroPlanifier(), 10);
 setInterval(() => { if (document.visibilityState === "visible" && synchroCfg().auto) synchroniser(); }, 3 * 60 * 1000);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && synchroCfg().auto) synchroniser(); });
 setTimeout(() => { if (synchroCfg().auto) synchroniser(); }, 4000);

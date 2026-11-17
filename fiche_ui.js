@@ -202,9 +202,8 @@ enregistrerBlocVoyage({ onglet: "equipe", ordre: 30, rendu: blocChecklistsVoyage
 enregistrerBlocVoyage({ onglet: "equipe", ordre: 40, rendu: (v) => (v.notes ? `<div class="section-title">Notes</div><p class="fiche-notes">${esc(v.notes)}</p>` : "") });
 
 /* ---------- gestes propres à la fiche ---------- */
-const agirVoyagesAvantFiche = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
-  if (!String(act).startsWith("fiche-")) return agirVoyagesAvantFiche.call(this, act, id, b);
+surAction("voyages", "*", async function (act, id, b) {
+  if (!String(act).startsWith("fiche-")) return PASSER;
   const [x, extra] = String(id).split("|");
   if (act === "fiche-onglet") {
     if (!parId(S.voyages, x)) return;
@@ -220,6 +219,6 @@ VUES.voyages.agir = async function (act, id, b) {
   if (act === "fiche-envoyer-facture") return typeof envoyerFacture === "function" ? envoyerFacture(f) : afficher("factures");
   if (act === "fiche-encaisser") return VUES.factures.agir.call(VUES.factures, "payer", f.id);
   if (act === "fiche-relancer") return VUES.factures.agir.call(VUES.factures, "relance", f.id);
-};
+});
 // La liste « autres actions » se referme quand on clique ailleurs.
 document.addEventListener("click", (e) => { for (const m of document.querySelectorAll("details.menu-plus[open]")) if (!m.contains(e.target)) m.open = false; });

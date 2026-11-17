@@ -49,8 +49,8 @@ L'exploitant vit dans : sa boîte e-mail et WhatsApp (commandes, documents), **M
 
 ### Dette technique et risques à traiter
 
-- **Enveloppes empilées** : 33 enveloppes d'`agir`, 14 de `rendu`, 8 de `sauver` (les 4 enveloppes de `blocFacturation` sont remplacées par le registre des blocs de la fiche depuis la v5.1.0 : `enregistrerBlocVoyage`). L'ordre de chargement décide de tout ; c'est fragile. Remplacer par un petit registre de crochets (`avant/après action`, `blocs de fiche`, `sections`) pendant la refonte de la fiche du voyage.
-- **Tout l'état dans localStorage** (environ 5 Mo par origine selon les navigateurs) : une grosse flotte sur deux ans peut l'atteindre. Prévoir le passage de `S` vers IndexedDB (déjà utilisé pour les photos), avec migration sans perte.
+- **Enveloppes empilées** : remplacées en v5.7.0 par un registre de crochets (`app.js`) : `surAction(pages, actes, fn)` (la dernière inscrite d'abord ; `PASSER` laisse la main), `autourAction(pages, actes, fn, { ordre })` (verrou 20, annulation 10, suites d'une action 50-70), `blocPage(page, { position, ordre, rendu })`, `avantSauver(nom, fn, ordre)` / `apresSauver(nom, fn, ordre)` (`sauver({ local, sansNotif })`), `enregistrerBlocVoyage` pour la fiche. Il ne reste plus aucune enveloppe d'`agir` ni de `sauver`. Restent, volontairement, des transformations : `rendu` de Commandes (synthèse des devis), Réglages (profil) et Chauffeur (blocs insérés), `rendu` des notifications sur l'accueil, `afficher` (profils, historique), `carteMission` (plein, quais, coupures), `champsVoyage`, `blocRetour`, `chiffrerCommande`, `actions` de quelques pages.
+- **Tout l'état dans localStorage** : réglé en v5.7.0 — stockage rapide tant que les données tiennent (≈ 4,5 millions de caractères), puis passage automatique dans la base de l'appareil (IndexedDB, magasin `etat`, clé `courant`) sans perte : la base est écrite d'abord, le drapeau `logistique-stockage = base` ensuite, le stockage rapide vidé en dernier ; instantanés quotidiens conservés.
 - **Poids au démarrage** : environ 1,4 Mo de JavaScript, CSS et HTML non minifiés, chargés d'un coup. Charger à la demande les pages rarement ouvertes.
 - **Fiche du voyage** : refaite en v5.1.0 (frise, prochaine action, quatre onglets, contenu calculé à l'ouverture). Un nouveau bloc s'inscrit avec `enregistrerBlocVoyage({ onglet, ordre, rendu })` au lieu d'envelopper une fonction.
 
@@ -91,7 +91,7 @@ Chaque élément : logique pure testée, interface, passage réel sur téléphon
 4. (livré en v5.5.0 : `coupures.js`, `coupures_ui.js` ; alertes envoyées tant que l'application est ouverte — les faire envoyer par le relais seul reste à faire) **Coupure planifiée** et alertes au chauffeur : prochaine pause et parkings poids lourds possibles, compteurs jour, semaine, deux semaines.
 5. (livré en v5.6.0 : `creneaux.js`, `creneaux_ui.js`) **Meilleur créneau au port** d'après l'historique des attentes, au planning et au devis.
 6. **Refonte de la fiche du voyage** (phase B) — à mener en parallèle dès le début : c'est elle que l'exploitant ouvre cinquante fois par jour.
-7. **Registre de crochets** à la place des enveloppes, puis **état dans IndexedDB**.
+7. (livré en v5.7.0) **Registre de crochets** à la place des enveloppes, puis **état dans IndexedDB**.
 8. **Facture en PDF**, arrivée au quai par géorepérage du client, mode chauffeur (phase C).
 
 ## 6. Texte à donner au nouveau modèle

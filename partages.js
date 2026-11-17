@@ -74,10 +74,5 @@ document.addEventListener("click", async (e) => {
   try { await navigator.clipboard.writeText(b.dataset.copier); toast("Lien copié"); } catch { document.querySelector("#lien-client")?.select(); toast("Sélectionné : copiez avec Ctrl+C.", "warn"); }
 });
 
-const agirVoyagesBase = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, bouton) {
-  if (act === "partager") return ouvrirPartage(String(id).split("|")[0]);
-  const r = await agirVoyagesBase.call(this, act, id, bouton);
-  if (["jalon", "annuler-jalon", "terminer", "modifier"].includes(act)) partagesSynchroniser(true);
-  return r;
-};
+surAction("voyages", ["partager"], async (act, id) => ouvrirPartage(String(id).split("|")[0]));
+autourAction("voyages", ["jalon", "annuler-jalon", "terminer", "modifier"], async (suite) => { const r = await suite(); partagesSynchroniser(true); return r; }, { ordre: 70, nom: "lien client mis à jour" });

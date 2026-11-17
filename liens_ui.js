@@ -118,10 +118,9 @@ function blocLienTransit(v) {
 enregistrerBlocVoyage({ onglet: "documents", ordre: 12, rendu: blocLiensDepot });
 enregistrerBlocVoyage({ onglet: "suivi", ordre: 21, rendu: blocLienTransit });
 
-const agirVoyagesAvantLiens = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
+surAction("voyages", "*", async function (act, id, b) {
   if (act === "lien-depot") { const c = parId(S.commandes, id); return c ? partagerLienDepot(c) : undefined; }
   if (act === "lien-transit") { const v = parId(S.voyages, id); return v ? partagerLienTransit(v) : undefined; }
   if (act === "liens-verifier") return majLiens({ silencieux: false });
-  return agirVoyagesAvantLiens.call(this, act, id, b);
-};
+  return PASSER;
+});

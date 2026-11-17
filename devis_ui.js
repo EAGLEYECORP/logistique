@@ -78,8 +78,8 @@ async function agirDevis(act, id) {
   return false;
 }
 if (VUES.commandes) {
-  const agirCommandesAvantDevis = VUES.commandes.agir, renduCommandesAvantDevis = VUES.commandes.rendu;
-  VUES.commandes.agir = async function (act, id, b) { if (String(act).startsWith("devis-") && (await agirDevis(act, id))) return; return agirCommandesAvantDevis.call(this, act, id, b); };
+  const renduCommandesAvantDevis = VUES.commandes.rendu;
+  surAction("commandes", "*", async function (act, id, b) { if (String(act).startsWith("devis-") && (await agirDevis(act, id))) return; return PASSER; });
   VUES.commandes.rendu = function () {
     const html = renduCommandesAvantDevis.call(this); if (filtreCmd !== "chiffrer") return html;
     const t = tauxDevis(dateISO(Date.now() - 90 * 86400000)); if (!t.envoyes) return html;

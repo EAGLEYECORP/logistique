@@ -44,8 +44,7 @@ async function envoyerDemandeDocuments(c) {
   await modale({ titre: "Envoyer au client", valider: "Fermer", annuler: "", corps: liens.length ? `<div class="liens-envoi">${liens.join("")}</div><p class="hint">Le message s'ouvre prêt à envoyer. La demande est notée sur la commande.</p>` : `<p>Aucun téléphone ni e-mail sur la fiche de ${esc(cl.nom || "ce client")}. Copiez le message :</p><textarea rows="8" readonly style="width:100%">${esc(texte)}</textarea>` });
 }
 if (VUES.commandes) {
-  const agirCommandesAvantDocs = VUES.commandes.agir;
-  VUES.commandes.agir = async function (act, id, b) { if (act === "documents") { const c = parId(S.commandes, id); return c ? ouvrirDocuments(c) : undefined; } return agirCommandesAvantDocs.call(this, act, id, b); };
+  surAction("commandes", "*", async function (act, id, b) { if (act === "documents") { const c = parId(S.commandes, id); return c ? ouvrirDocuments(c) : undefined; } return PASSER; });
 }
 
 /* ---------- fiche du voyage ---------- */
@@ -58,5 +57,4 @@ function blocDocumentsVoyage(v) {
       <div class="r">${btn("docs-voyage", n.e.complet ? "Voir" : "Mettre à jour", { id: c.id, cls: `btn ${n.e.complet ? "ghost " : ""}sm`, icone: "file" })}</div></div>`; }).join("")}`;
 }
 if (typeof enregistrerBlocVoyage === "function") enregistrerBlocVoyage({ onglet: "documents", ordre: 10, rendu: blocDocumentsVoyage });
-const agirVoyagesAvantDocs = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) { if (act === "docs-voyage") { const c = parId(S.commandes, id); if (c) { const l = voyageDeCommande(c); if (l) voyagesOuverts.add(l.v.id); return ouvrirDocuments(c); } return; } return agirVoyagesAvantDocs.call(this, act, id, b); };
+surAction("voyages", "*", async function (act, id, b) { if (act === "docs-voyage") { const c = parId(S.commandes, id); if (c) { const l = voyageDeCommande(c); if (l) voyagesOuverts.add(l.v.id); return ouvrirDocuments(c); } return; } return PASSER; });

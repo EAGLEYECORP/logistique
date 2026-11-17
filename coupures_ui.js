@@ -88,12 +88,11 @@ async function surveillerCoupures() {
 }
 function coupuresDemarrer() { setInterval(() => { surveillerCoupures().catch(() => { /* réessayé */ }); }, 2 * 60000); setTimeout(() => surveillerCoupures().catch(() => {}), 8000); }
 
-const agirVoyagesAvantCoupures = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
+surAction("voyages", "*", async function (act, id, b) {
   if (act === "coupure-aires") { const v = parId(S.voyages, id); return v ? listerAires(v) : undefined; }
   if (act === "coupure-prevenir") { const v = parId(S.voyages, id), c = v && coupuresVoyage(v); if (!c) return toast("Position du camion inconnue.", "warn"); return prevenirChauffeurCoupure(v, c.pause.dansMin <= c.finJour.dansMin ? "pause" : "finJour", c); }
-  return agirVoyagesAvantCoupures.call(this, act, id, b);
-};
+  return PASSER;
+});
 
 /* ---------- mode chauffeur : la prochaine pause sur la mission ---------- */
 if (typeof carteMission === "function") {

@@ -8,6 +8,12 @@
 /* ---------- chargement + récupération ---------- */
 /** Lit les données. Migre si besoin (copie de sécurité d'abord) ; si elles sont absentes ou corrompues, propose le miroir interne. */
 async function chargerEtat() {
+  if (stockageEnBase() && idbDisponible()) { // données volumineuses : la base de l'appareil est la mémoire principale
+    try {
+      const m = await etatMiroirLire();
+      if (m?.etat) { const r = migrer(m.etat); if (r.migre) { await snapshotEcrire(m.etat, "manuel").catch(() => {}); demarrage.notes.push(`Données mises à niveau (v${r.depuis} → v${VERSION_SCHEMA}). Une copie d'avant la mise à niveau est conservée.`); demarrage.sauverApres = true; } if (r.tropRecent) demarrage.notes.push("Ces données viennent d'une version plus récente de l'application : mettez-la à jour pour éviter toute perte."); return r.etat; }
+    } catch { /* base illisible : on essaie le stockage rapide, puis les instantanés */ }
+  }
   let brut = null;
   try { brut = localStorage.getItem(STORAGE_KEY); } catch { /* stockage bloqué */ }
   let corrompu = false;
@@ -132,6 +138,7 @@ function retirerSplash() {
 }
 
 async function demarrer() {
+  installerCrochets(); // toutes les pages sont chargées : leurs actions passent par le registre
   try { appliquerTheme(localStorage.getItem("logistique-theme") || "auto"); } catch { /* ignoré */ }
   S = await chargerEtat();
   if (demarrage.sauverApres) sauver();

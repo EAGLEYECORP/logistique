@@ -59,14 +59,10 @@ VUES.operations = {
 };
 
 /* ---------- accueil de l'exploitant (profil Exploitation) et conseils pour tous ---------- */
-const renduAccueilAvantOperations = VUES.tableau.rendu, agirAccueilAvantOperations = VUES.tableau.agir;
-VUES.tableau.rendu = function () {
-  const html = renduAccueilAvantOperations.call(this);
-  if (!S.camions.length) return html;
-  const exploitant = typeof roleLire === "function" && roleLire().role === "exploitation";
-  return exploitant ? `${blocConseils(5)}<div class="section-title">Flotte</div>${blocOperations(6)}${html}` : `${html}${blocConseils(3)}`;
-};
-VUES.tableau.agir = function (act, id, b) { if (agirOperations(act, id)) return; return agirAccueilAvantOperations?.call(this, act, id, b); };
+const exploitantConnecte = () => typeof roleLire === "function" && roleLire().role === "exploitation";
+blocPage("tableau", { position: "avant", ordre: 30, rendu: () => (S.camions.length && exploitantConnecte() ? `${blocConseils(5)}<div class="section-title">Flotte</div>${blocOperations(6)}` : "") });
+blocPage("tableau", { position: "apres", ordre: 10, rendu: () => (S.camions.length && !exploitantConnecte() ? blocConseils(3) : "") });
+surAction("tableau", "*", async function (act, id, b) { if (agirOperations(act, id)) return; return PASSER; });
 
 /* ---------- alertes : à un geste de l'action ---------- */
 function boutonsAlerte(a) {
@@ -77,7 +73,7 @@ function boutonsAlerte(a) {
 const memoireJournal = new Map(); let journalPret = false;
 const auteurJournal = () => (typeof roleLire === "function" && typeof ROLES !== "undefined" ? ROLES[roleLire().role]?.lib || "" : "");
 function journalInitialiser() { if (journalPret) return; journalPret = true; for (const v of S.voyages) memoireJournal.set(v.id, instantaneVoyage(v)); }
-if (typeof sauver === "function") { const sauverSansJournal = sauver; sauver = function () { try { journalInitialiser(); if (typeof majDepenses === "function") majDepenses(); if (typeof majAttentesPort === "function") majAttentesPort(); journaliser(memoireJournal, auteurJournal()); } catch (e) { console.warn("Historique :", e); } return sauverSansJournal.apply(this, arguments); }; }
+avantSauver("historique des voyages", () => { journalInitialiser(); if (typeof majDepenses === "function") majDepenses(); if (typeof majAttentesPort === "function") majAttentesPort(); journaliser(memoireJournal, auteurJournal()); }, 30);
 if (typeof afficher === "function") { const afficherSansJournal = afficher; afficher = function () { try { journalInitialiser(); } catch { /* ignoré */ } return afficherSansJournal.apply(this, arguments); }; }
 
 function blocHistorique(v) {
@@ -95,12 +91,11 @@ function blocAttentesPort(v) {
   return `<div class="section-title">Attentes aux ports</div>${lignes.map((p) => `<div class="trav"><div><strong>${esc(p.lib)}</strong><span class="sub">${p.sortie !== null ? `${dureeTexte(p.sortie - p.entree)} d'attente · entré le ${dateHeureFr(new Date(p.entree).toISOString())}${v.scanRouge?.[p.portId] ? " · passage au scanner (hors médiane)" : ""}` : enCours?.portId === p.portId ? esc(enCours.texte.replace(p.lib + " ", "")) : "sortie non enregistrée"}</span></div>
     <div class="r">${p.sortie === null && p.portId === "alg_entry" ? btn("sortie-alg", "Sorti du port", { id: v.id, cls: "btn sm" }) : ""}${p.sortie !== null ? btn("scan-rouge", v.scanRouge?.[p.portId] ? "Compter normalement" : "Passage au scanner", { id: `${v.id}|${p.portId}`, cls: "btn ghost sm", titre: "Un passage au scanner est une attente exceptionnelle : il n'entre pas dans la médiane" }) : ""}</div></div>`).join("")}`;
 }
-const agirVoyagesAvantAttentes = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
+surAction("voyages", "*", async function (act, id, b) {
   if (act === "sortie-alg") { const v = parId(S.voyages, id); if (!v) return; (v.sortiesPort ||= {}).alg_entry = new Date().toISOString(); voyagesOuverts.add(v.id); sauver(); toast("Sortie du port d'Algeciras enregistrée"); return rafraichir(); }
   if (act === "scan-rouge") { const [vid, portId] = id.split("|"), v = parId(S.voyages, vid); if (!v) return; v.scanRouge ||= {}; if (v.scanRouge[portId]) delete v.scanRouge[portId]; else v.scanRouge[portId] = true; voyagesOuverts.add(v.id); sauver(); return rafraichir(); }
-  return agirVoyagesAvantAttentes.call(this, act, id, b);
-};
+  return PASSER;
+});
 enregistrerCarteReglages({
   onglet: "general", ordre: 13,
   rendu() {

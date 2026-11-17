@@ -113,7 +113,7 @@ async function notifierPassagesAuto() {
     sauverSansNotif(); if (ongletActif === "passages" || ongletActif === "tableau") rafraichir();
   } catch (e) { console.warn("Notifications des passages :", e); } finally { passagesAutoEnCours = false; }
 }
-if (typeof sauver === "function") { const avantPassages = sauver; sauver = function () { const r = avantPassages.apply(this, arguments); try { if (passagesANotifier().length) setTimeout(notifierPassagesAuto, 0); } catch (e) { console.warn(e); } return r; }; }
+apresSauver("notifications des passages", (o) => { if (!o.sansNotif && passagesANotifier().length) setTimeout(notifierPassagesAuto, 0); }, 30);
 setInterval(() => { try { if (passagesANotifier().length) notifierPassagesAuto(); } catch { /* ignoré */ } }, 60000); // les attentes trop longues apparaissent avec le temps
 
 /* ---------- réglages : qui est prévenu, repères de délai ---------- */
@@ -142,13 +142,12 @@ enregistrerCarteReglages({
 
 /* ---------- accueil : alertes de passage en tête ---------- */
 if (VUES.tableau) {
-  const renduTableauAvantPassages = VUES.tableau.rendu;
-  VUES.tableau.rendu = function () {
-    const html = renduTableauAvantPassages.call(this), au = voyagesEnPassage(), alertes = au.filter((x) => x.retard);
+    blocPage("tableau", { position: "avant", ordre: 10, rendu() {
+    const html = "", au = voyagesEnPassage(), alertes = au.filter((x) => x.retard);
     if (!au.length) return html;
     const bloc = `<div class="card" id="bloc-passages"><div class="card-head"><h2>Passages douane</h2>${alertes.length ? badge(`${alertes.length} en attente anormale`, "warn") : badge(`${au.length} au port`, "ok")}</div>
       ${au.slice(0, 4).map((x) => `<div class="trav"><div><strong>${esc(x.v.ref)} · ${esc(x.prochaine ? etapePortLib(x.prochaine) : etapePortLib(x.derniere))}</strong><span class="sub">${x.retard ? "en attente" : "dernière étape"} depuis ${esc(dureePassage(x.depuisMin))} · ${esc(x.derniere.e.lib)}</span></div></div>`).join("")}
       <div class="row">${btn("aller", "Ouvrir les passages", { id: "passages", cls: "btn ghost sm", icone: "flag" })}</div></div>`;
     return bloc + html;
-  };
+  } });
 }

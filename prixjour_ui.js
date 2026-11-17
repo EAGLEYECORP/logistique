@@ -26,7 +26,7 @@ const prixJourAgeH = () => { const m = Date.parse(S.params?.prixGasoilJour?.maj 
 setTimeout(() => { if (prixJourAgeH() > 6) actualiserPrixDuJour({ silencieux: true }).catch(() => {}); }, 4000);
 setInterval(() => { if (prixJourAgeH() > 6) actualiserPrixDuJour({ silencieux: true }).catch(() => {}); }, 30 * 60000);
 // à chaque enregistrement : un voyage qui vient de se terminer (ou d'être facturé) garde le taux du jour
-if (typeof sauver === "function") { const sauverAvantTaux = sauver; sauver = function () { try { figerTauxVoyages(); } catch { /* ignoré */ } return sauverAvantTaux.apply(this, arguments); }; }
+avantSauver("taux des voyages figés", () => figerTauxVoyages(), 10);
 
 function cartePrixDuJour() {
   const P = S.params, j = P.prixGasoilJour || {}, t = P.tauxEURInfo, relais = typeof partageRelais === "function" && !!partageRelais();
@@ -40,8 +40,7 @@ function cartePrixDuJour() {
     <p class="hint">${relais ? "" : "Sans relais : taux indicatif et prix d'après vos pleins seulement. "}Actualisé seul toutes les 6 heures${j.maj ? ` (dernière fois : ${dateHeureFr(j.maj)})` : ""}. Le taux du jour sert aux voyages en cours ; un voyage terminé ou facturé garde le taux de son jour. Tant qu'un voyage prévu n'a pas de dépense de carburant réelle, son carburant est estimé à ces prix.</p></div>`;
 }
 if (VUES.carburant) {
-  const renduCarbAvant = VUES.carburant.rendu, agirCarbAvant = VUES.carburant.agir;
-  VUES.carburant.rendu = function () { return cartePrixDuJour() + renduCarbAvant.call(this); };
-  VUES.carburant.agir = async function (act, id, b) { if (act === "prix-jour") return actualiserPrixDuJour({ forcer: true }); return agirCarbAvant?.call(this, act, id, b); };
+  blocPage("carburant", { position: "avant", ordre: 10, rendu: cartePrixDuJour });
+  surAction("carburant", "*", async function (act, id, b) { if (act === "prix-jour") return actualiserPrixDuJour({ forcer: true }); return PASSER; });
 }
 enregistrerCarteReglages({ onglet: "general", ordre: 2, rendu: cartePrixDuJour, agir(act) { if (act !== "prix-jour") return false; actualiserPrixDuJour({ forcer: true }); return true; } });

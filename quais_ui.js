@@ -21,15 +21,8 @@ if (typeof carteMission === "function") {
   const carteMissionAvantQuais = carteMission;
   carteMission = function (c, ch, principale) { const h = carteMissionAvantQuais(c, ch, principale); return principale ? h.replace('<div class="chf-actions">', `${blocQuaiChauffeur(c)}<div class="chf-actions">`) : h; };
 }
-if (VUES.chauffeur) {
-  const agirChauffeurAvantQuais = VUES.chauffeur.agir;
-  VUES.chauffeur.agir = async function (act, id, b) {
-    if (act === "chf-quai") { const [cid, q] = String(id).split("|"), c = parId(S.commandes, cid); if (!c) return; arriveeQuai(c, q); sauver(); toast(`Arrivée notée à ${hmQuai(c.quais[q].arrivee)}`); return rafraichir(); }
-    const r = await agirChauffeurAvantQuais.call(this, act, id, b);
-    if (act === "chf-etape") { const c = parId(S.commandes, id); if (c && typeof jalonDepuisCommande === "function" && jalonDepuisCommande(c)) sauver(); } // le voyage suit ce que le chauffeur a marqué
-    return r;
-  };
-}
+surAction("chauffeur", ["chf-quai"], async (act, id) => { const [cid, q] = String(id).split("|"), c = parId(S.commandes, cid); if (!c) return; arriveeQuai(c, q); sauver(); toast(`Arrivée notée à ${hmQuai(c.quais[q].arrivee)}`); return rafraichir(); });
+autourAction("chauffeur", ["chf-etape"], async (suite, act, id) => { const r = await suite(); const c = parId(S.commandes, id); if (c && typeof jalonDepuisCommande === "function" && jalonDepuisCommande(c)) sauver(); return r; }, { ordre: 60, nom: "voyage suivi des étapes du chauffeur" });
 
 /* ---------- bureau : correction, facturation ---------- */
 async function corrigerQuais(c) {
@@ -82,22 +75,14 @@ function blocAttentesVoyage(v) {
   return `<div class="section-title">Attente aux quais</div>${lignes.join("")}`;
 }
 if (typeof enregistrerBlocVoyage === "function") enregistrerBlocVoyage({ onglet: ongletArgentOuSuivi, ordre: 45, rendu: blocAttentesVoyage });
-for (const vue of [VUES.commandes, VUES.voyages]) {
-  if (!vue) continue;
-  const agirAvantQuais = vue.agir;
-  vue.agir = async function (act, id, b) {
-    if (act === "attente" || act === "attente-facturer") { const c = parId(S.commandes, id); if (!c) return; const l = typeof voyageDeCommande === "function" && voyageDeCommande(c); if (l) voyagesOuverts.add(l.v.id); return act === "attente" ? corrigerQuais(c) : facturerAttente(c); }
-    return agirAvantQuais.call(this, act, id, b);
-  };
-}
+surAction(["commandes", "voyages"], ["attente", "attente-facturer"], async (act, id) => { const c = parId(S.commandes, id); if (!c) return; const l = typeof voyageDeCommande === "function" && voyageDeCommande(c); if (l) voyagesOuverts.add(l.v.id); return act === "attente" ? corrigerQuais(c) : facturerAttente(c); });
 
 /* ---------- page Factures : l'argent de l'attente ---------- */
 if (VUES.factures) {
-  const renduFacturesAvantQuais = VUES.factures.rendu;
-  VUES.factures.rendu = function () {
-    const html = renduFacturesAvantQuais.call(this), s = syntheseAttentes(dateISO(Date.now() - 30 * 86400000));
+    blocPage("factures", { position: "avant", ordre: 10, rendu() {
+    const html = "", s = syntheseAttentes(dateISO(Date.now() - 30 * 86400000));
     if (!s.auDelaMin) return html;
     return `<div class="card attente-synthese"><div class="card-head"><h2>Attente aux quais · 30 jours</h2>${s.facturableMad ? badge(`${fmt(s.facturableMad)} MAD à facturer`, "warn") : ""}</div>
       <p style="margin:0">${dureeQuai(s.auDelaMin)} au-delà des franchises sur ${s.quais} quai(s)${s.factureMad ? ` · ${fmt(s.factureMad)} MAD déjà facturés` : ""}${s.sansTarifMin ? ` · <strong>${dureeQuai(s.sansTarifMin)} sans tarif</strong> : fixez un tarif d'attente sur la fiche des clients concernés` : ""}.</p></div>` + html;
-  };
+  } });
 }

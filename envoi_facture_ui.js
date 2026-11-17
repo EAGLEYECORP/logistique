@@ -64,23 +64,20 @@ function actionsEnvoiFacture(f) {
 
 /* ---------- branchements ---------- */
 if (VUES.factures) {
-  const agirFacturesAvantEnvoi = VUES.factures.agir;
-  VUES.factures.agir = async function (act, id, b) {
+  surAction("factures", "*", async function (act, id, b) {
     const f = parId(S.factures, id);
     if (act === "envoyer-facture" && f) return envoyerFacture(f);
     if (act === "relances-facture" && f) { f.sansRelance = !f.sansRelance; sauver(); toast(f.sansRelance ? `${f.numero} : relances suspendues` : `${f.numero} : relances reprises`); return rafraichir(); }
-    return agirFacturesAvantEnvoi.call(this, act, id, b);
-  };
+    return PASSER;
+  });
 }
 // Une facture vient d'être créée (voyage, commande, retour, attente) : proposer de l'envoyer tout de suite.
-for (const [vue, actes] of [[VUES.voyages, ["facturer-voyage", "retour-facturer", "attente-facturer"]], [VUES.commandes, ["facturer", "attente-facturer"]]]) {
-  if (!vue) continue;
-  const agirAvantEnvoi = vue.agir;
-  vue.agir = async function (act, id, b) {
-    const avant = S.factures.length, r = await agirAvantEnvoi.call(this, act, id, b);
-    if (actes.includes(act) && S.factures.length > avant) { const f = S.factures[S.factures.length - 1]; if (await confirmer(`Envoyer ${f.numero} maintenant ?`, "La facture part avec le CMR signé et la preuve de livraison : le client n'a rien à réclamer, le paiement ne glisse pas.", "Envoyer")) await envoyerFacture(f); }
+for (const [page, actes] of [["voyages", ["facturer-voyage", "retour-facturer", "attente-facturer"]], ["commandes", ["facturer", "attente-facturer"]]]) {
+  autourAction(page, actes, async (suite) => {
+    const avant = S.factures.length, r = await suite();
+    if (S.factures.length > avant) { const f = S.factures[S.factures.length - 1]; if (await confirmer(`Envoyer ${f.numero} maintenant ?`, "La facture part avec le CMR signé et la preuve de livraison : le client n'a rien à réclamer, le paiement ne glisse pas.", "Envoyer")) await envoyerFacture(f); }
     return r;
-  };
+  }, { ordre: 50, nom: "envoi de la facture créée" });
 }
 // Relances dans le plan des notifications (fil de l'équipe ; e-mails au client exécutés par le relais, application fermée).
 if (typeof planNotifications === "function") { const planAvantRelances = planNotifications; planNotifications = function (o = {}) { return [...planAvantRelances(o), ...planRelances(o)].sort((a, b) => a.quand - b.quand); }; }

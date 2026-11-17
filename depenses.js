@@ -12,7 +12,7 @@ function majDepenses() {
   majDepensesEnCours = true;
   try { const touches = [...new Set([...retenterAttente(), ...majCoutsCalculesTous()])]; touches.forEach(recalculerMargeVoyage); return touches; } finally { majDepensesEnCours = false; }
 }
-if (typeof sauver === "function") { const sauverSansDepenses = sauver; sauver = function () { try { majDepenses(); } catch (e) { console.warn("Dépenses calculées :", e); } return sauverSansDepenses.apply(this, arguments); }; }
+avantSauver("dépenses calculées", () => majDepenses(), 40);
 
 /* ---------- relevé de carte carburant ---------- */
 function importerCarteCarburant() {
@@ -59,10 +59,10 @@ async function saisirInvite(v, cle) {
 }
 
 /* ---------- page Voyages : bouton d'import, dépenses en attente, actions ---------- */
-const actionsVoyagesAvantDepenses = VUES.voyages.actions, renduVoyagesAvantDepenses = VUES.voyages.rendu, agirVoyagesAvantDepenses = VUES.voyages.agir;
+const actionsVoyagesAvantDepenses = VUES.voyages.actions;
 VUES.voyages.actions = function () { return `${btn("carte-carburant", "Carte carburant", { icone: "upload", cls: "btn ghost fin", titre: "Importer le relevé CSV de votre carte carburant : chaque plein est rattaché au voyage du camion à cette date" })}${actionsVoyagesAvantDepenses.call(this)}`; };
-VUES.voyages.rendu = function () { return blocAttente() + renduVoyagesAvantDepenses.call(this); };
-VUES.voyages.agir = async function (act, id, btnEl) {
+blocPage("voyages", { position: "avant", ordre: 10, rendu: () => blocAttente() });
+surAction("voyages", ["carte-carburant", "attente-affecter", "attente-supprimer", "invite-saisir", "invite-ignorer"], async function (act, id, btnEl) {
   if (act === "carte-carburant") return importerCarteCarburant();
   if (act === "attente-affecter") {
     const a = (S.depensesAttente || []).find((x) => x.id === id); if (!a) return;
@@ -85,14 +85,15 @@ VUES.voyages.agir = async function (act, id, btnEl) {
     if (act === "invite-saisir") return saisirInvite(v, cle);
     (v.invitesIgnorees ||= []).push(cle); voyagesOuverts.add(v.id); sauver(); rafraichir(); return;
   }
-  const avant = act === "jalon" ? new Set((parId(S.voyages, String(id).split("|")[0])?.jalons || []).map((j) => j.type)) : null;
-  const r = await agirVoyagesAvantDepenses.call(this, act, id, btnEl);
-  if (act === "jalon") { // l'étape qui vient d'être marquée appelle peut-être une dépense : on la demande tout de suite
-    const v = parId(S.voyages, String(id).split("|")[0]), der = (v?.jalons || []).find((j) => !avant.has(j.type))?.type || "";
-    if (der && invitesCout(v).some((i) => i.cle === `jalon:${der}`)) await saisirInvite(v, `jalon:${der}`);
-  }
+});
+// après une étape du voyage : la dépense qu'elle appelle peut-être, demandée tout de suite
+autourAction("voyages", ["jalon"], async (suite, act, id) => {
+  const avant = new Set((parId(S.voyages, String(id).split("|")[0])?.jalons || []).map((j) => j.type));
+  const r = await suite();
+  const v = parId(S.voyages, String(id).split("|")[0]), der = (v?.jalons || []).find((j) => !avant.has(j.type))?.type || "";
+  if (der && invitesCout(v).some((i) => i.cle === `jalon:${der}`)) await saisirInvite(v, `jalon:${der}`);
   return r;
-};
+}, { ordre: 60, nom: "dépense appelée par une étape" });
 
 /* ---------- amende (page Tachygraphe) ---------- */
 async function saisirAmende() {
@@ -111,9 +112,9 @@ async function saisirAmende() {
   sauver(); toast(r.voyage ? `Amende comptée dans le voyage ${r.voyage.ref}` : "Aucun voyage à cette date : amende mise en attente (page Voyages)", r.voyage ? "ok" : "warn"); rafraichir();
 }
 if (VUES.tachy) {
-  const actionsTachyAvant = VUES.tachy.actions, agirTachyAvant = VUES.tachy.agir;
+  const actionsTachyAvant = VUES.tachy.actions;
   VUES.tachy.actions = function () { return `${actionsTachyAvant ? actionsTachyAvant.call(this) : ""}${btn("amende", "Enregistrer une amende", { icone: "alert", cls: "btn ghost fin" })}`; };
-  VUES.tachy.agir = function (act, id, b) { if (act === "amende") return saisirAmende(); return agirTachyAvant?.call(this, act, id, b); };
+  surAction("tachy", "*", async function (act, id, b) { if (act === "amende") return saisirAmende(); return PASSER; });
 }
 
 /* ---------- à chaque changement de page : les dépenses calculées sont à jour avant l'affichage ---------- */

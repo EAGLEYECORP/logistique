@@ -6,12 +6,58 @@
 
 /* ---------- persistance ---------- */
 /** Sauvegarde rapide (synchrone) + copie miroir et instantané quotidien dans IndexedDB (voir stockage.js). */
-function sauver() {
+function sauver(options = {}) {
+  for (const h of CROCHETS.avantSauver) { try { h.fn(options); } catch (e) { console.warn(`Avant l'enregistrement (${h.nom}) :`, e); } }
+  enregistrerEtat();
+  for (const h of CROCHETS.apresSauver) { try { h.fn(options); } catch (e) { console.warn(`Après l'enregistrement (${h.nom}) :`, e); } }
+}
+/** Écriture de l'état : stockage rapide de l'appareil tant qu'il suffit, base de l'appareil (IndexedDB) au-delà (voir stockage.js). */
+function enregistrerEtat() {
+  if (typeof stockageEnBase === "function" && stockageEnBase()) return enBasePlanifier();
   let precedent = null;
   try { precedent = localStorage.getItem(STORAGE_KEY); } catch { /* ignoré */ }
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); }
-  catch { toast("Stockage rapide plein : exportez vos données (Réglages → Données).", "danger"); }
+  const texte = JSON.stringify(S);
+  try { if (texte.length > LIMITE_STOCKAGE_RAPIDE) throw Object.assign(new Error("trop gros"), { name: "QuotaExceededError" }); localStorage.setItem(STORAGE_KEY, texte); }
+  catch (e) {
+    if (typeof passerEnBase === "function" && idbDisponible()) { passerEnBase(); return; }
+    toast("Stockage rapide plein : exportez vos données (Réglages → Données).", "danger");
+  }
   miroirPlanifier(precedent);
+}
+
+/* ---------- registre des crochets : chaque fichier s'inscrit au lieu d'envelopper une fonction ---------- */
+const CROCHETS = { actions: [], autour: [], blocs: [], avantSauver: [], apresSauver: [] };
+const correspond = (h, page, act) => (h.pages.includes("*") || h.pages.includes(page)) && (h.actes === "*" || (typeof h.actes === "function" ? h.actes(act) : h.actes.has(act)));
+/** Renvoyé par une action inscrite qui ne traite pas ce geste : la suivante essaie (comme l'ancienne chaîne d'enveloppes). */
+const PASSER = Symbol("passer");
+const trierCrochets = (l) => l.sort((a, b) => a.ordre - b.ordre);
+/** Gère des actions d'une ou plusieurs pages : surAction("voyages", ["lien-depot"], async (act, id, b) => …) — ou une fonction (act) => booléen, ou "*" (la fonction renvoie PASSER pour ce qu'elle ne traite pas). */
+function surAction(pages, actes, fn) { CROCHETS.actions.push({ pages: [].concat(pages), actes: actes === "*" || typeof actes === "function" ? actes : new Set([].concat(actes)), fn }); }
+/**
+ * Autour d'actions : autourAction(pages, actes, async (suite, act, id, b) => { …; const r = await suite(); …; return r; }, { ordre }).
+ * Ordre croissant = de l'extérieur vers l'intérieur (verrou, annulation, puis ce qui suit l'action).
+ */
+function autourAction(pages, actes, fn, { ordre = 50, nom = "" } = {}) { CROCHETS.autour.push({ pages: [].concat(pages), actes: typeof actes === "function" ? actes : new Set([].concat(actes)), fn, ordre, nom }); trierCrochets(CROCHETS.autour); }
+/** Bloc d'une page, avant ou après son contenu : blocPage("factures", { position: "avant", ordre, rendu: () => html }). */
+function blocPage(page, { position = "apres", ordre = 50, rendu }) { CROCHETS.blocs.push({ page, position, ordre, rendu }); trierCrochets(CROCHETS.blocs); }
+const blocsDePage = (page, position) => CROCHETS.blocs.filter((b) => b.page === page && b.position === position).map((b) => { try { return b.rendu() || ""; } catch (e) { console.warn(`Bloc de la page ${page} :`, e); return ""; } }).join("");
+/** Avant / après chaque enregistrement, dans l'ordre donné : avantSauver("journal", fn, 30). fn(options) ; options.local : sans envoi au serveur. */
+function avantSauver(nom, fn, ordre = 50) { CROCHETS.avantSauver.push({ nom, fn, ordre }); trierCrochets(CROCHETS.avantSauver); }
+function apresSauver(nom, fn, ordre = 50) { CROCHETS.apresSauver.push({ nom, fn, ordre }); trierCrochets(CROCHETS.apresSauver); }
+/** Action d'une page : crochets « autour », puis la première action inscrite qui la gère, sinon l'action propre de la page. */
+async function agirPage(page, act, id, b) {
+  const v = VUES[page], base = v?._agirBase || v?.agir;
+  const coeur = async () => { // la dernière inscrite d'abord (même priorité que l'ancienne chaîne) ; PASSER laisse la main à la suivante
+    for (let i = CROCHETS.actions.length - 1; i >= 0; i--) { const h = CROCHETS.actions[i]; if (!correspond(h, page, act)) continue; const r = await h.fn.call(v, act, id, b); if (r !== PASSER) return r; }
+    return base?.call(v, act, id, b);
+  };
+  let suite = coeur;
+  for (const h of [...CROCHETS.autour].reverse()) if (correspond(h, page, act)) { const interieur = suite; suite = () => h.fn(interieur, act, id, b); }
+  return suite();
+}
+/** Au démarrage : chaque page passe par le registre (un appel direct VUES.x.agir(...) aussi). */
+function installerCrochets() {
+  for (const [page, v] of Object.entries(VUES)) { if (v._agirBase !== undefined) continue; v._agirBase = v.agir || null; v.agir = function (act, id, b) { return agirPage(page, act, id, b); }; }
 }
 
 /* ---------- icônes (SVG en ligne, hors ligne) ---------- */
@@ -143,6 +189,7 @@ const optsCamions = (vide = "— Aucun —") => [["", vide], ...S.camions.map((c
    Vues
    ============================================================ */
 const VUES = {};
+const LIMITE_STOCKAGE_RAPIDE = 4_500_000; // caractères : au-delà, l'état va dans la base de l'appareil (IndexedDB)
 let ongletActif = "tableau";
 const ONGLETS = [
   ["tableau", "Accueil", "home", ""],
@@ -225,7 +272,7 @@ function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
   $("#titre").textContent = titre;
   $("#soustitre").textContent = typeof v.sous === "function" ? v.sous() : v.sous;
   $("#actions").innerHTML = v.actions?.() || "";
-  $("#app").innerHTML = sousOnglets(onglet) + v.rendu();
+  $("#app").innerHTML = sousOnglets(onglet) + blocsDePage(onglet, "avant") + v.rendu() + blocsDePage(onglet, "apres");
   const ongletActuel = document.querySelector(".sous-onglets .actif"); if (ongletActuel) ongletActuel.parentElement.scrollLeft = ongletActuel.offsetLeft - 8; // l'onglet ouvert reste visible sur téléphone
   document.title = `${titre} · Logistique Fret`;
   etiqueterTableaux();

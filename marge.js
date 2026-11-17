@@ -39,8 +39,7 @@ const champsLigneCout = (v) => [
   { name: "ref", label: "Référence (facture, reçu)", full: true },
 ];
 
-const agirVoyagesAvantMarge = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, btnEl) {
+surAction("voyages", "*", async function (act, id, btnEl) {
   if (act === "ligne-ajouter") {
     const v = parId(S.voyages, id); if (!v) return;
     const f = await formulaire(`Dépense — ${v.ref}`, champsLigneCout(v), { valider: "Ajouter", aide: "La traversée concernée ne sert que pour une facture de traversée : elle remplace alors l'estimation de ce sens." });
@@ -63,7 +62,7 @@ VUES.voyages.agir = async function (act, id, btnEl) {
     if (!(await confirmer("Supprimer cette dépense ?", "L'estimation du même type, s'il y en a une, sera de nouveau utilisée."))) return;
     retirerLigneCout(v, lid); recalculerMargeVoyage(v.id); sauver(); toast("Dépense supprimée"); rafraichir(); return;
   }
-  return agirVoyagesAvantMarge.call(this, act, id, btnEl);
-};
+  return PASSER;
+});
 // Toute entrée de coût venue d'ailleurs (import, GPS, calcul) met à jour la pastille sans recharger la page.
 surMargeVoyage(({ voyageId }) => { const v = parId(S.voyages, voyageId); for (const el of document.querySelectorAll(`[data-marge="${voyageId}"]`)) if (v) el.outerHTML = pastilleMarge(v); });

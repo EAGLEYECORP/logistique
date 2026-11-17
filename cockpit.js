@@ -165,10 +165,9 @@ VUES.rentabilite = {
 };
 
 /* ---------- accueil : ce qui se prépare (prévisions) ---------- */
-const rendreAccueilBase = VUES.tableau.rendu;
-VUES.tableau.rendu = function () {
-  const html = rendreAccueilBase.call(this), p = S.camions.length || S.chauffeurs.length ? previsions() : [];
+blocPage("tableau", { position: "avant", ordre: 50, rendu() {
+  const html = "", p = S.camions.length || S.chauffeurs.length ? previsions() : [];
   if (!p.length) return html;
   return `<div class="card"><div class="card-head"><h2>À prévoir</h2>${badge(String(p.length), p.some((x) => x.niveau === "warn") ? "warn" : "neutral")}</div>
     <ul class="ctl">${p.map((x) => `<li class="${x.niveau === "warn" ? "warn" : ""}">${ic(x.niveau === "warn" ? "clock" : "calendar")}<span>${esc(x.texte)} ${btn("aller", "Voir", { id: x.onglet, cls: "btn ghost sm" })}</span></li>`).join("")}</ul></div>` + html;
-};
+} });

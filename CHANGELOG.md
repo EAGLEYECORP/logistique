@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.7.0 — Plus de limite de 5 Mo pour les données ; fondations remises d'aplomb
+
+- **Les données n'ont plus de plafond** : tant qu'elles tiennent dans le stockage rapide du navigateur (≈ 5 Mo), rien ne change ; au-delà, elles passent **automatiquement** dans la base de l'appareil (IndexedDB) au lieu d'afficher « stockage plein ». Sans perte : la base est écrite d'abord, le stockage rapide n'est vidé qu'ensuite ; les instantanés quotidiens continuent ; la protection contre l'effacement est demandée. Réglages → Données dit où elles sont enregistrées. Une flotte qui accumule deux ans de voyages, de traces et de dépenses ne bute plus sur la limite.
+- **Fondations** (rien ne change à l'écran, tout reste où il était) : les 33 couches qui s'empilaient sur les actions des pages et les 8 sur l'enregistrement sont remplacées par un **registre** où chaque partie de l'application s'inscrit, avec un **ordre explicite** là où il compte (verrou à plusieurs, « Annuler », suites d'une étape ; avant l'enregistrement : taux figés, commandes des voyages, historique, dépenses ; après : synchronisation, notifications, envoi au serveur). Les blocs ajoutés aux pages (accueil, factures, voyages, planning, gasoil, chauffeurs) s'inscrivent aussi, dans le même ordre qu'avant. Ajouter une fonction ne dépend plus de l'ordre de chargement des fichiers.
+- Vérifié : tous les essais réels de la session repassés (fiche du voyage, boîte des demandes, liens, itinéraire, coupures, créneau au port), et les gestes des pages Commandes, Factures, Chauffeurs, Camions, Tachygraphe et Voyages un par un.
+
 ## 5.6.0 — Meilleur créneau au port, d'après vos propres passages
 
 - **Fiche du voyage → Suivi → Créneau au port** : pour le prochain port du voyage (Tanger Med à l'export, Algeciras, Tanger Med à l'import), l'heure d'arrivée conseillée ce jour-là et celle à éviter, avec l'attente habituelle de chacune et le nombre de passages ; pour un voyage prévu, l'**arrivée estimée** au port (départ du dépôt à 6 h, 70 km/h, pauses et repos de nuit) et ce qu'elle coûte en attente par rapport au meilleur créneau. Petit graphique des tranches de 3 heures, l'arrivée estimée soulignée.

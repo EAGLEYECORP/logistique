@@ -139,10 +139,12 @@ Automatique et sans action de votre part.
 
 **Pourquoi du JavaScript pur, sans compilation ?** L'application doit s'ouvrir partout (poste de bureau, téléphone, Termux), se servir avec un simple `python -m http.server` et rester modifiable par n'importe qui sans chaîne d'outils. Un framework et un bundler ajouteraient Node, des dépendances et une étape de build sans bénéfice ici. La logique est séparée de l'interface et testée.
 
+**Ajouter une fonction sans toucher aux autres** : chaque fichier s'inscrit dans le registre de `app.js` au lieu d'envelopper une fonction existante — `surAction(page, actes, fn)` pour ses boutons, `autourAction(page, actes, fn, { ordre })` pour agir avant ou après un geste, `blocPage(page, { position, ordre, rendu })` pour un bloc de page, `enregistrerBlocVoyage({ onglet, ordre, rendu })` pour la fiche du voyage, `avantSauver` / `apresSauver` pour l'enregistrement, `enregistrerCarteReglages` pour les réglages. Un test refuse deux noms globaux identiques dans les scripts de la page.
+
 | Fichier | Rôle |
 |---|---|
 | `noyau.js` | **Logique métier pure** : état, migrations, calculs, alertes, rappels, étapes de commande, montants en lettres (testée) |
-| `stockage.js` | IndexedDB : miroir, copies quotidiennes, photos, compression d'image |
+| `stockage.js` | IndexedDB : miroir, copies quotidiennes, photos et PDF, compression d'image ; état dans la base de l'appareil quand il dépasse le stockage rapide |
 | `sauvegarde.js` | ZIP, chiffrement AES-GCM, import/export, CSV, verrou PIN (testé) |
 | `app.js` | Interface : vues, fenêtres, navigation, recherche globale |
 | `commercial.js` | Commandes, clients, factures |

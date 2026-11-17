@@ -78,6 +78,33 @@ function miroirVider() {
   if (idbDisponible() && typeof S !== "undefined") etatMiroirEcrire(S).catch(() => {});
 }
 
+/* ---------- état volumineux : la base de l'appareil devient la mémoire principale ---------- */
+// Tant que les données tiennent dans le stockage rapide (≈ 5 Mo selon les navigateurs), il reste la mémoire principale (écriture immédiate)
+// et la base (IndexedDB) en garde une copie. Au-delà, l'état est écrit dans la base seule ; un petit drapeau dans le stockage rapide le dit.
+const CLE_MODE_STOCKAGE = "logistique-stockage";
+const stockageEnBase = () => { try { return localStorage.getItem(CLE_MODE_STOCKAGE) === "base"; } catch { return false; } };
+let _tBase = null;
+function enBasePlanifier() {
+  const jour = dateISO(Date.now());
+  if (_jourSnapshot !== jour) { _jourSnapshot = jour; try { snapshotEcrire(JSON.parse(JSON.stringify(S)), "auto", jour).catch(() => {}); } catch { /* ignoré */ } }
+  clearTimeout(_tBase); _tBase = setTimeout(() => { _tBase = null; etatMiroirEcrire(S).catch(() => toast("Enregistrement impossible dans la base de l'appareil : exportez vos données (Réglages → Données).", "danger")); }, 300);
+}
+/** Les données ne tiennent plus dans le stockage rapide : elles passent dans la base (le stockage rapide n'est vidé qu'une fois la base écrite). */
+let _passageEnBase = null;
+function passerEnBase() { return (_passageEnBase ||= passerEnBaseUneFois().finally(() => { _passageEnBase = null; })); }
+async function passerEnBaseUneFois() {
+  try { await etatMiroirEcrire(S); } catch { toast("Stockage plein : exportez vos données (Réglages → Données).", "danger"); return false; }
+  try { localStorage.setItem(CLE_MODE_STOCKAGE, "base"); localStorage.removeItem(STORAGE_KEY); } catch { /* ignoré */ }
+  if (typeof stockageDemanderPersistance === "function") stockageDemanderPersistance();
+  toast("Vos données ont grandi : elles sont maintenant enregistrées dans la base de l'appareil, sans la limite de 5 Mo.", "ok");
+  return true;
+}
+/** Déconnexion (plusieurs utilisateurs) : l'état gardé dans la base est oublié aussi. */
+async function oublierEtatEnBase() {
+  try { localStorage.removeItem(CLE_MODE_STOCKAGE); } catch { /* ignoré */ }
+  if (idbDisponible()) await idbTx("etat", "readwrite", (st) => idbDemande(st.delete("courant"))).catch(() => {});
+}
+
 /* ---------- instantanés ---------- */
 /** type "auto" : un par jour (clé auto-AAAA-MM-JJ) · type "manuel" : avant un import/une restauration (clé avant-<horodatage>). */
 async function snapshotEcrire(etat, type = "auto", jour = dateISO(Date.now())) {

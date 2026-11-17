@@ -53,7 +53,7 @@ async function commandeDepuisMessage(message, { aujourdhui = today(), recuLe = t
   return n;
 }
 if (VUES.commandes) {
-  const actionsCommandesAvantLecture = VUES.commandes.actions, agirCommandesAvantLecture = VUES.commandes.agir;
+  const actionsCommandesAvantLecture = VUES.commandes.actions;
   VUES.commandes.actions = () => btn("coller", "Coller un message", { icone: "file", cls: "btn ghost" }) + actionsCommandesAvantLecture();
-  VUES.commandes.agir = async function (act, id, b) { if (act === "coller") return collerMessage(); return agirCommandesAvantLecture.call(this, act, id, b); };
+  surAction("commandes", "*", async function (act, id, b) { if (act === "coller") return collerMessage(); return PASSER; });
 }

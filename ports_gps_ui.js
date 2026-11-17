@@ -14,9 +14,8 @@ function blocApprentissageGps(lieu) {
 }
 if (typeof blocLieu === "function") { const blocLieuAvantGps = blocLieu; blocLieu = function (p) { return blocLieuAvantGps(p) + (p ? blocApprentissageGps(p.lieu) : ""); }; }
 if (VUES.passages) {
-  const agirPassagesAvantGps = VUES.passages.agir;
-  VUES.passages.agir = async function (act, id, b) {
+  surAction("passages", "*", async function (act, id, b) {
     if (act === "zone-oublier") { if (!(await confirmer("Oublier cet emplacement ?", "Le GPS ne posera plus cette étape tant qu'elle n'aura pas été relevée de nouveau, deux fois.", "Oublier"))) return; oublierZoneEtape(id); sauver(); toast("Emplacement oublié"); return rafraichir(); }
-    return agirPassagesAvantGps.call(this, act, id, b);
-  };
+    return PASSER;
+  });
 }

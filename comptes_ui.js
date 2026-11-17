@@ -197,18 +197,18 @@ async function verrouiller(col, id, raison) {
 const liberer = (col, id) => { if (multiActif()) api("DELETE", `/api/verrous/${col}/${encodeURIComponent(id)}`).catch(() => {}); };
 
 /* ---------- enregistrement : local, puis serveur ---------- */
-let sauverLocal = () => {};
-if (typeof sauver === "function") { const avant = sauver; sauverLocal = () => avant(); sauver = function () { const r = avant.apply(this, arguments); if (multiActif()) { clearTimeout(multi.minuteur); multi.minuteur = setTimeout(pousser, 300); } return r; }; }
+/** Enregistrer sur cet appareil sans renvoyer au serveur (les données viennent du serveur). */
+const sauverLocal = () => sauver({ local: true });
+apresSauver("envoi au serveur", (o) => { if (!o.local && multiActif()) { clearTimeout(multi.minuteur); multi.minuteur = setTimeout(pousser, 300); } }, 40);
 // opérations sensibles : verrou de 30 s (livraison, encaissement, suppression d'un voyage)
-const agirVoyagesAvantMulti = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
+autourAction("voyages", ["jalon", "preuve", "supprimer"], async (suite, act, id) => {
   const vid = String(id || "").split("|")[0], v = parId(S.voyages, vid);
   const prochain = v && JALONS_VOYAGE.find(([k]) => !(v.jalons || []).some((j) => j.type === k));
   const sensible = (act === "jalon" && (String(id || "").split("|")[1] || prochain?.[0]) === "livre") || act === "preuve" || act === "supprimer";
   if (sensible && !(await verrouiller("voyages", vid, act === "supprimer" ? "suppression" : "livraison"))) return;
-  try { return await agirVoyagesAvantMulti.call(this, act, id, b); } finally { if (sensible) setTimeout(() => liberer("voyages", vid), 1500); }
-};
-if (VUES.factures) { const agirFacturesAvantMulti = VUES.factures.agir; VUES.factures.agir = async function (act, id, b) { const sensible = act === "payer"; if (sensible && !(await verrouiller("factures", id, "encaissement"))) return; try { return await agirFacturesAvantMulti.call(this, act, id, b); } finally { if (sensible) setTimeout(() => liberer("factures", id), 1500); } }; }
+  try { return await suite(); } finally { if (sensible) setTimeout(() => liberer("voyages", vid), 1500); }
+}, { ordre: 20, nom: "verrou (plusieurs utilisateurs)" });
+autourAction("factures", ["payer"], async (suite, act, id) => { if (!(await verrouiller("factures", id, "encaissement"))) return; try { return await suite(); } finally { setTimeout(() => liberer("factures", id), 1500); } }, { ordre: 20, nom: "verrou (plusieurs utilisateurs)" });
 const apresVoyagesAvantMulti = VUES.voyages.apres;
 VUES.voyages.apres = function () { const r = apresVoyagesAvantMulti?.call(this); if (multiActif()) decorerVerrous(); return r; };
 
@@ -313,6 +313,7 @@ function multiDeconnecte() {
   try { multi.source?.close(); } catch { /* ignoré */ }
   multi.utilisateur = null; multi.source = null;
   try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem("logistique-mode"); } catch { /* ignoré */ }
+  if (typeof oublierEtatEnBase === "function") oublierEtatEnBase();
   api("GET", "/api/auth/etat").then((e) => ecranConnexion(e)).catch(() => location.reload());
 }
 async function seDeconnecter() { await api("POST", "/api/auth/logout", {}).catch(() => {}); multiDeconnecte(); }

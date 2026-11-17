@@ -80,8 +80,7 @@ async function ouvrirDossierVoyage(voyageId) {
   if (f.format === "imprimer") return imprimerDossierVoyage(v, { couts: !!f.couts });
   try { const a = await archiveDossierVoyage(v, { couts: !!f.couts }); telecharger(a.nom, a.octets, "application/zip"); toast(`Archive créée : ${a.nbFichiers} fichier(s)`); } catch (e) { toast(`Archive impossible : ${e.message}`, "danger"); }
 }
-const agirVoyagesDossier = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, bouton) {
+surAction("voyages", "*", async function (act, id, bouton) {
   if (act === "dossier") return ouvrirDossierVoyage(String(id).split("|")[0]);
-  return agirVoyagesDossier.call(this, act, id, bouton);
-};
+  return PASSER;
+});

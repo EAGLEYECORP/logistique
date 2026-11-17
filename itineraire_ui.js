@@ -48,9 +48,8 @@ function blocItineraire(v) {
 }
 enregistrerBlocVoyage({ onglet: "suivi", ordre: 35, rendu: blocItineraire });
 
-const agirVoyagesAvantItineraire = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
-  if (act !== "itineraire-calculer") return agirVoyagesAvantItineraire.call(this, act, id, b);
+surAction("voyages", "*", async function (act, id, b) {
+  if (act !== "itineraire-calculer") return PASSER;
   const v = parId(S.voyages, id); if (!v) return;
   if (b) b.disabled = true;
   const r = await calculerTroncons(v);
@@ -58,7 +57,7 @@ VUES.voyages.agir = async function (act, id, b) {
   const a = appliquerItineraire(v, r.it); voyagesOuverts.add(v.id);
   if (typeof recalculerMargeVoyage === "function") recalculerMargeVoyage(v.id);
   sauver(); toast(`Itinéraire : ${fmt(r.it.km)} km, ${dureeRoute(r.it.heures)} de conduite${a.kmPays === "rempli" ? " · péages d'Europe recalculés" : a.kmPays === "garde" ? " · vos km par pays sont gardés" : ""}`); rafraichir();
-};
+});
 
 /* ---------- devis : l'itinéraire réel avant le prix conseillé ---------- */
 if (typeof chiffrerCommande === "function") {

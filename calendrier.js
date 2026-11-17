@@ -147,8 +147,7 @@ if (typeof champsVoyage === "function") {
 }
 
 /* ---------- dupliquer un voyage ---------- */
-const agirVoyagesAvantPlanning = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
+surAction("voyages", "*", async function (act, id, b) {
   if (act === "dupliquer") {
     const v = parId(S.voyages, String(id).split("|")[0]); if (!v) return;
     const proposee = dateISO(Date.parse((finVoyage(v) || today()) + "T00:00:00Z") + 86400000);
@@ -159,8 +158,8 @@ VUES.voyages.agir = async function (act, id, b) {
     const c = conflitsAffectation(n); if (c.length) toast(c[0].texte, "warn");
     return rafraichir();
   }
-  return agirVoyagesAvantPlanning.call(this, act, id, b);
-};
+  return PASSER;
+});
 
 /* ---------- page Chauffeurs : disponibilités des 14 prochains jours, papiers cliquables (aussi sur Camions) ---------- */
 function carteDispoChauffeurs() {
@@ -170,14 +169,10 @@ function carteDispoChauffeurs() {
     ${grilleHtml(g, "chauffeur")}
     <div class="row" style="margin-top:8px">${btn("dispo-absence", "Déclarer une absence", { icone: "plus", cls: "btn ghost sm" })}${btn("aller", "Planning complet", { id: "planning", icone: "calendar", cls: "btn ghost sm" })}<span class="hint">Touchez une case : voyage, absence, papiers expirés ou case libre pour planifier.</span></div></div>`;
 }
-for (const [vue, genre] of [[VUES.chauffeurs, "chauffeur"], [VUES.camions, "camion"]]) {
-  if (!vue) continue;
-  const agirBase = vue.agir;
-  vue.agir = async function (act, id, b) {
-    if (act === "papiers") { const r = ressourcePlanning(genre, id); return r && expliquerPapiers(genre, r, today()); }
-    if (act === "cellule" || act === "absence-modifier" || act === "absence-supprimer") return VUES.planning.agir(act, id, b);
-    if (act === "dispo-absence") return saisirAbsence(genre, "");
-    return agirBase.call(this, act, id, b);
-  };
-}
-{ const renduChauffeursBase = VUES.chauffeurs.rendu; VUES.chauffeurs.rendu = function () { return carteDispoChauffeurs() + renduChauffeursBase.call(this); }; }
+surAction(["chauffeurs", "camions"], ["papiers", "cellule", "absence-modifier", "absence-supprimer", "dispo-absence"], async function (act, id, b) {
+  const genre = this === VUES.camions ? "camion" : "chauffeur";
+  if (act === "papiers") { const r = ressourcePlanning(genre, id); return r && expliquerPapiers(genre, r, today()); }
+  if (act === "dispo-absence") return saisirAbsence(genre, "");
+  return VUES.planning.agir(act, id, b);
+});
+blocPage("chauffeurs", { position: "avant", ordre: 10, rendu: () => carteDispoChauffeurs() });

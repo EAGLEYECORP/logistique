@@ -19,13 +19,10 @@ function proposerAnnulation(avant, toastsAvant) {
   t.append(b);
 }
 for (const [page, actes] of Object.entries(ACTES_ANNULABLES)) {
-  const vue = VUES[page]; if (!vue?.agir) continue;
-  const agirAvantAnnulation = vue.agir;
-  vue.agir = async function (act, id, b) {
-    if (!actes.includes(act)) return agirAvantAnnulation.call(this, act, id, b);
+  autourAction(page, actes, async (suite) => {
     const avant = JSON.stringify(S), toastsAvant = new Set(document.getElementById("toasts")?.children || []);
-    const r = await agirAvantAnnulation.call(this, act, id, b);
+    const r = await suite();
     if (JSON.stringify(S) !== avant) proposerAnnulation(avant, toastsAvant);
     return r;
-  };
+  }, { ordre: 10, nom: "annuler" });
 }

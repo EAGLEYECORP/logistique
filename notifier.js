@@ -84,8 +84,9 @@ async function remettreRappelsLocaux() {
   for (const m of nouveaux) S.notifsEtat.remis[m.cle] = new Date().toISOString();
   await envoyerNotifications(nouveaux); sauverSansNotif();
 }
-let sauverSansNotif = typeof sauver === "function" ? sauver : () => {};
-if (typeof sauver === "function") { const avant = sauver; sauverSansNotif = avant; sauver = function () { const r = avant.apply(this, arguments); try { if (jalonsANotifier().length) setTimeout(notifierEtapesAuto, 0); planifierEnvoiPlan(); } catch (e) { console.warn("Notifications :", e); } return r; }; }
+/** Enregistrer sans déclencher les notifications automatiques (quand l'enregistrement vient des notifications elles-mêmes). */
+const sauverSansNotif = () => sauver({ sansNotif: true });
+apresSauver("notifications des étapes", (o) => { if (o.sansNotif) return; if (jalonsANotifier().length) setTimeout(notifierEtapesAuto, 0); planifierEnvoiPlan(); }, 20);
 setInterval(() => { remettreRappelsLocaux().catch(() => {}); }, 60000);
 setTimeout(() => { remettreRappelsLocaux().catch(() => {}); planifierEnvoiPlan(); }, 3000);
 
@@ -107,11 +108,10 @@ async function notifierJalonManuel(v, jalon) {
   else toast(r.erreurs.length ? `${r.envoyes} envoyé(s) · ${r.erreurs[0]}` : `${r.envoyes} notification(s) envoyée(s)`, r.erreurs.length ? "warn" : "ok");
   rafraichir();
 }
-const agirVoyagesAvantNotif = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
+surAction("voyages", "*", async function (act, id, b) {
   if (act === "notifier-jalon") { const [vid, jalon] = String(id).split("|"), v = parId(S.voyages, vid); if (v) { voyagesOuverts.add(v.id); await notifierJalonManuel(v, jalon); } return; }
-  return agirVoyagesAvantNotif.call(this, act, id, b);
-};
+  return PASSER;
+});
 
 /* ---------- panneau : notifications programmées (24 h) et fil ---------- */
 function blocNotifications() {
@@ -137,16 +137,16 @@ async function agirNotifications(act, id) {
 }
 for (const vue of ["tableau", "direction", "operations"]) {
   const V = VUES[vue]; if (!V) continue;
-  const rendu = V.rendu, agir = V.agir;
+  const rendu = V.rendu;
   V.rendu = function () {
     const html = rendu.call(this), b = S.voyages.length ? blocNotifications() : "", ancre = /(<div class="card"[^>]*>\s*<div class="card-head"><h2>À traiter)/;
     return vue === "tableau" && ancre.test(html) ? html.replace(ancre, `${b}$1`) : html + b;
   };
-  V.agir = async function (act, id, el) {
+  surAction(vue, "*", async (act, id) => {
     if (await agirNotifications(act, id)) return;
     if (act === "voyage" && vue === "direction" && typeof ouvrirVoyage === "function") return ouvrirVoyage(id);
-    return agir?.call(this, act, id, el);
-  };
+    return PASSER;
+  });
 }
 
 /* ---------- réglages : destinataires, routage, messages, essai ---------- */

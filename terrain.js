@@ -157,7 +157,7 @@ function importerReleveEu(voyageId) {
 }
 
 /* ---------- branchement ---------- */
-const rendreChauffeurBase = VUES.chauffeur.rendu, agirChauffeurBase = VUES.chauffeur.agir;
+const rendreChauffeurBase = VUES.chauffeur.rendu;
 VUES.chauffeur.rendu = function () {
   const html = rendreChauffeurBase.call(this), ch = chauffeurCourant();
   const voyages = ch ? S.voyages.filter((v) => v.chauffeurId === ch.id && v.statut === "en_cours") : [];
@@ -165,22 +165,21 @@ VUES.chauffeur.rendu = function () {
   const marque = '<div class="row" style="justify-content:center;margin-top:24px">';
   return html.includes(marque) ? html.replace(marque, blocs + marque) : html + blocs;
 };
-VUES.chauffeur.agir = async function (act, id) {
+surAction("chauffeur", "*", async function (act, id) {
   if (act === "balise-start") return baliseDemarrer();
   if (act === "balise-stop") return baliseArreter();
   if (act === "preuve") return ouvrirPreuve(id);
-  return agirChauffeurBase.call(this, act, id);
-};
+  return PASSER;
+});
 const soumettreChauffeurBase = VUES.chauffeur.soumettre;
 VUES.chauffeur.soumettre = function (fid, v, form) {
   if (fid === "f-balise") { baliseSauver({ url: baseUrl(v.url), jeton: v.jeton, id: v.id }); toast("Réglages enregistrés"); rafraichirBalise(); return true; }
   return soumettreChauffeurBase?.call(this, fid, v, form);
 };
-const agirVoyagesTerrain = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, bouton) {
+surAction("voyages", "*", async function (act, id, bouton) {
   if (act === "preuve") return ouvrirPreuve(String(id).split("|")[0]);
   if (act === "cmr") return ouvrirCMR(String(id).split("|")[0]);
   if (act === "releve-eu") return importerReleveEu(String(id).split("|")[0]);
   if (act === "preuve-imprimer") return imprimerPreuve(parId(S.voyages, String(id).split("|")[0]));
-  return agirVoyagesTerrain.call(this, act, id, bouton);
-};
+  return PASSER;
+});

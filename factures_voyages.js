@@ -42,22 +42,20 @@ async function rattacherFacture(v) {
   try { rattacherVoyageFacture(v, parId(S.factures, f.factureId), { ajouterLigne: !!f.ligne }); } catch (e) { return toast(e.message, "danger"); }
   sauver(); toast("Voyage ajouté à la facture"); rafraichir();
 }
-const agirVoyagesAvantFacture = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
+surAction("voyages", "*", async function (act, id, b) {
   const v = parId(S.voyages, String(id || "").split("|")[0]);
   if (act === "facturer-voyage" && v) return facturerVoyage(v);
   if (act === "rattacher-facture" && v) return rattacherFacture(v);
   if (act === "voir-facture") return afficher("factures");
-  return agirVoyagesAvantFacture.call(this, act, id, b);
-};
+  return PASSER;
+});
 // page Factures : les voyages faits à facturer d'abord
 if (VUES.factures) {
-  const renduFacturesAvantVoyages = VUES.factures.rendu, agirFacturesAvantVoyages = VUES.factures.agir;
-  VUES.factures.rendu = function () {
-    const l = voyagesAFacturer(), html = renduFacturesAvantVoyages.call(this);
+  blocPage("factures", { position: "avant", ordre: 20, rendu() {
+    const l = voyagesAFacturer(), html = "";
     if (!l.length) return html;
     return `<div class="card callout" id="voyages-a-facturer"><div class="card-head"><h2>Voyages faits à facturer · ${l.length}</h2></div>
       ${l.map(({ voyage: v, depuis }) => `<div class="trav"><div><strong>${esc(v.ref || "")} · ${esc(v.origine || "")} → ${esc(v.destination || "")}</strong><span class="sub">${v.clientId ? esc(nomClient(v.clientId)) : "client à choisir"} · fait il y a ${depuis} j${v.prix ? " · " + fmtDevise(num(v.prix), v.devise || "MAD") + " HT" : ""}</span></div><div class="r">${badge(depuis > 7 ? "En retard" : "À facturer", depuis > 7 ? "danger" : "warn")}${btn("facturer-voyage", "Facturer", { id: v.id, cls: "btn sm" })}</div></div>`).join("")}</div>` + html;
-  };
-  VUES.factures.agir = async function (act, id, b) { if (act === "facturer-voyage") { const v = parId(S.voyages, id); return v ? facturerVoyage(v) : undefined; } return agirFacturesAvantVoyages.call(this, act, id, b); };
+  } });
+  surAction("factures", "*", async function (act, id, b) { if (act === "facturer-voyage") { const v = parId(S.voyages, id); return v ? facturerVoyage(v) : undefined; } return PASSER; });
 }

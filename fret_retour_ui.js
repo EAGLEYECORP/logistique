@@ -31,11 +31,7 @@ async function agirRetour(act, id) {
   if (act === "retour-chercher") { const v = parId(S.voyages, id); if (v) { voyagesOuverts.add(v.id); await chercherRetour(v); } return true; }
   return false;
 }
-for (const vue of [VUES.voyages, VUES.tableau]) {
-  if (!vue) continue;
-  const agirAvantRetour = vue.agir;
-  vue.agir = async function (act, id, b) { if (await agirRetour(act, id)) return; return agirAvantRetour?.call(this, act, id, b); };
-}
+surAction(["voyages", "tableau"], "*", async (act, id) => ((await agirRetour(act, id)) ? undefined : PASSER));
 
 /* ---------- fiche du voyage : bouton dans « Chargement de retour » ---------- */
 if (typeof blocRetour === "function") {
@@ -50,14 +46,13 @@ if (typeof blocRetour === "function") {
 
 /* ---------- accueil : retours à trouver ---------- */
 if (VUES.tableau) {
-  const renduTableauAvantRetours = VUES.tableau.rendu;
-  VUES.tableau.rendu = function () {
-    const html = renduTableauAvantRetours.call(this), l = retoursATrouver().filter((x) => x.jours <= 7);
+    blocPage("tableau", { position: "avant", ordre: 20, rendu() {
+    const html = "", l = retoursATrouver().filter((x) => x.jours <= 7);
     if (!l.length) return html;
     const bloc = `<div class="card" id="bloc-retours"><div class="card-head"><h2>Retours à trouver</h2>${badge(`${l.length} camion${l.length > 1 ? "s" : ""}`, l.some((x) => x.livre || x.jours <= 1) ? "danger" : "warn")}</div>
       ${l.slice(0, 4).map((x) => `<div class="trav"><div><strong>${esc(x.v.ref)} · ${esc(x.v.destination || "?")} · ${x.livre ? "livré" : x.jours <= 0 ? "livre aujourd'hui" : `livre dans ${x.jours} j`}</strong><span class="sub">${x.plancher.couvert ? "L'aller couvre déjà l'aller-retour" : `Prix plancher ${fmt(x.plancher.eur)} €`} · ${chargeursPour(x.v).length} chargeur(s) à proximité</span></div><div class="r">${btn("retour-chercher", "Trouver", { id: x.v.id, cls: "btn sm", icone: "search" })}</div></div>`).join("")}</div>`;
     return bloc + html;
-  };
+  } });
 }
 // Les clics dans une fenêtre (dialog) ne passent pas par le gestionnaire des pages : on les capte ici.
 document.addEventListener("click", (e) => {

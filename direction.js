@@ -166,9 +166,8 @@ function blocAnomalies() {
 }
 
 /* ---------- accueil du chef d'entreprise (profil Direction) ---------- */
-const renduAccueilAvantDirection = VUES.tableau.rendu;
-VUES.tableau.rendu = function () {
-  const html = renduAccueilAvantDirection.call(this);
+blocPage("tableau", { position: "avant", ordre: 40, rendu() {
+  const html = "";
   if ((typeof roleLire === "function" && roleLire().role !== "direction") || !(S.voyages.length || S.factures.length)) return html;
   const m0 = today().slice(0, 7) + "-01", p = pnlPeriode(m0, ajouterJours(ajouterMois(m0, 1), -1)), t = previsionsTresorerie(90);
   return `<div class="card fin" id="accueil-direction"><div class="card-head"><h2>L'entreprise ce mois-ci</h2>${btn("aller", "Tout voir", { id: "direction", cls: "btn ghost sm" })}</div>
@@ -180,4 +179,4 @@ VUES.tableau.rendu = function () {
       <div class="kpi"><div class="l">Trésorerie</div>${deuxDevises(t.solde_initial)}</div>
       <div class="kpi"><div class="l">Point bas à 90 jours</div>${deuxDevises(t.min.solde, t.min.solde < 0 ? "neg" : "")}<div class="s ${t.negatif ? "danger" : ""}">${t.negatif ? "sous zéro le " + dateFr(t.negatif) : "le " + dateFr(t.min.date)}</div></div>
     </div>${(() => { const a = anomalies(); return a.length ? `<div class="section-title">Anomalies · ${a.length}</div>${listeAnomalies(a.slice(0, 3))}` : ""; })()}</div>` + html;
-};
+} });

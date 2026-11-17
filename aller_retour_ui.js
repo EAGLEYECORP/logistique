@@ -9,7 +9,7 @@
    ============================================================ */
 
 /* ---------- les commandes suivent leur voyage à chaque enregistrement ---------- */
-if (typeof sauver === "function") { const avantAllerRetour = sauver; sauver = function () { try { synchroToutesCommandes(); } catch (e) { console.warn("Commandes des voyages :", e); } return avantAllerRetour.apply(this, arguments); }; }
+avantSauver("commandes des voyages", () => synchroToutesCommandes(), 20);
 
 /* ---------- commande → voyage ---------- */
 async function planifierCommande(c) {
@@ -41,14 +41,13 @@ async function commandeEnRetour(c) {
   sauver(); toast(`${c.ref} chargée au retour de ${v.ref}`); rafraichir();
 }
 if (VUES.commandes) {
-  const agirCommandesAvantAR = VUES.commandes.agir;
-  VUES.commandes.agir = async function (act, id, b) {
+  surAction("commandes", "*", async function (act, id, b) {
     const c = parId(S.commandes, id);
     if (act === "planifier" && c) return planifierCommande(c);
     if (act === "en-retour" && c) return commandeEnRetour(c);
     if (act === "ouvrir-voyage" && c) { const l = voyageDeCommande(c); return l ? ouvrirVoyage(l.v.id) : undefined; }
-    return agirCommandesAvantAR.call(this, act, id, b);
-  };
+    return PASSER;
+  });
 }
 
 /* ---------- fiche du voyage : chargement de retour ---------- */
@@ -79,9 +78,8 @@ if (typeof enregistrerBlocVoyage === "function") {
   enregistrerBlocVoyage({ onglet: "suivi", ordre: 40, rendu: (v) => blocRetour(v) }); // appelé par son nom : fret_retour_ui.js y ajoute la recherche d'un retour
   enregistrerBlocVoyage({ onglet: "argent", ordre: 21, rendu: blocFactureRetour });
 }
-const agirVoyagesAvantAR = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
-  if (!String(act).startsWith("retour-")) return agirVoyagesAvantAR.call(this, act, id, b);
+surAction("voyages", "*", async function (act, id, b) {
+  if (!String(act).startsWith("retour-")) return PASSER;
   const v = parId(S.voyages, id); if (!v) return;
   voyagesOuverts.add(v.id);
   if (act === "retour-nouveau") {
@@ -105,4 +103,4 @@ VUES.voyages.agir = async function (act, id, b) {
   if (act === "retour-modifier") { const f = await formulaire(`Modifier ${r.ref}`, champsCommande(r)); if (!f) return; Object.assign(r, lireCommande(f)); sauver(); toast("Commande de retour mise à jour"); return rafraichir(); }
   if (act === "retour-retirer") { if (!(await confirmer(`Retirer ${r.ref} du voyage ${v.ref} ?`, "La commande est conservée et redevient libre ; sa recette ne compte plus dans ce voyage.", "Retirer"))) return; delierRetour(v); sauver(); toast("Retour retiré du voyage"); return rafraichir(); }
   if (act === "retour-facturer") { const f = factureDeCommande(r); if (f) return toast(`Déjà facturée : ${f.numero}.`, "warn"); facturerCommandes([r]); }
-};
+});

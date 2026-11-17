@@ -40,9 +40,8 @@ function carteGrilleAttentes() {
     : vide("clock", "Aucun passage mesuré", "Les attentes se mesurent seules à chaque passage (entrée au port et embarquement, posés à la main ou par le GPS).")}</div>`;
 }
 if (VUES.planning) {
-  const renduPlanningAvantCreneaux = VUES.planning.rendu, agirPlanningAvantCreneaux = VUES.planning.agir;
-  VUES.planning.rendu = function () { return renduPlanningAvantCreneaux.call(this) + carteGrilleAttentes(); };
-  VUES.planning.agir = async function (act, id, b) { if (act === "grille-port") { portGrille = id; return rafraichir(); } return agirPlanningAvantCreneaux?.call(this, act, id, b); };
+  blocPage("planning", { position: "apres", ordre: 10, rendu: carteGrilleAttentes });
+  surAction("planning", "*", async function (act, id, b) { if (act === "grille-port") { portGrille = id; return rafraichir(); } return PASSER; });
 }
 
 /* ---------- devis : le créneau conseillé à Tanger Med ---------- */

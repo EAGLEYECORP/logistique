@@ -39,10 +39,9 @@ async function saisirEtapePort(v, id) {
   const effets = marquerEtapePort(v, id, { date: new Date(f.date).toISOString(), ref: f.ref, note: f.note, inspection: !!f.inspection });
   voyagesOuverts.add(v.id); sauver(); toast(`${e.lib} : fait${effets.length ? " · " + effets.join(" · ") : ""}`); rafraichir();
 }
-const agirVoyagesAvantPorts = VUES.voyages.agir;
-VUES.voyages.agir = async function (act, id, b) {
+surAction("voyages", "*", async function (act, id, b) {
   if (act === "port-etape") { const [vid, eid] = String(id).split("|"), v = parId(S.voyages, vid); if (!v) return; const saisie = v.etapesPort?.[eid];
     if (saisie && !(await new Promise((ok) => modale({ titre: etapePort(eid)?.lib || "Étape", valider: "Modifier", annuler: "Annuler l'étape", corps: `<p style="margin:0">Notée le ${hmPort(saisie.date)}${saisie.ref ? ` · ${esc(saisie.ref)}` : ""}.</p>` }).then((r) => ok(r !== null ? true : (annulerEtapePort(v, eid), voyagesOuverts.add(v.id), sauver(), toast("Étape annulée"), rafraichir(), false)))))) return;
     return saisirEtapePort(v, eid); }
-  return agirVoyagesAvantPorts.call(this, act, id, b);
-};
+  return PASSER;
+});

@@ -97,7 +97,7 @@ async function remplirStockage() {
   if (!$("#info-stockage")) return;
   const ligne = (l, v) => `<tr><td>${l}</td><td class="r num">${v}</td></tr>`;
   $("#info-stockage").innerHTML = `<table><tbody>
-    ${ligne("Données (stockage rapide, limite ≈ 5 Mo)", `${tailleOctets(donnees)} · ${fmt(donnees / 5242880 * 100)} %`)}
+    ${typeof stockageEnBase === "function" && stockageEnBase() ? ligne("Données (base de l'appareil, sans limite de 5 Mo)", tailleOctets(donnees)) : ligne("Données (stockage rapide, limite ≈ 5 Mo ; au-delà, base de l'appareil)", `${tailleOctets(donnees)} · ${fmt(donnees / 5242880 * 100)} %`)}
     ${ligne("Photos", `${photos.n} · ${tailleOctets(photos.taille)}`)}
     ${est ? ligne("Espace utilisé / disponible", `${tailleOctets(est.usage)} / ${tailleOctets(est.quota)}`) : ""}
     ${ligne("Protection contre l'effacement", persistant ? badge("Activée", "ok") : badge("Non activée", "warn"))}

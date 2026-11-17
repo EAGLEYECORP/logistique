@@ -34,16 +34,11 @@ jobs:
       url: ${{ steps.deploiement.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # historique complet : date du dernier changement de chaque fichier
       - name: Préparer le site (fichiers de l'application uniquement)
         run: |
-          # Date de chaque fichier = son dernier commit : un fichier inchangé garde la même étiquette (ETag) d'une publication
-          # à l'autre et revient « inchangé » au lieu d'être retéléchargé.
-          git ls-files -z | while IFS= read -r -d '' f; do touch -d "@$(git log -1 --format=%ct -- "$f")" "$f"; done
           mkdir _site
-          cp -p *.html *.css *.js *.webmanifest *.svg *.png _site/
-          cp -rp vendor _site/
+          cp *.html *.css *.js *.webmanifest *.svg *.png _site/
+          cp -r vendor _site/
           # Version du cache hors ligne = commit : chaque publication déclenche la mise à jour chez les utilisateurs ;
           # empreinte de chaque fichier préchargé : à la mise à jour, seuls les fichiers qui ont changé sont téléchargés.
           node serveur/empreintes.js _site "${GITHUB_SHA::10}"

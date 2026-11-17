@@ -593,8 +593,34 @@ test("multi-utilisateur : cookie de session (HttpOnly, SameSite) et protection i
     const page = await s.appel("/"); assert.strictEqual(page.code, 200); assert.ok(page.texte.includes("<html")); assert.ok(page.texte.includes('<meta name="lf-multi" content="1">'), "page marquée : l'application sait qu'elle doit demander une connexion"); assert.ok(/text\/html/.test(page.entetes.get("content-type")));
     assert.strictEqual((await s.appel("/app.js")).code, 200); assert.strictEqual((await s.appel("/vendor/leaflet/leaflet.js")).code, 200);
     const sw = await s.appel("/sw.js"); assert.ok(!sw.texte.includes("__VERSION__") && /relais-test-[0-9a-f]{8}/.test(sw.texte), "version du cache renseignée");
+    // préchargement hors ligne servi en entier (polices, module IA compris) ; empreintes = fichiers tels que servis ; « inchangé » sur revalidation
+    const emp = JSON.parse(sw.texte.match(/const EMPREINTES = (\{.*?\});/)[1]);
+    assert.strictEqual(emp["./"], crypto.createHash("sha256").update(page.texte).digest("hex").slice(0, 16), "empreinte de la page d'accueil telle que servie (avec la marque multi)");
+    for (const f of ["vendor/fonts/general-sans-500.woff2", "vendor/fonts/noto-sans-arabic.woff2", "vendor/leaflet/leaflet.css"]) assert.ok(/^[0-9a-f]{16}$/.test(emp[f]), f);
+    const police = await s.appel("/vendor/fonts/general-sans-600.woff2"); assert.strictEqual(police.code, 200, "polices servies (sinon le préchargement hors ligne échoue)"); assert.strictEqual(police.entetes.get("content-type"), "font/woff2");
+    assert.strictEqual((await s.appel("/vendor/anthropic-sdk.js")).code, 200, "module IA servi");
+    const etag = (await s.appel("/app.js")).entetes.get("etag"); assert.ok(etag);
+    assert.strictEqual((await s.appel("/app.js", { entetes: { "if-none-match": etag } })).code, 304, "fichier inchangé : rien à renvoyer");
+    assert.strictEqual((await s.appel("/vendor/fonts/../../serveur/relais.js")).code === 200, false);
     for (const interdit of ["/serveur/relais.js", "/package.json", "/tests/relais.test.js", "/../etc/passwd", "/.git/config", "/serveur/donnees/comptes.json"]) assert.ok([401, 404].includes((await s.appel(interdit)).code), interdit);
   } finally { await s.arreter(); }
+});
+
+test("hors ligne : la liste préchargée couvre chaque script de la page et la carte ; empreintes de chaque fichier posées à la publication", () => {
+  const { fichiersPrecharges, preparerSw, empreinte } = require("../serveur/empreintes.js"), racine = path.join(__dirname, "..");
+  const sw = fs.readFileSync(path.join(racine, "sw.js"), "utf8"), liste = fichiersPrecharges(sw), html = fs.readFileSync(path.join(racine, "index.html"), "utf8");
+  const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]), styles = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual([...scripts, ...styles].filter((f) => !liste.includes(f)), [], "un script de la page manque au hors ligne");
+  for (const f of ["vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css", "vendor/fonts/noto-sans-arabic.woff2", "./", "index.html"]) assert.ok(liste.includes(f), f);
+  assert.ok(!scripts.includes("vendor/leaflet/leaflet.js"), "la carte se charge à la demande, pas au démarrage");
+  assert.ok(!liste.includes("vendor/anthropic-sdk.js"), "module IA : gardé à la première utilisation (il demande internet de toute façon)");
+  assert.deepStrictEqual(liste.filter((f) => !fs.existsSync(path.join(racine, f === "./" ? "index.html" : f))), [], "fichier préchargé absent du dépôt");
+  const pret = preparerSw(sw, "abc1234567", (f) => fs.readFileSync(path.join(racine, f)));
+  assert.ok(pret.includes('const VERSION = "abc1234567"'));
+  const emp = JSON.parse(pret.match(/const EMPREINTES = (\{.*?\});/)[1]);
+  assert.deepStrictEqual(Object.keys(emp), liste);
+  assert.strictEqual(emp["app.js"], empreinte(fs.readFileSync(path.join(racine, "app.js")))); assert.strictEqual(emp["./"], emp["index.html"]);
+  assert.throws(() => preparerSw(sw, "v", (f) => (f === "style.css" ? null : Buffer.from("x"))), /style\.css/);
 });
 
 test("multi-utilisateur : tout survit à un redémarrage (chiffré au repos), réinitialisation par e-mail, clé de récupération du chef", async () => {

@@ -203,7 +203,8 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 262 tests (225 application, 37 relais) |
+| `serveur/empreintes.js` | Empreinte de chaque fichier préchargé, posée à la publication : une mise à jour ne télécharge que les fichiers qui ont changé |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 263 tests (225 application, 38 relais) |
 | `tests/captures.js`, `tests/donnees-captures.js` | Captures de référence de chaque page (téléphone, bureau, clair, sombre) comparées à chaque livraison — outil de développement, demande Playwright |
 
 ```bash

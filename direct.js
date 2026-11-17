@@ -228,9 +228,22 @@ function iconeCamion(f) {
   return L.divIcon({ className: `direct-marq ${sel ? "sel" : ""}`, iconSize: [30, 30], iconAnchor: [15, 15],
     html: `<svg viewBox="0 0 28 28" width="30" height="30"><circle cx="14" cy="14" r="13" fill="${c}" stroke="#fff" stroke-width="2"/>${fleche}</svg><span class="direct-nom">${esc(f.nom)}</span>` });
 }
+/** La bibliothèque de carte (≈ 150 Ko) n'est chargée qu'à l'ouverture de la carte en direct, pas au démarrage ; le service worker la garde pour le hors ligne. */
+let chargementLeaflet = null;
+function chargerLeaflet() {
+  if (typeof L !== "undefined") return Promise.resolve();
+  return (chargementLeaflet ??= new Promise((ok, ko) => {
+    const css = Object.assign(document.createElement("link"), { rel: "stylesheet", href: "vendor/leaflet/leaflet.css" }), s = Object.assign(document.createElement("script"), { src: "vendor/leaflet/leaflet.js" });
+    let reste = 2; const fini = () => { if (!--reste) ok(); }, echec = () => { chargementLeaflet = null; css.remove(); s.remove(); ko(new Error("Carte : vendor/leaflet introuvable")); };
+    css.onload = fini; s.onload = fini; css.onerror = echec; s.onerror = echec;
+    const style = document.querySelector('link[href="style.css"]'); if (style) style.before(css); else document.head.append(css); // avant style.css : l'application garde la main sur l'apparence de la carte
+    document.head.append(s);
+  }));
+}
 function directCarteInit() {
   const el = $("#direct-map"); if (!el) return;
   if (carte.map) { carte.map.remove(); carte.map = null; carte.marqueurs.clear(); carte.traces.clear(); }
+  el.replaceChildren();
   if (typeof L === "undefined") { el.innerHTML = `<p class="hint" style="padding:16px">La bibliothèque de carte n'a pas pu être chargée (vendor/leaflet).</p>`; return; }
   const c = directCfg();
   carte.map = L.map(el, { zoomControl: true, worldCopyJump: true, preferCanvas: false });
@@ -423,7 +436,11 @@ VUES.direct = {
       <div id="direct-liste">${attente ? directListeAttente(flotte) : directListe(flotte)}</div>${cfgFormulaire(c)}`;
   },
   apres() {
-    directCarteInit(); directMettreAJour();
+    if (typeof L === "undefined") { // première ouverture : la carte arrive dans un instant, le reste de la page est déjà là
+      const el = $("#direct-map"); if (el) el.innerHTML = `<p class="hint" style="padding:16px">Chargement de la carte…</p>`;
+      chargerLeaflet().catch(() => {}).then(() => { if (ongletActif === "direct" && $("#direct-map")) { directCarteInit(); directMettreAJour(); } });
+    } else directCarteInit();
+    directMettreAJour();
     if (directCfg().mode !== "off") directRafraichir();
   },
   async soumettre(fid, v) {

@@ -16,8 +16,9 @@ const C = require("../comptes.js");
 const A = require("./auth.js");
 const { envoyerCourriel } = require("./courriel.js");
 const { creerCoffre, ecrireAtomique } = require("./coffre.js");
+const { preparerSw } = require("./empreintes.js");
 
-const TYPES = { html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8", png: "image/png", svg: "image/svg+xml", json: "application/json; charset=utf-8", webmanifest: "application/manifest+json", ico: "image/x-icon", txt: "text/plain; charset=utf-8" };
+const TYPES = { html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", css: "text/css; charset=utf-8", png: "image/png", svg: "image/svg+xml", json: "application/json; charset=utf-8", webmanifest: "application/manifest+json", ico: "image/x-icon", txt: "text/plain; charset=utf-8", woff2: "font/woff2" };
 const VERROU_MS = 30000;
 
 function creerMulti({ dossier = null, coffre = creerCoffre(null), racine = path.join(__dirname, ".."), version = "", jetonLecture = "", smtp = null, courriel_ = envoyerCourriel, maintenant = () => Date.now(),
@@ -145,17 +146,28 @@ function creerMulti({ dossier = null, coffre = creerCoffre(null), racine = path.
   }
   const envoyer = (res, code, obj, entetes, extra = {}) => { res.writeHead(code, entetes({ "Content-Type": "application/json; charset=utf-8", ...extra })); res.end(JSON.stringify(obj)); };
 
+  /** Contenu d'un fichier de l'application tel que servi (null si le chemin n'est pas public). */
+  function contenuServi(chemin) {
+    const ok = (/^\/[A-Za-z0-9_-]+\.(html|js|css|png|svg|json|webmanifest|ico|txt)$/.test(chemin) && !/^\/package(-lock)?\.json$/.test(chemin))
+      || /^\/vendor\/(leaflet\/[A-Za-z0-9_./-]+\.(js|css|png)|fonts\/[A-Za-z0-9_-]+\.woff2|anthropic-sdk\.js)$/.test(chemin);
+    if (!ok || chemin.includes("..")) return null;
+    const f = path.join(racine, chemin); if (!f.startsWith(racine + path.sep)) return null;
+    let o; try { o = fs.readFileSync(f); } catch { return null; }
+    if (chemin === "/index.html") o = Buffer.from(o.toString("utf8").replace(/<head>/i, '<head><meta name="lf-multi" content="1">')); // l'application sait qu'elle est servie par un relais multi-utilisateur
+    if (chemin === "/sw.js") { // empreintes des fichiers tels que servis ; la version change dès qu'un fichier préchargé change
+      const pret = preparerSw(o.toString("utf8"), "__VERSION__", (fichier) => contenuServi("/" + fichier));
+      o = Buffer.from(pret.replace("__VERSION__", `relais-${version}-${crypto.createHash("sha1").update(pret).digest("hex").slice(0, 8)}`));
+    }
+    return o;
+  }
   function servirStatique(req, res, p, entetes) {
     if (!["GET", "HEAD"].includes(req.method)) return false;
-    const chemin = p === "/" ? "/index.html" : p;
-    const ok = (/^\/[A-Za-z0-9_-]+\.(html|js|css|png|svg|json|webmanifest|ico|txt)$/.test(chemin) && !/^\/package(-lock)?\.json$/.test(chemin)) || /^\/vendor\/leaflet\/[A-Za-z0-9_./-]+\.(js|css|png)$/.test(chemin);
-    if (!ok || chemin.includes("..")) return false;
-    const f = path.join(racine, chemin); if (!f.startsWith(racine + path.sep)) return false;
-    let o; try { o = fs.readFileSync(f); } catch { return false; }
-    const ext = chemin.split(".").pop();
-    if (chemin === "/index.html") o = Buffer.from(o.toString("utf8").replace(/<head>/i, '<head><meta name="lf-multi" content="1">')); // l'application sait qu'elle est servie par un relais multi-utilisateur
-    if (chemin === "/sw.js") o = Buffer.from(o.toString("utf8").replace("__VERSION__", `relais-${version}-${crypto.createHash("sha1").update(o).digest("hex").slice(0, 8)}`));
-    res.writeHead(200, { "Content-Type": TYPES[ext] || "application/octet-stream", "Cache-Control": ["html", "js", "css", "webmanifest"].includes(ext) ? "no-cache" : "public, max-age=86400", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY" });
+    const chemin = p === "/" ? "/index.html" : p, o = contenuServi(chemin);
+    if (!o) return false;
+    const ext = chemin.split(".").pop(), etag = `"${crypto.createHash("sha1").update(o).digest("hex").slice(0, 20)}"`;
+    const base = { "Cache-Control": ["html", "js", "css", "webmanifest"].includes(ext) ? "no-cache" : "public, max-age=86400", ETag: etag, "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY" };
+    if (req.headers["if-none-match"] === etag) { res.writeHead(304, base); res.end(); return true; } // inchangé : rien à renvoyer
+    res.writeHead(200, { "Content-Type": TYPES[ext] || "application/octet-stream", ...base });
     res.end(req.method === "HEAD" ? undefined : o); return true;
   }
 

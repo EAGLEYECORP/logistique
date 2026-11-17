@@ -69,6 +69,7 @@ async function capturerVariante(navigateur, url, appareil, viewport, theme, etat
       if (x === "voyages") voyagesOuverts.add("v1");
       afficher(x); scrollTo(0, 0);
     }, pg);
+    if (pg === "direct") await page.waitForFunction(() => typeof L !== "undefined" && document.querySelector("#direct-map.leaflet-container"), null, { timeout: 15000 }); // la carte se charge à la demande
     await page.waitForTimeout(250);
     await capturer(pg);
   }

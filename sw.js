@@ -2,7 +2,9 @@
 /* ============================================================
    Service worker — Logistique Fret
    1. Hors ligne : toute l'application est préchargée ; le cache sert d'abord (ouverture instantanée, même sans réseau).
-   2. Mises à jour : une nouvelle version attend que l'utilisateur accepte (message SKIP_WAITING), jamais de mélange en cours d'usage.
+      Sauf le module IA (vendor/anthropic-sdk.js) : il demande internet de toute façon, il est gardé à sa première utilisation.
+   2. Mises à jour : une nouvelle version attend que l'utilisateur accepte (message SKIP_WAITING), jamais de mélange en cours d'usage ;
+      seuls les fichiers qui ont changé sont téléchargés (empreintes posées à la publication).
    3. Rappels : sur Android/Chrome (application installée), « periodicsync » relit la copie interne des données
       et affiche les rappels en retard, même application fermée.
    ============================================================ */
@@ -12,17 +14,37 @@ const CACHE = `logistique-${VERSION}`;
 const FICHIERS = [
   "./", "index.html", "style.css",
   "data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js", "app.js", "commercial.js", "voyages.js", "marge.js", "traces.js", "gares.js", "direct.js", "partages.js", "photos.js", "impression.js", "onboarding.js", "reglages.js", "notifications.js", "chauffeur.js", "terrain.js", "tachy.js", "depenses.js", "synchro.js", "cockpit.js", "direction.js", "operations.js", "notifier.js", "calendrier.js", "factures_voyages.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "annuler_ui.js", "ports_ui.js", "passages_ui.js", "ports_gps_ui.js", "prixjour_ui.js", "fiche_ui.js", "boite_ui.js", "liens_ui.js", "itineraire_ui.js", "coupures_ui.js", "creneaux_ui.js", "chauffeur_ui.js", "dossier.js", "profils.js", "comptes_ui.js", "langue.js", "boot.js",
-  "vendor/anthropic-sdk.js", "vendor/fonts/general-sans-500.woff2", "vendor/fonts/general-sans-600.woff2", "vendor/fonts/noto-sans-arabic.woff2", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css", "vendor/leaflet/images/layers.png", "vendor/leaflet/images/layers-2x.png",
+  "vendor/fonts/general-sans-500.woff2", "vendor/fonts/general-sans-600.woff2", "vendor/fonts/noto-sans-arabic.woff2", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css", "vendor/leaflet/images/layers.png", "vendor/leaflet/images/layers-2x.png",
   "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "manifest.webmanifest",
 ];
 
 // Logique métier et accès IndexedDB partagés avec l'application (aucun accès au DOM au chargement).
 importScripts("data.js", "noyau.js", "stockage.js");
 
-self.addEventListener("install", (e) => {
-  // cache: "reload" : on contourne le cache HTTP du serveur pour ne jamais précharger une version périmée.
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FICHIERS.map((f) => new Request(f, { cache: "reload" })))));
-});
+/* Empreinte de chaque fichier préchargé (posée à la publication par serveur/empreintes.js ; vide en développement). */
+const EMPREINTES = /*__EMPREINTES__*/{};
+const empreinteDe = async (octets) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", octets))].slice(0, 8).map((o) => o.toString(16).padStart(2, "0")).join("");
+/** Préchargement d'une version :
+    · un fichier dont l'empreinte n'a pas changé est repris de la copie hors ligne précédente : rien à télécharger ;
+    · les autres sont redemandés au serveur en revalidant (« no-cache ») : ce que la page vient de télécharger revient « inchangé »
+      sans être renvoyé, et jamais une version périmée n'est gardée ;
+    · un fichier reçu dont l'empreinte ne correspond pas (cache intermédiaire en retard) est gardé sans étiquette : il sera redemandé à la version suivante. */
+async function precharger() {
+  const cache = await caches.open(CACHE), anciennes = [];
+  for (const k of await caches.keys()) if (k.startsWith("logistique-") && k !== CACHE) anciennes.push(await caches.open(k));
+  await Promise.all(FICHIERS.map(async (f) => {
+    const attendue = EMPREINTES[f];
+    if (attendue) for (const c of anciennes) { const r = await c.match(f); if (r?.headers.get("x-empreinte") === attendue) return cache.put(f, r); }
+    const r = await fetch(new Request(f, { cache: "no-cache" }));
+    if (!r.ok) throw new Error(`Préchargement impossible : ${f} (${r.status})`);
+    if (!attendue) return cache.put(f, r);
+    const corps = await r.arrayBuffer(), h = new Headers(r.headers);
+    h.delete("content-encoding"); h.delete("content-length"); // corps déjà décompressé
+    if ((await empreinteDe(corps)) === attendue) h.set("x-empreinte", attendue);
+    return cache.put(f, new Response(corps, { status: r.status, statusText: r.statusText, headers: h }));
+  }));
+}
+self.addEventListener("install", (e) => e.waitUntil(precharger()));
 
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {

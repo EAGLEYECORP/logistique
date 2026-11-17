@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2694,6 +2694,46 @@ test("carburant d'un voyage prévu estimé au prix du jour (Maroc d'après vos p
   v.kmPays = "MA:500"; assert.ok(N.estimationCarburantJour(v).mad !== attendu, "kilomètres au Maroc saisis : pris en compte");
   N.ajouterLigneCout(v, { type: "carburant", montant: 9000, source: "fuel_card_csv" }); assert.strictEqual(N.carburantVoyage(v).mad, 9000); assert.strictEqual(N.carburantVoyage(v).estime, false);
   assert.strictEqual(N.estimationCarburantJour({ ...v, statut: "termine" }), null);
+});
+
+/* ---------- boîte des demandes (boite.js) ---------- */
+const MAIL_KARIM = { id: "m7-41", messageId: "abc123@primeurs-souss.ma", de: { nom: "Karim Bené", email: "achats@primeurs-souss.ma" }, sujet: "Demande de transport — clémentines", date: "2026-11-16T07:14:00.000Z", texte: "Bonjour,\n26 palettes de clémentines, chargement jeudi à Agadir, livraison lundi à Perpignan. Température 4 °C. Quel est votre prix ?", pieces: [{ nom: "liste colisage.pdf", type: "application/pdf" }], recu: 1000 };
+test("boîte des demandes : ajout sans doublon (identifiant, Message-ID, même texte le même jour), tri par date, lecture à la date du message, client reconnu par l'expéditeur", () => {
+  etatLecture(); N.S.demandes = [];
+  const a = N.ajouterDemandes([MAIL_KARIM, { ...MAIL_KARIM, id: "m7-99" }, { ...MAIL_KARIM, id: "autre", messageId: "" }], "email", Date.parse("2026-11-16T09:00:00Z"));
+  assert.strictEqual(a.length, 1, "même Message-ID, puis même texte le même jour : écartés"); assert.strictEqual(N.S.demandes[0].statut, "a_trier"); assert.deepStrictEqual([...N.S.demandes[0].pieces.map((x) => x.nom)], ["liste colisage.pdf"]);
+  const d = N.S.demandes[0]; assert.ok(N.texteDemande(d).startsWith("De : Karim Bené <achats@primeurs-souss.ma>\nObjet : Demande de transport — clémentines\n\nBonjour"));
+  const r = N.lectureDemande(d); assert.deepStrictEqual([r.champs.clientId, r.champs.origine, r.champs.destination, r.champs.dateChargement, r.champs.palettes, r.champs.tempMin], ["k1", "Agadir", "Perpignan", "2026-11-19", 26, 4], "« jeudi » lu à partir du lundi 16, date du message");
+  assert.strictEqual(N.suiteDemande(r), "chiffrer"); assert.strictEqual(N.resumeDemande(r), "Agadir → Perpignan · chargement 19/11/2026 · 26 palettes · 4 °C");
+  N.ajouterDemandes([{ de: { email: "x@y.es" }, sujet: "Hola", texte: "Murcia → Casablanca, 1 200 €", date: "2026-11-17T08:00:00Z" }], "email");
+  assert.deepStrictEqual([...N.S.demandes.map((x) => x.de.email)], ["x@y.es", "achats@primeurs-souss.ma"], "les plus récentes d'abord");
+  assert.strictEqual(N.suiteDemande(N.lectureDemande(N.S.demandes[0])), "commande", "prix donné : commande directe");
+  assert.strictEqual(N.ajouterDemandes([{ texte: "  ", sujet: "" }]).length, 0, "message vide ignoré");
+});
+test("boîte des demandes : pertinence (demande de transport d'abord, lettres d'information à part), tri, alerte de l'accueil, partage WhatsApp", () => {
+  etatLecture(); N.S.demandes = [];
+  N.ajouterDemandes([MAIL_KARIM, { id: "n1", de: { email: "news@promo.com" }, sujet: "Soldes d'hiver", texte: "-50 % sur tout le magasin", masse: true, date: "2026-11-16T08:00:00Z" }, { id: "n2", de: { email: "ami@gmail.com" }, sujet: "Dîner", texte: "On se voit samedi ?", date: "2026-11-16T08:30:00Z" }], "email");
+  const p = (id) => N.pertinenceDemande(N.S.demandes.find((d) => d.id === id));
+  assert.ok(p("m7-41") >= 6 && p("n2") < 3 && p("n1") < 0, `${p("m7-41")} ${p("n2")} ${p("n1")}`);
+  assert.deepStrictEqual([...N.demandesATrier().map((d) => d.id)].sort(), ["m7-41", "n2"], "les lettres d'information ne sont pas à trier");
+  let al = N.alertesDemandes(Date.parse("2026-11-16T10:00:00Z")); assert.strictEqual(al[0].niveau, "warn"); assert.ok(/2 demandes de transport à trier/.test(al[0].texte));
+  al = N.alertesDemandes(Date.parse("2026-11-17T10:00:00Z")); assert.strictEqual(al[0].niveau, "danger", "sans réponse depuis plus de 24 h");
+  assert.ok(N.classerDemande(N.S.demandes.find((d) => d.id === "m7-41"), "devis", { commandeId: "o9" }, Date.parse("2026-11-16T10:00:00Z")));
+  const k = N.S.demandes.find((d) => d.id === "m7-41"); assert.deepStrictEqual([k.statut, k.commandeId, k.traiteLe], ["devis", "o9", "2026-11-16T10:00:00.000Z"]);
+  N.classerDemande(k, "a_trier"); assert.ok(!k.commandeId && !k.traiteLe); assert.strictEqual(N.classerDemande(k, "inconnu"), false);
+  N.classerDemande(N.S.demandes.find((d) => d.id === "n2"), "ignoree"); N.classerDemande(k, "commande"); assert.strictEqual(N.alertesDemandes().length, 0);
+  const w = N.demandeDepuisPartage({ texte: "[16/11/2026, 09:12] Hassan Transit: camion frigo Tanger → Lyon jeudi, 33 palettes" }, Date.parse("2026-11-16T09:15:00Z"));
+  assert.strictEqual(w.de.nom, "Hassan Transit"); const [ajoutee] = N.ajouterDemandes([w], "whatsapp"); assert.strictEqual(ajoutee.source, "whatsapp");
+  assert.strictEqual(N.ajouterDemandes([w], "whatsapp").length, 0, "le même partage deux fois : une seule demande"); assert.strictEqual(N.demandeDepuisPartage({ titre: "", texte: "", lien: "" }), null);
+  assert.strictEqual(N.demandeDepuisPartage({ titre: "Karim", texte: "Agadir Paris", lien: "https://x.y/z" }).texte, "Agadir Paris\nhttps://x.y/z");
+});
+test("boîte des demandes : au-delà de 500, les plus anciennes déjà triées sont oubliées, jamais celles à trier", () => {
+  N.S.demandes = []; const base = Date.parse("2026-01-01T00:00:00Z");
+  N.ajouterDemandes(Array.from({ length: 498 }, (_, i) => ({ id: `t${i}`, texte: `message ${i}`, date: new Date(base + i * 3600000).toISOString() })), "email");
+  N.S.demandes.forEach((d) => { if (Number(d.id.slice(1)) < 300) d.statut = "ignoree"; });
+  N.ajouterDemandes(Array.from({ length: 10 }, (_, i) => ({ id: `n${i}`, texte: `nouveau ${i}`, date: new Date(base + (600 + i) * 3600000).toISOString() })), "email");
+  assert.strictEqual(N.S.demandes.length, 500); assert.ok(N.S.demandes.some((d) => d.id === "n9") && N.S.demandes.some((d) => d.id === "t300"), "toutes les demandes à trier restent");
+  assert.ok(!N.S.demandes.some((d) => d.id === "t0") && N.S.demandes.some((d) => d.id === "t299"), "les 8 plus anciennes triées sont oubliées");
 });
 
 (async () => {

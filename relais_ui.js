@@ -23,6 +23,7 @@ async function testerRelais(base, jeton) {
   const can = e.notifications || [];
   ok(can.includes("email"), can.includes("email") ? "E-mail prêt : factures avec pièces jointes et relances automatiques." : "E-mail non configuré : ajoutez les lignes SMTP_… à la configuration du relais (guide, étape 7).");
   ok(can.some((c) => ["ntfy", "equipe", "whatsapp"].includes(c)) || can.includes("email"), `Notifications programmées : ${can.length ? can.join(", ") : "aucun canal"}${e.planifies !== undefined ? ` · ${e.planifies} message(s) en attente` : ""}.`);
+  const bo = e.boite; ok(!!bo?.active && !bo.erreur, !bo?.active ? "Boîte des demandes non configurée : ajoutez les lignes IMAP_… pour recevoir ici les demandes envoyées par e-mail (Réglages → Général → Boîte des demandes)." : bo.erreur ? `Boîte des demandes : ${bo.erreur}` : `Boîte des demandes relevée (${bo.adresse}), en lecture seule.`);
   const maj = S.params.prixGasoilJour?.maj; ok(!!maj && Date.now() - maj < 2 * 86400000, maj ? `Prix du jour reçus le ${dateHeureFr(new Date(maj).toISOString())}.` : "Prix du jour pas encore reçus (taux Bank Al-Maghrib, gazole officiel) : ils arrivent à l'actualisation.");
   return l;
 }
@@ -47,7 +48,7 @@ async function lancerTestRelais() {
 }
 async function preparerInstallation() {
   const je = jetonHasard(), jl = jetonHasard(), cle = jetonHasard(32);
-  const env = `PORT=8787\nJETON_ECRITURE=${je}\nJETON_LECTURE=${jl}\nCHIFFRER_DONNEES=true\nCLE_DONNEES=${cle}\n# MULTI_UTILISATEUR=true\n# URL_PUBLIQUE=https://votre-nom.duckdns.org\n# SMTP_HOTE=smtp.gmail.com\n# SMTP_PORT=465\n# SMTP_SECURITE=tls\n# SMTP_UTILISATEUR=compta@votre-entreprise.ma\n# SMTP_MOT_DE_PASSE=mot-de-passe-d-application\n# SMTP_DE=compta@votre-entreprise.ma`;
+  const env = `PORT=8787\nJETON_ECRITURE=${je}\nJETON_LECTURE=${jl}\nCHIFFRER_DONNEES=true\nCLE_DONNEES=${cle}\n# MULTI_UTILISATEUR=true\n# URL_PUBLIQUE=https://votre-nom.duckdns.org\n# SMTP_HOTE=smtp.gmail.com\n# SMTP_PORT=465\n# SMTP_SECURITE=tls\n# SMTP_UTILISATEUR=compta@votre-entreprise.ma\n# SMTP_MOT_DE_PASSE=mot-de-passe-d-application\n# SMTP_DE=compta@votre-entreprise.ma\n# IMAP_HOTE=imap.gmail.com\n# IMAP_UTILISATEUR=contact@votre-entreprise.ma\n# IMAP_MOT_DE_PASSE=mot-de-passe-d-application`;
   const linux = "git clone https://github.com/EAGLEYECORP/logistique.git && cd logistique\nsudo DOMAINE=votre-nom.duckdns.org bash serveur/installer.sh";
   await modale({ titre: "Préparer l'installation du relais", valider: "Fermer", annuler: "", corps: `
     <p style="margin-top:0">À faire sur la machine qui restera allumée (PC ou mini-PC du bureau). Le guide détaille chaque étape et les options sans IP publique.</p>

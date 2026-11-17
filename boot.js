@@ -118,6 +118,7 @@ function enregistrerServiceWorker() {
 function demarrageModules() {
   if (typeof notifDemarrer === "function") notifDemarrer();
   if (typeof demarrageInstallation === "function") demarrageInstallation();
+  if (typeof boiteDemarrer === "function") boiteDemarrer(); // boîte des demandes : message partagé, relève par le relais
 }
 
 function retirerSplash() {

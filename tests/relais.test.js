@@ -762,6 +762,129 @@ test("photos : envoi, liste, lecture à l'identique, suppression avec trace, jet
   } finally { await new Promise((ok) => r.serveur.close(ok)); }
 });
 
+/* ---------- boîte des demandes : lecture des e-mails, relève IMAP, routes ---------- */
+const CRLF = (t) => t.replace(/\r?\n/g, "\r\n");
+const MAIL_QP = CRLF(`From: =?UTF-8?Q?Karim_Ben=C3=A9?= <achats@primeurs-souss.ma>
+To: contact@atlas-fret.ma
+Subject: =?UTF-8?B?RGVtYW5kZSBkZSB0cmFuc3BvcnQg4oCUIGNsw6ltZW50aW5lcw==?=
+Date: Tue, 17 Nov 2026 08:14:00 +0100
+Message-ID: <abc123@primeurs-souss.ma>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="ext"
+
+--ext
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Bonjour,=0A26 palettes de cl=C3=A9mentines, chargement jeudi =C3=A0 Agadir, livraison Perpig=
+nan lundi. Temp=C3=A9rature 4 =C2=B0C. Quel est votre prix ?
+
+Le lun. 9 nov. 2026 =C3=A0 10:02, Atlas Fret <contact@atlas-fret.ma> a =C3=A9crit :
+> Prix : 1 900 =E2=82=AC pour Lyon
+--alt
+Content-Type: text/html; charset="utf-8"
+
+<p>Bonjour</p>
+--alt--
+--ext
+Content-Type: application/pdf; name="=?UTF-8?Q?liste_colisage_n=C2=B012.pdf?="
+Content-Disposition: attachment; filename*=utf-8''liste%20colisage%20n%C2%B012.pdf
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQK
+--ext--
+`);
+const MAIL_HTML = CRLF(`From: "Logistica Iberia" <trafico@logistica-iberia.es>
+Subject: =?iso-8859-1?Q?Cotizaci=F3n_cami=F3n_frigor=EDfico?=
+Date: Wed, 18 Nov 2026 09:00:00 +0000
+Content-Type: text/html; charset=windows-1252
+Content-Transfer-Encoding: base64
+
+${Buffer.from("<html><head><style>p{color:red}</style></head><body><p>Hola,</p><p>Necesitamos un cami&oacute;n de Murcia a Casablanca, 33 palets, 20/11.<br>Precio&nbsp;?</p></body></html>", "latin1").toString("base64")}
+`);
+
+test("boîte des demandes : lecture d'un e-mail — mots encodés, quoted-printable, HTML seul, windows-1252, historique cité coupé, pièce jointe nommée, réponses automatiques", () => {
+  const { lireCourriel, decoderEntete, couperHistorique } = require("../serveur/mime.js");
+  const a = lireCourriel(Buffer.from(MAIL_QP, "latin1"));
+  assert.deepStrictEqual(a.de, { nom: "Karim Bené", email: "achats@primeurs-souss.ma" }); assert.strictEqual(a.sujet, "Demande de transport — clémentines"); assert.strictEqual(a.messageId, "abc123@primeurs-souss.ma");
+  assert.strictEqual(a.date, "2026-11-17T07:14:00.000Z"); assert.ok(/26 palettes de clémentines, chargement jeudi à Agadir, livraison Perpignan lundi\. Température 4 °C/.test(a.texte), a.texte);
+  assert.ok(!/1 900/.test(a.texte) && !/a écrit/.test(a.texte), "l'ancien message cité n'est pas repris");
+  assert.deepStrictEqual(a.pieces.map((x) => x.nom), ["liste colisage n°12.pdf"]); assert.strictEqual(a.masse, false); assert.strictEqual(a.auto, false);
+  const b = lireCourriel(MAIL_HTML);
+  assert.strictEqual(b.sujet, "Cotización camión frigorífico"); assert.strictEqual(b.de.email, "trafico@logistica-iberia.es"); assert.ok(/Necesitamos un camión de Murcia a Casablanca, 33 palets, 20\/11\.\nPrecio \?/.test(b.texte), b.texte); assert.ok(!/color/.test(b.texte));
+  assert.strictEqual(decoderEntete("=?utf-8?B?w6k=?= =?utf-8?B?w6k=?= suite"), "éé suite", "mots encodés voisins collés");
+  assert.strictEqual(couperHistorique("Merci\n\nDe : X\nEnvoyé : lundi\nObjet : ancien"), "Merci"); assert.strictEqual(couperHistorique("> cité\nNouveau"), "> cité\nNouveau", "une citation en tête est gardée");
+  const auto = lireCourriel(CRLF("From: a@b.ma\nSubject: Réponse automatique : absent\nAuto-Submitted: auto-replied\n\nJe suis absent.")); assert.strictEqual(auto.auto, true);
+  assert.strictEqual(lireCourriel(CRLF("From: news@x.com\nList-Unsubscribe: <mailto:u@x.com>\n\nPromo")).masse, true);
+});
+
+/** Faux serveur IMAP local : une boîte de messages { uid, brut } ; enregistre les commandes reçues. */
+async function fauxImap({ messages, uidValidite = 7, motDePasse = "app-pass" }) {
+  const net = require("net"), commandes = [];
+  const serveur = net.createServer((c) => {
+    let tampon = ""; c.write("* OK [CAPABILITY IMAP4rev1] faux.imap pret\r\n");
+    c.on("data", (b) => {
+      tampon += b.toString("latin1"); let i;
+      while ((i = tampon.indexOf("\r\n")) >= 0) {
+        const l = tampon.slice(0, i); tampon = tampon.slice(i + 2); commandes.push(l); const [tag, cmd, ...reste] = l.split(" ");
+        if (cmd === "LOGIN") c.write(reste[1] === `"${motDePasse}"` ? `${tag} OK connecte\r\n` : `${tag} NO [AUTHENTICATIONFAILED] Invalid credentials\r\n`);
+        else if (cmd === "EXAMINE") c.write(`* ${messages.length} EXISTS\r\n* OK [UIDVALIDITY ${uidValidite}] UIDs valid\r\n${tag} OK [READ-ONLY] EXAMINE fait\r\n`);
+        else if (cmd === "UID" && reste[0] === "SEARCH") { const m = l.match(/UID (\d+):\*$/); const l2 = m ? messages.filter((x) => x.uid >= Number(m[1])) : messages; c.write(`* SEARCH ${(l2.length ? l2 : m ? [messages[messages.length - 1]] : []).map((x) => x.uid).join(" ")}\r\n${tag} OK recherche\r\n`); }
+        else if (cmd === "UID" && reste[0] === "FETCH") {
+          for (const u of reste[1].split(",").map(Number)) { const m = messages.find((x) => x.uid === u), o = Buffer.from(m.brut, "latin1"); c.write(Buffer.concat([Buffer.from(`* ${u} FETCH (RFC822.SIZE ${o.length} BODY[]<0> {${o.length}}\r\n`, "latin1"), o, Buffer.from(` UID ${u})\r\n`)])); }
+          c.write(`${tag} OK fetch\r\n`);
+        } else if (cmd === "LOGOUT") { c.write(`* BYE\r\n${tag} OK au revoir\r\n`); c.end(); }
+        else c.write(`${tag} BAD inconnu\r\n`);
+      }
+    });
+  });
+  await new Promise((ok) => serveur.listen(0, "127.0.0.1", ok));
+  return { commandes, port: serveur.address().port, fermer: () => new Promise((ok) => serveur.close(ok)) };
+}
+
+test("boîte des demandes : relève IMAP en lecture seule — EXAMINE et BODY.PEEK, première relève sur 3 jours puis seulement les nouveaux, mauvais mot de passe expliqué", async () => {
+  const { releverBoite } = require("../serveur/imap.js");
+  const msgs = [{ uid: 41, brut: MAIL_QP }, { uid: 42, brut: MAIL_HTML }], f = await fauxImap({ messages: msgs });
+  const cfg = { hote: "127.0.0.1", port: f.port, securite: "aucune", utilisateur: "contact@atlas-fret.ma", motDePasse: "app-pass", maintenant: Date.parse("2026-11-17T10:00:00Z") };
+  try {
+    const r = await releverBoite(cfg);
+    assert.deepStrictEqual([r.uidValidite, r.dernierUid, r.messages.map((m) => m.uid)], [7, 42, [41, 42]]); assert.ok(r.messages[0].brut.toString("latin1").includes("Message-ID: <abc123@"));
+    assert.ok(f.commandes.some((c) => / EXAMINE "INBOX"$/.test(c)) && !f.commandes.some((c) => / SELECT /.test(c)), "dossier ouvert en lecture seule");
+    assert.ok(f.commandes.some((c) => /UID SEARCH SINCE 14-Nov-2026$/.test(c))); assert.ok(f.commandes.some((c) => /UID FETCH 41,42 \(UID RFC822\.SIZE BODY\.PEEK\[\]<0\.300000>\)/.test(c)), "BODY.PEEK : rien n'est marqué lu");
+    const r2 = await releverBoite({ ...cfg, depuisUid: 42, uidValidite: 7 }); assert.deepStrictEqual([r2.messages.length, r2.dernierUid], [0, 42], "« 43:* » renvoie le dernier message : il est écarté");
+    msgs.push({ uid: 43, brut: MAIL_QP.replace("abc123", "def456") }); const r3 = await releverBoite({ ...cfg, depuisUid: 42, uidValidite: 7 }); assert.deepStrictEqual(r3.messages.map((m) => m.uid), [43]);
+    await assert.rejects(releverBoite({ ...cfg, motDePasse: "faux" }), /Connexion refusée par la boîte \(\[AUTHENTICATIONFAILED\] Invalid credentials\)/);
+    await assert.rejects(releverBoite({ ...cfg, motDePasse: "mot é" }), /mot de passe d'application/);
+    await assert.rejects(releverBoite({ ...cfg, port: 1 }), /injoignable/);
+  } finally { await f.fermer(); }
+});
+
+test("boîte des demandes : le relais relève, écarte nos messages et les doublons, garde l'erreur lisible ; routes protégées par le jeton", async () => {
+  const msgs = [{ uid: 41, brut: MAIL_QP }, { uid: 42, brut: MAIL_HTML }, { uid: 43, brut: CRLF("From: contact@atlas-fret.ma\nSubject: copie envoyée\n\nRe: devis") }, { uid: 44, brut: MAIL_QP }], f = await fauxImap({ messages: msgs });
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), "boite-"));
+  const imap = { hote: "127.0.0.1", port: f.port, securite: "aucune", utilisateur: "contact@atlas-fret.ma", motDePasse: "app-pass" };
+  const s = await demarrer(dossier, { imap });
+  try {
+    assert.strictEqual((await s.appel("/api/demandes")).code, 401); assert.strictEqual((await s.appel("/api/demandes/relever", { methode: "POST" })).code, 401);
+    const pre = await fetch(s.base + "/api/demandes", { method: "OPTIONS" }); assert.strictEqual(pre.status, 204); assert.ok(/x-lf/.test(pre.headers.get("access-control-allow-headers")), "l'application (autre origine) envoie X-LF : le navigateur doit y être autorisé");
+    const r = await s.appel("/api/demandes/relever", { methode: "POST", jeton: "lit" }); assert.strictEqual(r.code, 200); assert.strictEqual(r.json.nouvelles, 2, "notre propre message et le doublon (même Message-ID) sont écartés");
+    const l = await s.appel("/api/demandes", { jeton: "lit" }); assert.deepStrictEqual(l.json.demandes.map((d) => d.de.email), ["achats@primeurs-souss.ma", "trafico@logistica-iberia.es"]);
+    assert.strictEqual(l.json.boite.active, true); assert.strictEqual(l.json.boite.adresse, "c…@atlas-fret.ma"); assert.strictEqual(l.json.boite.erreur, "");
+    assert.ok(l.json.demandes[0].texte.includes("clémentines")); assert.deepStrictEqual(l.json.demandes[0].pieces.map((x) => x.nom), ["liste colisage n°12.pdf"]);
+    assert.strictEqual((await s.appel(`/api/demandes?depuis=${l.json.demandes[1].recu}`, { jeton: "lit" })).json.demandes.length, 0);
+    assert.strictEqual((await s.appel("/api/demandes/relever", { methode: "POST", jeton: "lit" })).code, 429, "pas de relève forcée en rafale");
+    assert.strictEqual((await s.appel("/api/etat", { jeton: "lit" })).json.boite.nombre, 2);
+    await s.arreter();
+    const s2 = await demarrer(dossier, { imap: { ...imap, motDePasse: "faux" } }); // redémarrage : demandes et position de relève conservées ; erreur gardée lisible
+    try { assert.strictEqual(s2.boite().dernierUid, 44); const e = await s2.releverDemandes(); assert.ok(/Connexion refusée/.test(e.erreur)); assert.ok(/Connexion refusée/.test((await s2.appel("/api/demandes", { jeton: "lit" })).json.boite.erreur)); assert.strictEqual(s2.boite().demandes.length, 2); }
+    finally { await s2.arreter(); }
+    const s3 = await demarrer(null); try { assert.strictEqual((await s3.appel("/api/demandes/relever", { methode: "POST", jeton: "lit" })).code, 503); assert.strictEqual((await s3.appel("/api/demandes", { jeton: "lit" })).json.boite.active, false); } finally { await s3.arreter(); }
+  } finally { await f.fermer(); }
+});
+
 (async () => {
   let ok = 0;
   for (const [n, f] of tests) { try { await f(); ok++; console.log("✓", n); } catch (e) { console.error("✗", n, "\n ", e.message); process.exitCode = 1; } }

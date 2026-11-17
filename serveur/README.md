@@ -114,6 +114,8 @@ L'application rédige les messages (dans la langue de chaque destinataire) et le
 |---|---|
 | `NTFY_HOTES` | Serveurs ntfy autorisés pour les sujets choisis dans l'application (par défaut `ntfy.sh` ; celui de `NTFY_URL` est ajouté). |
 | `SMTP_HOTE`, `SMTP_PORT`, `SMTP_SECURITE` | Serveur d'envoi d'e-mails. Sécurité : `tls` (port 465), `starttls` (port 587, par défaut). |
+| `IMAP_HOTE`, `IMAP_PORT`, `IMAP_SECURITE` | **Boîte des demandes** : serveur IMAP de la boîte qui reçoit les demandes des clients (port 993 en `tls` par défaut). |
+| `IMAP_UTILISATEUR`, `IMAP_MOT_DE_PASSE`, `IMAP_DOSSIER`, `IMAP_INTERVALLE_MIN` | Identifiants (Gmail : mot de passe d'application), dossier (`INBOX`), relève toutes les 5 minutes par défaut. Lecture seule : le dossier est ouvert par `EXAMINE` et les messages lus par `BODY.PEEK`, rien n'est marqué lu ni déplacé. |
 | `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE`, `SMTP_DE` | Identifiants et adresse d'expédition. Gratuit : la boîte de l'entreprise, ou Gmail avec un **mot de passe d'application** (environ 500 messages par jour). |
 
 WhatsApp vers un client utilise le compte WhatsApp Cloud déjà décrit plus haut (`WHATSAPP_TOKEN`…) ; s'il échoue ou n'est pas configuré, le message part par e-mail si le client en a un. Sans compte WhatsApp, l'application ouvre le message prêt à envoyer depuis votre téléphone. **Le client n'est jamais prévenu sans son accord** (case à cocher sur sa fiche).
@@ -128,6 +130,8 @@ Routes (jeton de lecture) :
 | `POST /api/notifications/manuelle` | Envoie tout de suite (bouton « Notifier »). Un même message envoyé par deux appareils dans les 6 h ne part qu'une fois. |
 | `POST /api/notifications/document` | E-mail avec pièces jointes `{ a, sujet, texte, pieces: [{ nom, type, base64 }] }` : facture, preuve de livraison, photos du CMR. Types : PDF, HTML, JPEG, PNG ; 8 pièces et 8 Mo au plus ; serveur SMTP requis. |
 | `POST /api/notifications/test` | Essaie chaque canal configuré et dit ce qui est arrivé. |
+| `GET /api/demandes?depuis=<ms>` | Boîte des demandes : messages relevés (expéditeur, sujet, date, texte sans l'historique cité, noms des pièces jointes) reçus après `depuis`, et l'état de la relève. Nos propres messages, les réponses automatiques et les doublons (même Message-ID) sont écartés ; 300 messages gardés. |
+| `POST /api/demandes/relever` | Relève la boîte tout de suite (une fois toutes les 20 secondes au plus). |
 
 Le plan est enregistré dans `donnees/scheduler.json` ; il survit à un redémarrage. Un message en retard de plus de 6 h (relais arrêté) n'est plus envoyé. 300 messages par heure au plus.
 

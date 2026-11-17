@@ -155,6 +155,7 @@ Automatique et sans action de votre part.
 | `optimisation.js`, `journal.js`, `prevision.js` | Conseils et tableau des opérations ; historique des voyages ; attentes aux ports et arrivée estimée (testés) |
 | `planning.js`, `calendrier.js` | Disponibilités, conflits d'affectation, ressources libres, duplication, programme du chauffeur (testé) ; page Planning |
 | `passages.js`, `passages_ui.js` | Événements de passage, suite de chaque étape, alertes, routage des messages (testé) ; page Passages douane |
+| `boite.js`, `boite_ui.js`, `serveur/imap.js`, `serveur/mime.js` | Boîte des demandes : e-mails relevés par le relais (IMAP en lecture seule, lecture MIME sans dépendance) et messages partagés depuis WhatsApp, lus, triés en commande, devis ou ignorés (testé) |
 | `fiche.js`, `fiche_ui.js` | Fiche du voyage : frise, prochaine action, points d'attention (logique pure, testée) ; en-tête, quatre onglets (Suivi, Documents, Argent, Équipe) et registre des blocs (`enregistrerBlocVoyage`, dans `voyages.js`) |
 | `ports_gps.js`, `ports_gps_ui.js` | Étapes de port posées par le GPS : passages dans les zones, et emplacements des contrôles appris de vos propres arrêts (testé) |
 | `aller_retour.js`, `aller_retour_ui.js` | Un dossier par voyage : commande → voyage, retour chargé (seconde commande), suivi unique, recette et rentabilité réparties, facturation sans doublon (testé) |
@@ -193,7 +194,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 239 tests (208 application, 31 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 245 tests (211 application, 34 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

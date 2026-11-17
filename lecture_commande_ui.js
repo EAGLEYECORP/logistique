@@ -29,20 +29,28 @@ async function collerMessage() {
   const f = await modale({ titre: "Coller une demande de transport", valider: "Lire le message", corps: `<label class="f full">Message reçu (e-mail, WhatsApp, SMS) — collez-le tel quel, en-tête compris<textarea name="message" id="message-colle" rows="11" required placeholder="De : Karim &lt;achats@client.ma&gt;&#10;Bonjour, 26 palettes de clémentines, chargement jeudi à Agadir, livraison lundi à Perpignan, 2 à 6 °C, 22 t. Votre meilleur prix ?"></textarea></label>
     <p class="hint">Lu sur cet appareil : rien n'est envoyé. Villes, dates (« jeudi », « 20/11 », « Nov 20 »), palettes, poids, température, prix, référence et client sont reconnus en français, anglais et espagnol.</p>` });
   if (!f || !String(f.message || "").trim()) return;
-  const message = String(f.message).trim(), r = lireDemande(message);
+  await commandeDepuisMessage(String(f.message).trim());
+}
+/**
+ * Message → commande pré-remplie : client inconnu proposé à la création, champs lus montrés avec leur extrait, puis le formulaire.
+ * Renvoie la commande créée (statut « devis » si le client demande un prix ou n'en donne pas), ou null.
+ */
+async function commandeDepuisMessage(message, { aujourdhui = today(), recuLe = today() } = {}) {
+  const r = lireDemande(message, { aujourdhui });
   if (!r.champs.clientId && (r.client.email || r.client.tel || r.client.nom)) {
     const c = await formulaire("Client inconnu : le créer ?", champsClient({ nom: r.client.nom && !/@/.test(r.client.nom) ? r.client.nom : nomDepuisEmail(r.client.email), email: r.client.email, tel: r.client.tel ? (r.client.tel.startsWith("212") ? "+" + r.client.tel : r.client.tel) : "" }),
       { valider: "Créer le client", annuler: "Plus tard", aide: "Ces coordonnées viennent du message. Corrigez le nom (raison sociale) si besoin." });
     if (c) { const n = { id: uid(), ...c, delai: num(c.delai, S.params.delaiPaiement) }; S.clients.push(n); r.champs.clientId = n.id; r.manquants = r.manquants.filter((m) => m !== "client"); }
   }
-  const prefill = { ...r.champs, devise: r.champs.devise || "EUR", notes: `Demande reçue le ${dateFr(today())} :\n${message.slice(0, 1500)}` };
+  const prefill = { ...r.champs, devise: r.champs.devise || "EUR", notes: `Demande reçue le ${dateFr(recuLe)} :\n${message.slice(0, 1500)}` };
   const liste = champsCommande(prefill).map((x) => (x.name === "prix" ? { ...x, required: false, label: "Prix de vente (vide = à chiffrer)" } : x));
   const v = await modale({ titre: "Nouvelle commande d'après le message", corps: resumeLecture(r) + champs(liste), valider: r.demandePrix || !r.champs.prix ? "Créer (à chiffrer)" : "Créer la commande" }); // ce qui a été lu, en tête : visible sans défiler
-  if (!v) return;
+  if (!v) return null;
   const devis = r.demandePrix || !num(v.prix), statut = devis ? "devis" : "confirme";
   const n = { id: uid(), ref: prochainNumero("CMD", S.commandes, "ref"), statut, source: "message", jalons: [{ statut, date: new Date().toISOString() }], ...lireCommande(v) };
   S.commandes.push(n); filtreCmd = devis ? "chiffrer" : "actives"; sauver();
   toast(devis ? `Commande ${n.ref} créée, à chiffrer` : `Commande ${n.ref} créée`); rafraichir();
+  return n;
 }
 if (VUES.commandes) {
   const actionsCommandesAvantLecture = VUES.commandes.actions, agirCommandesAvantLecture = VUES.commandes.agir;

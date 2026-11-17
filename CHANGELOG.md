@@ -1,5 +1,17 @@
 # Changelog
 
+## 5.2.0 — Boîte des demandes : les demandes reçues par e-mail et WhatsApp, déjà lues
+
+- **Nouvelle page Commandes → Demandes.** Les e-mails de la boîte de l'entreprise y arrivent seuls : le relais relit la boîte **toutes les 5 minutes, en lecture seule** (rien n'est marqué lu ni déplacé dans votre messagerie), sans service payant ni bibliothèque ajoutée.
+- **Chaque message est déjà lu** : trajet, date de chargement (« jeudi », « demain » lus à la date du message), palettes, poids, température, prix ; client reconnu à son adresse, ou « Nouveau client » ; « Ressemble à CMD-… » si la demande est peut-être déjà enregistrée ; ce qui manque ; noms des pièces jointes (elles restent dans la messagerie). L'historique cité d'une réponse est retiré pour ne pas relire un ancien prix ou une ancienne ville.
+- **Un geste par message** : « Créer la commande » (client inconnu créé au passage), **« Chiffrer et répondre »** quand le client demande un prix (commande à chiffrer, prix conseillé, devis envoyé par WhatsApp ou e-mail), « Répondre », « Ignorer » (avec « Annuler »). Les demandes traitées gardent le lien vers leur commande ; « Remettre à trier » si besoin.
+- **Les vraies demandes d'abord** : les messages qui ressemblent à une demande de transport passent devant ; lettres d'information et listes de diffusion rangées dans « Autres » ; nos propres messages et les réponses automatiques écartés par le relais.
+- **Depuis WhatsApp (Android)** : l'application installée apparaît dans le menu « Partager » ; un message partagé arrive dans la boîte et la page s'ouvre. Sur iPhone (pas de partage vers une application web) ou si WhatsApp ne propose pas « Partager » pour ce message : copier, puis « Coller un message » sur la page Demandes — le message rejoint la même boîte.
+- Le nombre de demandes à trier s'affiche sur l'onglet Demandes et dans « À traiter » de l'accueil (urgent au-delà de 24 h sans réponse). Raccourci « Demandes à trier » sur l'icône de l'application.
+- **Réglages → Général → Boîte des demandes** : état de la relève (dernière relève, erreur expliquée, par exemple mot de passe refusé), lignes à ajouter au relais, « Relever maintenant ». Le test du relais dit aussi si la boîte est relevée. Les droits suivent ceux de la page Commandes.
+- **Relais** : variables `IMAP_HOTE`, `IMAP_UTILISATEUR`, `IMAP_MOT_DE_PASSE` (et `IMAP_PORT`, `IMAP_SECURITE`, `IMAP_DOSSIER`, `IMAP_INTERVALLE_MIN`) ; routes `GET /api/demandes` et `POST /api/demandes/relever` ; messages gardés chiffrés au repos si le chiffrement est activé. Guide d'hébergement, installateur et modèles de configuration mis à jour.
+- Correction : l'application installée sur GitHub Pages ne pouvait pas appeler un relais placé à une autre adresse pour le lien de suivi des clients (en-tête `X-LF` refusé par le navigateur) ; le relais l'autorise maintenant.
+
 ## 5.1.0 — Fiche du voyage : où en est le camion, et la seule chose à faire maintenant
 
 - **La fiche du voyage est refaite.** Fermée, elle montre la référence, le client, le trajet en grand, la marge et le statut, une **frise réduite** et la ligne **« À faire »** : on sait quoi faire sur chaque voyage sans l'ouvrir.

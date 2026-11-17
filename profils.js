@@ -26,8 +26,9 @@ const roleCourant = () => {
   const l = roleLire(), b = ROLES[l.role], p = !l.compte && !b.compte && l.role !== "direction" ? S.params?.pagesProfils?.[l.role] : null;
   return p ? { ...b, onglets: Array.isArray(p.onglets) ? p.onglets : b.onglets, finances: typeof p.finances === "boolean" ? p.finances : b.finances } : b;
 };
-const PAGES_NON_REGLABLES = ["tableau", "parametres", "chauffeur", "utilisateurs", "acces", "journal"];
-const ongletPermis = (id) => { if (typeof comptesOngletPermis === "function") { const x = comptesOngletPermis(id); if (x !== undefined) return x; } const r = roleCourant(); return !r.onglets || r.onglets.includes(id) || id === "parametres" || id === "chauffeur"; };
+const PAGES_NON_REGLABLES = ["tableau", "parametres", "chauffeur", "utilisateurs", "acces", "journal", "demandes"]; // « demandes » suit « commandes »
+const PAGES_LIEES = { demandes: "commandes" }; // la boîte des demandes suit les droits de la page Commandes
+const ongletPermis = (page) => { const id = PAGES_LIEES[page] || page; if (typeof comptesOngletPermis === "function") { const x = comptesOngletPermis(id); if (x !== undefined) return x; } const r = roleCourant(); return !r.onglets || r.onglets.includes(id) || id === "parametres" || id === "chauffeur"; };
 
 function roleAppliquer() {
   ONGLETS.length = 0; ONGLETS.push(...ONGLETS_TOUS.filter((o) => ongletPermis(o[0])));

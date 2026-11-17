@@ -40,6 +40,8 @@ Il faut : **une machine allumée en permanence**, **Node.js 18 ou plus** (gratui
 6. **Brancher l'application** : Réglages → Général → **Relais** : adresse et jeton de lecture, puis « Tester ». En mode multi-utilisateur, ouvrez simplement l'adresse du relais : l'application s'y affiche et demande de créer le premier compte.
 7. **E-mail** (factures, relances) : dans `/etc/logistique-fret.env`, retirez le `#` des lignes `SMTP_…` et remplissez-les, puis `sudo systemctl restart logistique-fret`. Avec Gmail : activez la validation en deux étapes du compte, créez un **mot de passe d'application** et mettez-le dans `SMTP_MOT_DE_PASSE` (environ 500 messages par jour). La boîte de l'entreprise (hébergeur du domaine) convient aussi : demandez-lui l'adresse SMTP et le port.
 
+8. **Boîte des demandes** (les demandes envoyées par e-mail arrivent dans l'application, déjà lues) : dans le même fichier, retirez le `#` des lignes `IMAP_…` et remplissez-les avec la boîte qui reçoit les demandes des clients (Gmail : `imap.gmail.com` et un mot de passe d'application ; boîte chez l'hébergeur du site : l'adresse IMAP de son espace client), puis redémarrez le relais. Le relais relit la boîte toutes les 5 minutes **en lecture seule** : rien n'est marqué lu ni déplacé. Vérifiez dans l'application : Réglages → Général → Boîte des demandes.
+
 ## A bis. PC Windows au bureau
 
 1. Installez **Node.js LTS** depuis nodejs.org.

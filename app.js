@@ -147,6 +147,7 @@ let ongletActif = "tableau";
 const ONGLETS = [
   ["tableau", "Accueil", "home", ""],
   ["commandes", "Commandes", "box", "Exploitation"],
+  ["demandes", "Demandes", "mail", "Exploitation"],
   ["operations", "Opérations", "flag", "Exploitation"],
   ["planning", "Planning", "calendar", "Exploitation"],
   ["direct", "Carte", "radar", "Exploitation"],
@@ -176,7 +177,7 @@ const ONGLETS_MOBILE = ["tableau", "direct", "commandes", "camions"]; // (ancien
     la section n'affiche que les pages permises (profils, accès par service), en onglets en haut de la page. */
 const SECTIONS = [
   ["aujourdhui", "Aujourd'hui", "home", ["tableau", "operations"]],
-  ["commandes", "Commandes", "box", ["commandes", "clients"]],
+  ["commandes", "Commandes", "box", ["commandes", "demandes", "clients"]],
   ["voyages", "Voyages", "ship", ["voyages", "planning", "passages", "direct", "gps", "itineraires", "douane", "international", "peages"]],
   ["flotte", "Flotte", "truck", ["camions", "chauffeurs", "carburant", "tachy"]],
   ["argent", "Argent", "receipt", ["factures", "rentabilite", "direction"]],
@@ -194,9 +195,11 @@ function pageDeSection(s) {
 }
 function retenirPageSection(onglet) { const s = sectionDe(onglet); if (!s) return; try { const m = JSON.parse(localStorage.getItem(CLE_SECTIONS) || "{}"); m[s[0]] = onglet; localStorage.setItem(CLE_SECTIONS, JSON.stringify(m)); } catch { /* ignoré */ } }
 /** Onglets de la section en haut de la page (s'il y a au moins deux pages permises). */
+/** Nombre affiché à côté d'un onglet de section (ex. demandes à trier) : COMPTES_ONGLETS[id] = () => nombre. */
+const COMPTES_ONGLETS = {};
 function sousOnglets(onglet) {
   const s = sectionDe(onglet); if (!s) return ""; const pages = pagesSection(s); if (pages.length < 2) return "";
-  return `<nav class="sous-onglets" aria-label="${esc(s[1])}">${pages.map((id) => { const o = ONGLETS.find((x) => x[0] === id); return `<button type="button" data-tab="${id}" class="${id === onglet ? "actif" : ""}" ${id === onglet ? 'aria-current="page"' : ""}>${esc(LIB_ONGLET_COURT[id] || o[1])}</button>`; }).join("")}</nav>`;
+  return `<nav class="sous-onglets" aria-label="${esc(s[1])}">${pages.map((id) => { const o = ONGLETS.find((x) => x[0] === id); return `<button type="button" data-tab="${id}" class="${id === onglet ? "actif" : ""}" ${id === onglet ? 'aria-current="page"' : ""}>${esc(LIB_ONGLET_COURT[id] || o[1])}${COMPTES_ONGLETS[id]?.() ? `<span class="compte">${COMPTES_ONGLETS[id]()}</span>` : ""}</button>`; }).join("")}</nav>`;
 }
 
 function afficher(onglet = ongletActif, { garderScroll = false } = {}) {

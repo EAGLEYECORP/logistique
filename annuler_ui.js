@@ -6,7 +6,7 @@
    Chargé en dernier : il enveloppe les actions des pages telles que les autres fichiers les ont laissées.
    ============================================================ */
 
-const ACTES_ANNULABLES = { voyages: ["jalon", "annuler-jalon", "port-etape", "passage-fait"], passages: ["passage-fait"], commandes: ["avancer", "devis-accepte"], factures: ["payer"], chauffeur: ["chf-etape", "chf-quai", "chf-service", "chf-fin"] };
+const ACTES_ANNULABLES = { voyages: ["jalon", "annuler-jalon", "port-etape", "passage-fait"], passages: ["passage-fait"], commandes: ["avancer", "devis-accepte"], factures: ["payer"], demandes: ["dem-ignorer", "dem-retrier"], chauffeur: ["chf-etape", "chf-quai", "chf-service", "chf-fin"] };
 function proposerAnnulation(avant, toastsAvant) {
   const zone = document.getElementById("toasts"), t = zone?.lastElementChild;
   if (!t || [...zone.children].indexOf(t) < 0 || toastsAvant.has(t) || t.querySelector(".toast-annuler")) return;

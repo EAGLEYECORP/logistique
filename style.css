@@ -1041,3 +1041,31 @@ details.fiche .menu-plus > summary { display: inline-flex; padding: 5px 10px; li
   .fiche .lignes-cout .trav .r { justify-content: flex-start; }
 }
 @media print { .fiche-pied, .fiche-onglets, .fiche-action .row, .fiche-attention { display: none !important; } }
+
+/* ============================================================
+   Boîte des demandes (v5.2)
+   ============================================================ */
+.sous-onglets .compte { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-inline-start: 6px; padding: 0 5px; border-radius: 99px; background: var(--primary); color: var(--on-primary); font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dem-etat { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); color: var(--text-2); font-size: .86rem; }
+.dem-etat svg.i { flex: none; width: 17px; height: 17px; margin-top: 1px; }
+.dem-etat.ok svg.i { color: var(--ok); } .dem-etat.warn { background: var(--warn-soft); } .dem-etat.warn svg.i { color: var(--warn); }
+.dem-etat.danger { background: var(--danger-soft); color: var(--text); } .dem-etat.danger svg.i { color: var(--danger); }
+.card.demande { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; }
+.card.demande.ignoree, .card.demande.masse { opacity: .78; }
+.dem-tete { display: flex; align-items: center; gap: 10px; }
+.dem-source { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); }
+.dem-source svg.i { width: 17px; height: 17px; }
+.dem-qui { flex: 1; min-width: 0; } .dem-qui strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dem-sujet { font-family: var(--font-titre); font-weight: 600; font-size: 1.02rem; line-height: 1.3; overflow-wrap: anywhere; }
+.dem-lu { display: flex; align-items: flex-start; gap: 8px; padding: 9px 12px; border-radius: 12px; background: var(--primary-soft); font-weight: 600; font-size: .92rem; font-variant-numeric: tabular-nums; }
+.dem-lu svg.i { flex: none; width: 17px; height: 17px; margin-top: 2px; color: var(--primary); }
+.dem-lu.vide { background: var(--surface-2); color: var(--text-2); font-weight: 500; } .dem-lu.vide svg.i { color: var(--muted); }
+.dem-puces { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dem-manque { color: var(--warn); display: inline; }
+.dem-texte > summary { cursor: pointer; list-style: none; color: var(--text-2); font-size: .88rem; } .dem-texte > summary::-webkit-details-marker { display: none; }
+.dem-texte[open] > summary { display: none; }
+.dem-complet { white-space: pre-wrap; font-size: .88rem; color: var(--text-2); max-height: 360px; overflow: auto; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); overflow-wrap: anywhere; }
+.dem-pieces { display: flex; gap: 6px; align-items: flex-start; } .dem-pieces svg.i { flex: none; width: 15px; height: 15px; margin-top: 1px; } .dem-pieces span { color: var(--muted); }
+.card.demande .row { margin-top: 2px; }
+pre.bloc-code { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: .82rem; overflow-x: auto; white-space: pre; }
+@media (max-width: 560px) { .card.demande { padding: 14px 16px; } .card.demande .row .btn { flex: 1 1 auto; justify-content: center; } }

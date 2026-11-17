@@ -71,7 +71,7 @@ const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "P
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    clients: [], commandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [], depensesAttente: [], attentesPort: [], routageJalons: [], notificationsApp: [], notifsEtat: { annulees: {}, reports: {} },
+    clients: [], commandes: [], demandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [], depensesAttente: [], attentesPort: [], routageJalons: [], notificationsApp: [], notifsEtat: { annulees: {}, reports: {} },
     params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }
@@ -317,6 +317,7 @@ function alertes() {
   for (const { voyage: v, depuis } of voyagesAFacturer()) if (depuis >= 1) ajouter(depuis > 7 ? "danger" : "warn", "voyages", `Voyage ${v.ref || ""}${v.clientId ? " (" + nomClient(v.clientId) + ")" : ""} fait depuis ${depuis} j : pas encore facturé`, "factures", `voy:${v.id}:facturer`);
   if (typeof alertesRetour === "function") for (const a of alertesRetour()) ajouter(a.niveau, "voyages", a.texte, "commandes", a.cle); // fret_retour.js
   if (typeof alertesDocuments === "function") for (const a of alertesDocuments()) ajouter(a.niveau, "commandes", a.texte, "commandes", a.cle); // documents_commande.js
+  if (typeof alertesDemandes === "function") for (const a of alertesDemandes()) ajouter(a.niveau, "demandes", a.texte, "commandes", a.cle); // boite.js
   for (const c of S.commandes) {
     if (c.perdu) continue; // devis perdu : plus rien à faire
     if (c.statut === "livre" && !(typeof factureDeCommande === "function" ? factureDeCommande(c) : c.factureId)) ajouter("warn", "commandes", `Commande ${c.ref} livrée — à facturer`, "commandes", `cmd:${c.id}:facturer`);

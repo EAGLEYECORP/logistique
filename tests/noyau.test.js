@@ -2922,6 +2922,61 @@ test("chargement : aucun nom global déclaré deux fois dans les scripts de inde
   assert.deepStrictEqual(doublons, []);
 });
 
+/** État de charge : 500 voyages, 500 commandes, 380 factures — le volume d'un transporteur sur plusieurs années. */
+function etat500() {
+  const j = (n) => N.dateISO(Date.now() + n * 864e5), villes = ["Perpignan", "Lyon", "Madrid", "Barcelone", "Paris", "Marseille", "Valence", "Murcie"], e = N.etatVide();
+  e.clients = Array.from({ length: 40 }, (_, i) => ({ id: "k" + i, nom: "Client " + i, delai: 30 }));
+  e.camions = Array.from({ length: 25 }, (_, i) => ({ id: "c" + i, immat: `${100 + i}-A-1`, km: 300000, essieux: 5 }));
+  e.chauffeurs = Array.from({ length: 25 }, (_, i) => ({ id: "h" + i, nom: "Chauffeur " + i, camionId: "c" + i, sejours: [] }));
+  for (let i = 0; i < 500; i++) {
+    const d = -400 + Math.floor(i * 0.82), st = d < -10 ? "termine" : d < 0 ? "en_cours" : "prevu", cl = "k" + (i % 40);
+    e.commandes.push({ id: "o" + i, ref: `CMD-${i}`, clientId: cl, origine: "Agadir", destination: villes[i % 8], dateChargement: j(d), prix: 3000 + (i % 7) * 100, devise: "EUR", statut: "confirme", jalons: [] });
+    e.voyages.push({ id: "v" + i, ref: `V-${i}`, statut: st, clientId: cl, commandeId: "o" + i, origine: "Agadir", destination: villes[i % 8], dateDepart: j(d), dateRetourPrevue: j(d + 8), chauffeurId: "h" + (i % 25), camionId: "c" + (i % 25), prix: 3000 + (i % 7) * 100, devise: "EUR", kmAller: 2000, kmRetourVide: 2000, carburantMad: 14000, lignesCout: [{ id: "l" + i, type: "carburant", montant: 9000, devise: "MAD", source: "saisie", date: j(d) }], coches: {}, jalons: [], traversees: [] });
+    if (st === "termine" && i % 5) e.factures.push({ id: "f" + i, numero: `FAC-${i}`, clientId: cl, voyageIds: ["v" + i], date: j(d + 4), echeance: j(d + 34), devise: "EUR", tva: 0, statut: "emise", lignes: [{ designation: "Transport", montant: 3000 }] });
+  }
+  return e;
+}
+
+test("budget de rendu, 500 voyages : coût et marge calculés une seule fois par affichage, mêmes résultats qu'à froid, facture de chaque voyage par index, sous le budget", () => {
+  N.S = etat500();
+  const froid = N.S.voyages.map((v) => N.margeVoyage(v).marge_nette), facturesFroid = N.S.voyages.map((v) => N.factureDuVoyage(v)?.id ?? null);
+  const orig = N.coutVoyageCalcul; let appels = 0;
+  N.coutVoyageCalcul = (v) => { appels++; return orig(v); };
+  try {
+    const t = Date.now();
+    const r = N.avecMemo(() => { const m = N.S.voyages.map((v) => N.margeVoyage(v).marge_nette); for (const v of N.S.voyages) { N.coutVoyage(v); N.margeVoyage(v.id); } return { m, f: N.S.voyages.map((v) => N.factureDuVoyage(v)?.id ?? null) }; });
+    const ms = Date.now() - t;
+    assert.deepStrictEqual([...r.m], [...froid]); assert.deepStrictEqual([...r.f], [...facturesFroid]);
+    assert.strictEqual(appels, 500, "un calcul de coût par voyage et par affichage");
+    assert.ok(ms < 1000, `500 marges en ${ms} ms (budget 1 s)`);
+    appels = 0; for (const v of N.S.voyages) { N.coutVoyage(v); N.coutVoyage(v); }
+    assert.strictEqual(appels, 1000, "hors affichage, aucune mémoire : l'état peut avoir changé");
+  } finally { N.coutVoyageCalcul = orig; }
+  assert.strictEqual(N._memoCalcul, null);
+});
+
+test("contraste : textes, couleurs d'état et pastilles à 4,5:1 au moins sur chaque fond, thèmes clair et sombre ; texte blanc seulement sur les fonds « pleins »", () => {
+  const css = fs.readFileSync(path.join(racine, "style.css"), "utf8");
+  const bloc = (re) => { const m = css.match(re); assert.ok(m, String(re)); return Object.fromEntries([...m[1].matchAll(/--([\w-]+):\s*([^;]+);/g)].map((x) => [x[1], x[2].trim()])); };
+  const clair = bloc(/:root \{([^}]*)\}/), sombre = bloc(/:root\[data-theme="dark"\] \{([^}]*)\}/);
+  assert.deepStrictEqual(bloc(/:root:not\(\[data-theme="light"\]\) \{([^}]*)\}/), sombre, "les deux blocs du thème sombre doivent rester identiques");
+  const rgba = (c) => { if (c.startsWith("#")) return [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)).concat(1); const p = c.match(/rgba?\(([^)]+)\)/)[1].split(",").map(Number); return [p[0], p[1], p[2], p[3] ?? 1]; };
+  const sur = (c, fond) => { const a = rgba(c), f = rgba(fond); return [0, 1, 2].map((i) => a[i] * a[3] + f[i] * (1 - a[3])); };
+  const lum = (c) => c.slice(0, 3).map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }).reduce((s, x, i) => s + x * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const faibles = [], note = (texte, r) => { if (r < 4.5) faibles.push(`${texte} ${r.toFixed(2)}`); };
+  for (const [nom, t] of [["clair", clair], ["sombre", sombre]]) {
+    for (const fond of ["surface", "bg", "surface-2"]) {
+      for (const k of ["text", "text-2", "muted", "primary", "ok", "warn", "danger", "info"]) note(`${nom} : ${k} sur ${fond}`, ratio(rgba(t[k]), rgba(t[fond])));
+      for (const k of ["primary", "ok", "warn", "danger", "info"]) note(`${nom} : ${k} sur ${k}-soft (${fond})`, ratio(rgba(t[k]), sur(t[`${k}-soft`], t[fond])));
+    }
+    for (const k of ["primary-plein", "danger-plein", "ok-plein"]) note(`${nom} : blanc sur ${k}`, ratio(rgba(t["on-primary"]), rgba(t[k])));
+  }
+  assert.deepStrictEqual(faibles, []);
+  const blancSurTexte = css.split("}").filter((r) => /background:\s*var\(--(primary|danger|ok)\)/.test(r) && /(^|[;{\s])color:\s*(var\(--on-primary\)|#fff\b)/.test(r));
+  assert.deepStrictEqual(blancSurTexte.map((r) => r.trim().slice(0, 90)), []);
+});
+
 (async () => {
   let ok = 0;
   for (const [nom, fn] of tests) {

@@ -134,8 +134,16 @@ let S = etatVide();
 /* ---------- utilitaires ---------- */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const num = (v, d = 0) => { const n = parseFloat(String(v ?? "").replace(",", ".").replace(/\s/g, "")); return Number.isFinite(n) ? n : d; };
-const fmt = (n, dec = 0) => Number(n || 0).toLocaleString("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+const num = (v, d = 0) => { if (typeof v === "number") return Number.isFinite(v) ? v : d; const n = parseFloat(String(v ?? "").replace(",", ".").replace(/\s/g, "")); return Number.isFinite(n) ? n : d; };
+/* ---------- mémoire de calcul, le temps d'un affichage ---------- */
+// L'état ne change pas pendant qu'une page se dessine : le coût, la marge d'un voyage et la répartition d'un mois n'y sont calculés qu'une fois.
+let _memoCalcul = null;
+/** Exécute fn avec la mémoire de calcul active (imbrication permise). */
+function avecMemo(fn) { if (_memoCalcul) return fn(); _memoCalcul = new Map(); try { return fn(); } finally { _memoCalcul = null; } }
+/** Résultat mémorisé de f pour (genre, clé) pendant un affichage ; calcul direct hors affichage. */
+function memoCalcul(genre, cle, f) { if (!_memoCalcul) return f(); let m = _memoCalcul.get(genre); if (!m) _memoCalcul.set(genre, (m = new Map())); if (m.has(cle)) return m.get(cle); const r = f(); m.set(cle, r); return r; }
+const _formats = new Map();
+const fmt = (n, dec = 0) => { let f = _formats.get(dec); if (!f) _formats.set(dec, (f = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: dec, maximumFractionDigits: dec }))); return f.format(Number(n || 0)); };
 const mad = (n) => fmt(n, 2) + " MAD";
 const dateISO = (d) => { const x = new Date(d); return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const today = () => dateISO(Date.now());
@@ -526,7 +534,8 @@ function lignesVoyage(v) {
   const remplace = (h) => reelles.some((l) => l.type === h.type && (h.type !== "traversee" || !l.sens || !h.sens || l.sens === h.sens));
   return [...reelles.map((l) => ({ ...l, mad: ligneCoutMad(l, tauxVoyage(v)) })), ...coutsHerites(v).filter((h) => !remplace(h)).map((h) => ({ ...h, mad: h.montant }))];
 }
-function coutVoyage(v) {
+function coutVoyage(v) { return memoCalcul("cout", v, () => coutVoyageCalcul(v)); }
+function coutVoyageCalcul(v) {
   const taux = tauxVoyage(v);
   const parts = { peagesMaroc: 0, peagesFrance: 0, peagesEurope: 0, traversees: 0, carburant: 0, fraisRoute: 0, douane: 0, autres: 0, froid: 0, amendes: 0, maintien: 0 };
   for (const l of lignesVoyage(v)) parts[typeCout(l.type)[2]] += l.mad;
@@ -703,7 +712,7 @@ function etatFacture(f) {
 function factureDuVoyage(v) {
   if (!v) return null;
   const directe = v.factureId && parId(S.factures, v.factureId); if (directe) return directe;
-  const citee = S.factures.find((f) => (f.voyageIds || []).includes(v.id)); if (citee) return citee;
+  const citee = memoCalcul("factureCitant", "index", () => { const m = new Map(); for (const f of S.factures) for (const id of f.voyageIds || []) if (!m.has(id)) m.set(id, f); return m; }).get(v.id) ?? (_memoCalcul ? null : S.factures.find((f) => (f.voyageIds || []).includes(v.id))); if (citee) return citee;
   const cmd = v.commandeId && parId(S.commandes, v.commandeId);
   return (cmd?.factureId && parId(S.factures, cmd.factureId)) || null;
 }

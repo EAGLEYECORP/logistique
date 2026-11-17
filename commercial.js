@@ -261,7 +261,7 @@ VUES.factures = {
       <thead><tr><th>Facture</th><th>Client</th><th>Date</th><th class="r">Montant TTC</th><th>Statut</th><th></th></tr></thead><tbody>
       ${liste.map((f) => {
         const t = totauxFacture(f); const e = etatFacture(f);
-        return `<tr><td><strong>${esc(f.numero)}</strong><span class="sub">${(f.lignes || []).length} ligne(s)${S.voyages.filter((v) => factureDuVoyage(v) === f).map((v) => " · voyage " + esc(v.ref || "")).join("")}</span></td>
+        return `<tr><td><strong>${esc(f.numero)}</strong><span class="sub">${(f.lignes || []).length} ligne(s)${(memoCalcul("voyagesParFacture", "index", () => { const m = new Map(); for (const v of S.voyages) { const x = factureDuVoyage(v); if (x) (m.get(x) || m.set(x, []).get(x)).push(v); } return m; }).get(f) || []).map((v) => " · voyage " + esc(v.ref || "")).join("")}</span></td>
           <td>${esc(nomClient(f.clientId))}</td>
           <td>${dateFr(f.date)}<span class="sub">échéance ${dateFr(f.echeance)}</span></td>
           <td class="r num">${fmtDevise(t.ttc, f.devise)}<span class="sub">HT ${fmt(t.ht, 2)} · TVA ${fmt(f.tva)} %</span></td>

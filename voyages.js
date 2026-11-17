@@ -11,6 +11,7 @@ const nomJalon = (k) => JALONS_VOYAGE.find(([c]) => c === k)?.[1] || k;
 const classeTexte = (c) => ({ 1: "classe 1", 2: "classe 2", 3: "classe 3" }[c] || "classe 3 (par défaut)");
 const niveauCtl = { danger: "danger", warn: "warn" };
 let voyagesOuverts = new Set();
+let voyagesFinisMontres = 30; // voyages terminés affichés (les plus récents d'abord) : la page reste rapide avec des centaines de voyages
 let ongletCheck = {};
 
 /* ---------- Traversées : le passage Tanger Med ⇄ Algeciras est dans chaque voyage ---------- */
@@ -187,7 +188,7 @@ VUES.voyages = {
       <div class="kpi"><div class="l">${ic("truck")} Retour à vide</div><div class="v">${fmt(rv.pct, 0)} <small>%</small></div><div class="s ${rv.pct > 30 ? "warn" : ""}">${fmt(rv.kmVide)} km · ≈ ${fmt(rv.coutVide)} MAD</div></div>
     </div>
     ${actifs.sort(tri).map(carteVoyage).join("")}
-    ${finis.length ? `<div class="section-title">Terminés · ${finis.length}</div>${finis.sort((a, b) => tri(b, a)).map(carteVoyage).join("")}` : ""}
+    ${finis.length ? `<div class="section-title">Terminés · ${finis.length}</div>${finis.sort((a, b) => tri(b, a)).filter((v, i) => i < voyagesFinisMontres || voyagesOuverts.has(v.id)).map(carteVoyage).join("")}${finis.length > voyagesFinisMontres ? `<div class="row" style="justify-content:center;margin:8px 0 16px">${btn("voyages-suivants", `Afficher les ${Math.min(30, finis.length - voyagesFinisMontres)} suivants (${finis.length - voyagesFinisMontres} restants)`, { cls: "btn ghost" })}</div>` : ""}` : ""}
     ${S.voyages.filter((v) => v.statut === "annule").map(carteVoyage).join("")}
     ${aideInterdictions()}`;
   },
@@ -214,6 +215,7 @@ VUES.voyages = {
       const n = { id: uid(), ...lireVoyage(f), jalons: [], coches: {}, traversees: [nouvelleTraversee("aller", "tmed-alg"), nouvelleTraversee("retour", "alg-tmed")] };
       S.voyages.unshift(n); voyagesOuverts.add(n.id); sauver(); toast(`Voyage ${n.ref} créé`); rafraichir();
     }
+    if (act === "voyages-suivants") { voyagesFinisMontres += 30; return rafraichir(); }
     if (!v) return;
     if (act === "modifier") {
       const f = await formulaire(`Modifier ${v.ref}`, champsVoyage(v));

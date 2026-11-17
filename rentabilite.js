@@ -7,7 +7,7 @@
    ============================================================ */
 
 /** Voyages (hors annulés) partis le même mois : c'est entre eux que se répartissent les charges générales du mois. */
-function voyagesDuMois(mois) { return S.voyages.filter((v) => v.statut !== "annule" && (v.dateDepart || "").slice(0, 7) === mois); }
+function voyagesDuMois(mois) { return memoCalcul("mois", mois, () => S.voyages.filter((v) => v.statut !== "annule" && (v.dateDepart || "").slice(0, 7) === mois)); }
 const uniteVoyage = (v) => { const c = coutVoyage(v); return { id: v.id, camionId: v.camionId || "", km: c.km, ca: c.prix }; };
 
 /**
@@ -18,6 +18,9 @@ const uniteVoyage = (v) => { const c = coutVoyage(v); return { id: v.id, camionI
 function margeVoyage(voyageId) {
   const v = typeof voyageId === "string" ? parId(S.voyages, voyageId) : voyageId;
   if (!v) return null;
+  return memoCalcul("marge", v, () => margeVoyageCalcul(v));
+}
+function margeVoyageCalcul(v) {
   const c = coutVoyage(v), carb = carburantVoyage(v), jours = joursVoyage(v);
   const couts_directs = lignesVoyage(v).map((l) => ({ id: l.id, type: l.type, montant: l.mad, source: l.source, ref: l.ref || "", date: l.date || "", sens: l.sens || "", libelle: l.libelle || "", projete: !!l.projete, origine: l.devise === "EUR" ? { montant: num(l.montant), devise: "EUR" } : null }));
   if (carb.estime) couts_directs.push({ type: "carburant", montant: carb.mad, source: "calcule", ref: "", date: "", sens: "", libelle: carb.source === "prix_jour" ? `Estimé au prix du jour : ${carb.detail}` : "Estimé d'après les pleins du camion", projete: true, origine: null });
@@ -26,7 +29,7 @@ function margeVoyage(voyageId) {
   if (cam) { const f = fixesMensuelsCamion(cam, v.dateDepart || today()); if (f.total > 0) couts_fixes_alloues.push({ camionId: cam.id, montant: (f.total * jours) / JOURS_PAR_MOIS, cle: "jours", mensuel: f.total }); }
   const charges_generales_allouees = [];
   if (v.dateDepart && v.statut !== "annule") {
-    const unites = voyagesDuMois(v.dateDepart.slice(0, 7)).map(uniteVoyage);
+    const unites = [...memoCalcul("unites", v.dateDepart.slice(0, 7), () => voyagesDuMois(v.dateDepart.slice(0, 7)).map(uniteVoyage))];
     if (!unites.some((u) => u.id === v.id)) unites.push(uniteVoyage(v));
     for (const g of chargesGeneralesMois()) { const m = repartir(g.montant, g.cle, unites).get(v.id) || 0; if (m > 0) charges_generales_allouees.push({ id: g.id, libelle: g.libelle, categorie: g.categorie, montant: m, cle: g.cle }); }
   }

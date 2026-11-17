@@ -203,10 +203,12 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 260 tests (223 application, 37 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 262 tests (225 application, 37 relais) |
+| `tests/captures.js`, `tests/donnees-captures.js` | Captures de référence de chaque page (téléphone, bureau, clair, sombre) comparées à chaque livraison — outil de développement, demande Playwright |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s
+node tests/captures.js --url http://localhost:8080/   # captures de chaque page comparées aux références (--accepter, --contre <adresse publiée>)
 ```
 
 ## Assistant IA de classement SH (facultatif)

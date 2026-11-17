@@ -3,3 +3,6 @@ node_modules
 
 # configuration secrète du relais
 serveur/relais.env
+
+# captures de référence (tests/captures.js) : propres à chaque machine
+tests/captures/

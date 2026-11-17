@@ -249,7 +249,8 @@ function sousOnglets(onglet) {
   return `<nav class="sous-onglets" aria-label="${esc(s[1])}">${pages.map((id) => { const o = ONGLETS.find((x) => x[0] === id); return `<button type="button" data-tab="${id}" class="${id === onglet ? "actif" : ""}" ${id === onglet ? 'aria-current="page"' : ""}>${esc(LIB_ONGLET_COURT[id] || o[1])}${COMPTES_ONGLETS[id]?.() ? `<span class="compte">${COMPTES_ONGLETS[id]()}</span>` : ""}</button>`; }).join("")}</nav>`;
 }
 
-function afficher(onglet = ongletActif, { garderScroll = false } = {}) {
+function afficher(onglet = ongletActif, options = {}) { return avecMemo(() => afficherPage(onglet, options)); }
+function afficherPage(onglet = ongletActif, { garderScroll = false } = {}) {
   if (typeof modeChauffeurActif === "function") {
     if (modeChauffeurActif()) onglet = "chauffeur"; // l'appareil est verrouillé sur l'écran du chauffeur
     else if (onglet === "chauffeur") onglet = "tableau";
@@ -1123,6 +1124,29 @@ document.addEventListener("keydown", (e) => {
     const b = $("#actions [data-act=ajouter]");
     if (b) { e.preventDefault(); b.click(); }
   }
+});
+/* Clavier : cellules et lignes cliquables (planning, tableaux) atteignables à la tabulation ; Entrée ou Espace = toucher ;
+   dans la grille du planning une seule cellule est dans l'ordre de tabulation (aujourd'hui), les flèches font le reste. */
+const NATIFS_CLAVIER = "button, a[href], input, select, textarea, summary";
+function rendreAtteignables(racine = document) {
+  racine.querySelectorAll("#app [data-act]").forEach((el) => {
+    if (el.matches(NATIFS_CLAVIER) || el.hasAttribute("tabindex")) return;
+    if (!el.matches("td, tr")) el.setAttribute("role", "button");
+    el.tabIndex = el.matches("td.cel") ? -1 : 0;
+  });
+  racine.querySelectorAll("table.planning").forEach((t) => { if (t.querySelector("td.cel[tabindex='0']")) return; const c = t.querySelector("td.cel.auj") || t.querySelector("td.cel"); if (c) c.tabIndex = 0; });
+}
+new MutationObserver(() => rendreAtteignables()).observe(app, { childList: true, subtree: true });
+document.addEventListener("keydown", (e) => {
+  const el = e.target;
+  if (!el?.matches?.("#app [data-act]") || el.matches(NATIFS_CLAVIER) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); return; }
+  if (!el.matches("td.cel") || !e.key.startsWith("Arrow")) return;
+  const tr = el.parentElement, i = [...tr.children].indexOf(el);
+  const cible = e.key === "ArrowRight" || e.key === "ArrowLeft"
+    ? ((e.key === "ArrowRight") !== (document.documentElement.dir === "rtl") ? el.nextElementSibling : el.previousElementSibling)
+    : (e.key === "ArrowDown" ? tr.nextElementSibling : tr.previousElementSibling)?.children[i];
+  if (cible?.matches("td.cel")) { e.preventDefault(); el.tabIndex = -1; cible.tabIndex = 0; cible.focus(); }
 });
 // Rafraîchit les états (repos, service) chaque minute.
 setInterval(() => { if (["tableau", "chauffeurs", "chauffeur"].includes(ongletActif) && !$("#modale").open) rafraichir(); }, 60000);

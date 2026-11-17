@@ -18,8 +18,9 @@ function sensParDetroit(v, sens) {
   if (t) return t.ligne === (sens === "aller" ? "tmed-alg" : "alg-tmed");
   return !(v.traversees || []).length;
 }
-const jourHeureCourt = (iso) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" }).replace(",", "") : ""; };
-const jourCourt = (iso) => { const d = new Date(String(iso).length <= 10 ? iso + "T12:00:00" : iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" }) : ""; };
+const FMT_JOUR_HEURE = new Intl.DateTimeFormat("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" }), FMT_JOUR_COURT = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" });
+const jourHeureCourt = (iso) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? FMT_JOUR_HEURE.format(d).replace(",", "") : ""; };
+const jourCourt = (iso) => { const d = new Date(String(iso).length <= 10 ? iso + "T12:00:00" : iso); return Number.isFinite(d.getTime()) ? FMT_JOUR_COURT.format(d) : ""; };
 const dureeCourte = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m < 60 ? `${m} min` : m < 2880 ? `${Math.floor(m / 60)} h${m % 60 ? " " + String(m % 60).padStart(2, "0") : ""}` : `${Math.round(m / 1440)} j`; };
 
 /**

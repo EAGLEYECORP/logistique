@@ -51,6 +51,7 @@ L'exploitant vit dans : sa boîte e-mail et WhatsApp (commandes, documents), **M
 
 - **Enveloppes empilées** : remplacées en v5.7.0 par un registre de crochets (`app.js`) : `surAction(pages, actes, fn)` (la dernière inscrite d'abord ; `PASSER` laisse la main), `autourAction(pages, actes, fn, { ordre })` (verrou 20, annulation 10, suites d'une action 50-70), `blocPage(page, { position, ordre, rendu })`, `avantSauver(nom, fn, ordre)` / `apresSauver(nom, fn, ordre)` (`sauver({ local, sansNotif })`), `enregistrerBlocVoyage` pour la fiche. Il ne reste plus aucune enveloppe d'`agir` ni de `sauver`. Restent, volontairement, des transformations : `rendu` de Commandes (synthèse des devis), Réglages (profil) et Chauffeur (blocs insérés), `rendu` des notifications sur l'accueil, `afficher` (profils, historique), `carteMission` (plein, quais, coupures), `champsVoyage`, `blocRetour`, `chiffrerCommande`, `actions` de quelques pages.
 - **Tout l'état dans localStorage** : réglé en v5.7.0 — stockage rapide tant que les données tiennent (≈ 4,5 millions de caractères), puis passage automatique dans la base de l'appareil (IndexedDB, magasin `etat`, clé `courant`) sans perte : la base est écrite d'abord, le drapeau `logistique-stockage = base` ensuite, le stockage rapide vidé en dernier ; instantanés quotidiens conservés.
+- **Performance avec un gros historique** : réglée en v5.11.0 (calculs gardés le temps d'un affichage, voyages terminés par pages de 30) ; budget vérifié par un essai permanent.
 - **Poids au démarrage** : environ 1,4 Mo de JavaScript, CSS et HTML non minifiés, chargés d'un coup. Charger à la demande les pages rarement ouvertes.
 - **Fiche du voyage** : refaite en v5.1.0 (frise, prochaine action, quatre onglets, contenu calculé à l'ouverture). Un nouveau bloc s'inscrit avec `enregistrerBlocVoyage({ onglet, ordre, rendu })` au lieu d'envelopper une fonction.
 
@@ -75,11 +76,15 @@ Parcours à étudier, dans cet ordre :
 - **Quatre onglets** : **Suivi** (frise, ports, attentes, carte), **Documents** (client, CMR, preuve, photos, dossier), **Argent** (prix aller + retour, coûts, marge, facture, attente au quai, plein), **Équipe** (chauffeur, camion, papiers, Schengen, contrôles avant départ). Chaque onglet n'est dessiné qu'à l'ouverture.
 - Critères : la fiche ouverte tient sur un écran de téléphone sans défiler jusqu'à la prochaine action ; toutes les fonctions actuelles restent accessibles ; aucun test ne casse.
 
-### Phase C — le mode chauffeur
+### Phase C — le mode chauffeur (livrée en v5.10.0)
 Gros boutons, **glisser pour confirmer** les étapes (pas de clic accidentel dans la poche), indicateur hors ligne permanent, vibration à l'enregistrement, consigne de plein et prochaine coupure en tête, arabe soigné.
 
-### Phase D — contrôles visuels et performance
+### Phase D — contrôles visuels et performance (livrée en v5.11.0)
 Captures de référence de chaque page (téléphone, bureau, clair, sombre) comparées à chaque livraison ; budget de rendu avec 500 voyages ; contraste et clavier.
+- **Captures** : `node tests/captures.js --url <application servie>` — 27 pages × téléphone/bureau × clair/sombre, mode chauffeur compris ; données fixes (`tests/donnees-captures.js`), heure figée, aucun appel extérieur ; références dans `tests/captures/` (non versionné : propres à la machine) ; `--accepter` les remplace ; `--contre https://eagleyecorp.github.io/logistique/` compare à la version publiée sans rien garder. Les écarts (capture et pixels changés en rouge) vont dans `tests/captures/ecarts/`.
+- **Rendu** : `avecMemo(fn)` / `memoCalcul(genre, clé, f)` (`noyau.js`) gardent un calcul le temps d'un affichage seulement (`afficher` l'enveloppe) : `coutVoyage`, `margeVoyage`, `voyagesDuMois`, l'index facture ↔ voyage. Hors affichage, rien n'est gardé (l'état peut changer). Essai permanent : 500 voyages, un calcul de coût par voyage et par affichage, mêmes résultats qu'à froid. Mesure sur navigateur (téléphone, processeur ×4) : toutes les pages sous 0,9 s.
+- **Contraste** : jetons `--primary-plein`, `--ok-plein`, `--danger-plein` pour les fonds pleins sous du texte blanc ; `--primary`, `--ok`, `--danger`… pour les textes. Essai permanent : 4,5:1 au moins pour chaque texte et chaque pastille sur chaque fond, thèmes clair et sombre, et aucun texte blanc sur un jeton de texte.
+- **Clavier** : tout élément `[data-act]` qui n'est pas un bouton devient atteignable (tabulation, Entrée/Espace) ; grille du planning à tabulation unique et flèches.
 
 ## 5. Finir l'application pour le quotidien — ordre conseillé
 

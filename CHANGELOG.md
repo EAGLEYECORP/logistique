@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.5.0 — Coupures planifiées : la prochaine pause, les compteurs du chauffeur, les aires poids lourds
+
+- **Fiche du voyage → Suivi → Conduite et coupures** (voyage en cours dont la balise est suivie) : **prochaine pause de 45 min** (« dans 0 h 40, vers 17:19, ≈ 53 km »), **fin de la conduite du jour** (9 h, ou 10 h quand c'est encore permis cette semaine), arrêt en cours (« encore 15 min pour valoir une pause »), dépassements en rouge.
+- **Compteurs** du chauffeur : depuis la dernière pause (4 h 30), aujourd'hui (9 h / 10 h), **cette semaine (56 h)**, **deux semaines (90 h)**. L'application tient un journal de conduite par chauffeur avec le GPS qu'elle voit ; les jours sans données (repos, ou application fermée) sont signalés : le compteur peut alors être sous-estimé.
+- **Aires poids lourds** vers le lieu estimé de la pause : lien de carte, ou liste OpenStreetMap (places poids lourds, gratuit ou payant, gardé, toilettes, douches) avec « Y aller ».
+- **Alerte au chauffeur** 30 minutes avant la pause et avant la fin de sa journée (réglable), sur son canal habituel (ntfy ou WhatsApp par le relais), avec le lien des aires ; une seule fois par pause ; tant que l'application est ouverte (au bureau). « Prévenir le chauffeur » l'envoie tout de suite. Réglages → Général → Coupures et alertes au chauffeur.
+- **Mode chauffeur** : la prochaine pause et la fin de journée sur la mission.
+- Correction : une balise à l'arrêt qui n'envoie sa position que toutes les 20 minutes ne faisait jamais « pause » (les trous entre deux positions ne s'additionnaient pas) ; l'alerte « 4 h 30 sans pause » pouvait se déclencher à tort.
+- Estimation d'après le GPS et le règlement CE 561/2006 simplifié : le tachygraphe fait foi.
+
 ## 5.4.0 — Itinéraire poids lourd : kilomètres réels par pays, liens Google Maps
 
 - **Fiche du voyage → Suivi → Itinéraire poids lourd** : le trajet découpé en tronçons routiers (Agadir → Tanger Med, Algeciras → Perpignan ; la traversée du détroit à part), chacun avec son **lien Google Maps** pour le chauffeur ou le bureau.

@@ -71,7 +71,7 @@ const PAYS = ["Maroc", "Espagne", "France", "Portugal", "Italie", "Belgique", "P
 function etatVide() {
   return {
     camions: [], pleins: [], interventions: [], chauffeurs: [], trajets: [], dossiers: [], codes: [],
-    clients: [], commandes: [], demandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [], depensesAttente: [], attentesPort: [], routageJalons: [], notificationsApp: [], notifsEtat: { annulees: {}, reports: {} },
+    clients: [], commandes: [], demandes: [], factures: [], voyages: [], autorisations: [], traces: [], zones: [], gares: [], releves: [], chargesGenerales: [], echeances: [], depensesAttente: [], attentesPort: [], routageJalons: [], notificationsApp: [], conduiteJournal: {}, notifsCoupure: {}, notifsEtat: { annulees: {}, reports: {} },
     params: { ...PARAMS_DEFAUT }, meta: { version: VERSION_SCHEMA }, entreprise: {},
   };
 }

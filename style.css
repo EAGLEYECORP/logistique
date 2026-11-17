@@ -1078,3 +1078,13 @@ pre.bloc-code { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; backg
 .vignette.fichier span { font-size: .72rem; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .trav.lien-transit { border-style: dashed; }
 .itineraire-resume { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 10px; } .itineraire-resume svg.i { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--ok); } .itineraire-resume strong { color: var(--text); }
+
+/* ============================================================
+   Coupures planifiées (v5.5)
+   ============================================================ */
+.compteurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 18px; margin: 4px 0 6px; }
+.compteur .ligne { display: flex; justify-content: space-between; gap: 8px; font-size: .86rem; font-variant-numeric: tabular-nums; }
+.compteur .ligne span { color: var(--text-2); } .compteur .progress { margin: 6px 0 2px; }
+.trav.coupures.warn { border-color: var(--warn); background: var(--warn-soft); } .trav.coupures.danger { border-color: var(--danger); background: var(--danger-soft); }
+.chf-coupure.danger { background: var(--danger-soft); }
+.compteur .ligne strong { white-space: nowrap; }

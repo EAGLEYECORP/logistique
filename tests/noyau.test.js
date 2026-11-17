@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js", "liens_ui.js", "itineraire_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js", "liens_ui.js", "itineraire_ui.js", "coupures_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2784,6 +2784,38 @@ test("itinéraire : tronçons routiers (détroit à part, sens import, même riv
   N.S.commandes[0].paysDest = "France"; const p = N.trajetParPays(v); assert.deepStrictEqual([p.kmMA, p.kmES, p.kmFR, p.source, p.paysDest], [812, 984, 28, "itineraire", "France"], "la consigne de plein suit les km réels");
   const c = { origine: "Agadir", destination: "Perpignan", paysOrigine: "Maroc", paysDest: "France" }; assert.ok(N.kmEstimes(c).km > 1500 && !N.kmEstimes(c).source, "sans itinéraire : estimation");
   c.itineraire = it; assert.deepStrictEqual([N.kmEstimes(c).km, N.kmEstimes(c).source], [1824, "itineraire"]);
+});
+
+/* ---------- coupures planifiées (coupures.js) ---------- */
+// points GPS simulés : [t, lat, lon, v] toutes les 5 minutes, roulage à 80 km/h ou arrêt
+const roulage = (debut, minutes, v = 80, lat0 = 35, pas = 0.005) => Array.from({ length: Math.floor(minutes / 5) + 1 }, (_, i) => [debut + i * 300, lat0 + i * pas, -5, v]);
+test("coupures : prochaine pause (4 h 30), fin de journée (9 h, 10 h si possible), arrêt en cours, dépassement, lieu estimé", () => {
+  const t0 = Date.parse("2026-11-17T05:00:00") / 1000;
+  let pts = roulage(t0, 180), c = N.prochainesCoupures(pts, t0 + 180 * 60, { vitesseKmH: 80 });
+  assert.ok(Math.abs(c.serieH - 3) < 0.1, c.serieH); assert.strictEqual(c.pause.dansMin, 90); assert.strictEqual(c.pause.km, 120); assert.strictEqual(c.finJour.dansMin, 360); assert.strictEqual(c.finJour.limiteH, 9); assert.strictEqual(c.enArret, false);
+  pts = [...pts, [t0 + 200 * 60, 35.9, -5, 0], [t0 + 210 * 60, 35.9, -5, 0]]; c = N.prochainesCoupures(pts, t0 + 210 * 60, { vitesseKmH: 80 }); assert.ok(c.enArret && c.arretMin >= 20 && c.arretMin < 45, `${c.arretMin}`);
+  const apresPause = roulage(t0 + 240 * 60, 60, 80, 35.9); c = N.prochainesCoupures([...pts, [t0 + 239 * 60, 35.9, -5, 0], ...apresPause], t0 + 300 * 60, { vitesseKmH: 80 });
+  assert.ok(c.serieH < 1.1, `pause de 45 min passée : la série repart (${c.serieH})`); assert.ok(c.jourH > 3.9, `la journée continue (${c.jourH})`);
+  c = N.prochainesCoupures(roulage(t0, 300), t0 + 300 * 60, { vitesseKmH: 80 }); assert.strictEqual(c.pause.depasse, true); assert.strictEqual(c.pause.dansMin, 0);
+  const long = [...roulage(t0, 270), ...roulage(t0 + 320 * 60, 270, 80, 36.5), ...roulage(t0 + 640 * 60, 60, 80, 37.9)]; // 9 h 30 de conduite dans la journée
+  assert.strictEqual(N.prochainesCoupures(long, t0 + 700 * 60, { etendusSemaine: 0, vitesseKmH: 80 }).finJour.limiteH, 10, "au-delà de 9 h : 10 h possibles");
+  assert.strictEqual(N.prochainesCoupures(long, t0 + 700 * 60, { etendusSemaine: 2, vitesseKmH: 80 }).finJour.depasse, true, "déjà deux journées de 10 h cette semaine");
+  const p = N.pointEstime([36.14, -5.45], [42.69, 2.89], 120); assert.ok(p[0] > 36.14 && p[0] < 37.2 && p[1] > -5.45, JSON.stringify(p)); assert.deepStrictEqual([...N.pointEstime([36, -5], [36.5, -4.5], 500)], [36.5, -4.5]);
+  assert.strictEqual(N.lienAiresPL([36.7, -4.4]), "https://www.google.com/maps/search/aire+poids+lourds/@36.7,-4.4,11z");
+});
+test("coupures : journal par jour (jamais diminué, 21 jours gardés), compteurs de la semaine et des deux semaines, jours sans données ; aires OpenStreetMap ; message au chauffeur", () => {
+  const t = (d, h) => Date.parse(`${d}T${h}:00`) / 1000;
+  let j = N.noterConduite({}, roulage(t("2026-11-16", "06:00"), 360), t("2026-11-16", "20:00")); assert.ok(Math.abs(j["2026-11-16"] - 6) < 0.1, JSON.stringify(j));
+  j = N.noterConduite({ ...j, "2026-11-16": 7.5, "2026-10-01": 5 }, roulage(t("2026-11-16", "06:00"), 60), t("2026-11-17", "10:00")); assert.strictEqual(j["2026-11-16"], 7.5, "jamais diminué"); assert.ok(!("2026-10-01" in j), "plus de 21 jours : oublié");
+  j = { "2026-11-09": 9.5, "2026-11-10": 8, "2026-11-13": 9, "2026-11-16": 10, "2026-11-17": 4 };
+  const s = N.compteursSemaine(j, "2026-11-18"); // mercredi
+  assert.deepStrictEqual([s.semaineH, s.deuxSemainesH, s.joursEtendus, s.resteSemaineH, s.joursSansDonnees], [14, 40.5, 1, 42, 0]);
+  assert.strictEqual(N.compteursSemaine({ "2026-11-16": 9 }, "2026-11-19").joursSansDonnees, 2, "mardi et mercredi sans conduite vue");
+  const aires = N.lireAiresPL({ elements: [{ type: "node", lat: 36.2, lon: -5.4, tags: { amenity: "parking", hgv: "designated", name: "Parking PL Los Barrios", fee: "yes", "capacity:hgv": "80", supervised: "yes" } }, { type: "way", center: { lat: 36.6, lon: -5.0 }, tags: { highway: "services", name: "Área de servicio", toilets: "yes", shower: "yes" } }, { type: "node", lat: 36.15, lon: -5.44, tags: { highway: "rest_area" } }, { type: "node", tags: {} }] }, [36.14, -5.45]);
+  assert.deepStrictEqual([...aires.map((a) => a.nom)], ["Parking PL Los Barrios", "Área de servicio", "Aire de repos"], "poids lourds d'abord, puis par distance");
+  assert.deepStrictEqual([aires[0].places, aires[0].payant, aires[0].gardee, aires[1].douches], [80, true, true, true]); assert.ok(N.requeteAiresPL([36.14, -5.45]).includes('(around:25000,36.14,-5.45)'));
+  const m = N.messageCoupure("pause", 30, t("2026-11-17", "15:40"), "fr", "https://maps/x"); assert.ok(/^Pause de 45 min à prévoir dans 30 min \(vers 15:40\)\. Aires poids lourds : https:\/\/maps\/x$/.test(m), m);
+  assert.ok(N.messageCoupure("finJour", 20, t("2026-11-17", "18:00"), "ar").includes("نهاية السياقة"));
 });
 
 (async () => {

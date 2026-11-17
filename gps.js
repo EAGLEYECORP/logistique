@@ -506,7 +506,7 @@ function conduiteCourante(points, maintenant = null) {
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1], b = points[i], dt = b[0] - a[0];
     const v = b[3] ?? (dt > 0 ? (gpsDistance(a, b) / dt) * 3.6 : 0);
-    if (dt > 15 * 60) { arret = dt; if (dt >= PAUSE_REGLEMENTAIRE_S) serie = 0; continue; }
+    if (dt > 15 * 60) { arret += dt; if (arret >= PAUSE_REGLEMENTAIRE_S) serie = 0; continue; } // balise à l'arrêt qui n'émet que toutes les 20 min : les trous s'additionnent
     if (v >= SEUIL_MARCHE_KMH) { serie += dt; arret = 0; }
     else { arret += dt; if (arret >= PAUSE_REGLEMENTAIRE_S) serie = 0; }
   }

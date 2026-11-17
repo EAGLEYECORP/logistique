@@ -68,11 +68,12 @@ function blocAttentesVoyage(v) {
   if (!cmds.length) return "";
   const lignes = cmds.map(([sens, c]) => {
     const r = resumeAttenteCommande(c);
-    const detail = r ? r.l.map((x) => `${x.lib} : ${x.a.enCours ? `sur place depuis ${hmQuai(x.a.arrivee)}` : dureeQuai(x.a.minutes)}${x.a.auDelaMin ? ` (${dureeQuai(x.a.auDelaMin)} au-delà)` : ""}${x.a.facture ? " · facturé" : ""}`).join(" · ") : "Arrivée et départ des quais non notés (le chauffeur les note, ou corrigez ici).";
+    const detail = r ? r.l.map((x) => `${x.lib} : ${x.a.enCours ? `sur place depuis ${hmQuai(x.a.arrivee)}` : dureeQuai(x.a.minutes)}${x.a.auDelaMin ? ` (${dureeQuai(x.a.auDelaMin)} au-delà)` : ""}${x.a.facture ? " · facturé" : ""}${c.quais?.[x.q]?.sourceArrivee === "gps" || c.quais?.[x.q]?.sourceDepart === "gps" ? " · GPS" : ""}`).join(" · ") : "Arrivée et départ des quais non notés (le chauffeur les note, ou corrigez ici).";
     const action = r?.facturable ? (r.dejaFacturee ? btn("attente-facturer", `Facturer ${fmtDevise(r.montant, r.k.devise)}`, { id: c.id, icone: "receipt", cls: "btn sm" }) : `<span class="sub">${fmtDevise(r.montant, r.k.devise)} : ajouté à la facture du ${c.id === v.commandeId ? "voyage" : "retour"}</span>`) : r?.auDela && !r.k.tarif ? `<span class="sub">tarif à fixer</span>` : "";
     return `<div class="trav"><div><strong>${sens} · ${esc(c.ref)} · ${esc(nomClient(c.clientId))}</strong><span class="sub">${detail}</span></div><div class="r">${action}${btn("attente", "Noter", { id: c.id, cls: "btn ghost sm", icone: "clock" })}</div></div>`;
   });
-  return `<div class="section-title">Attente aux quais</div>${lignes.join("")}`;
+  const sansSite = cmds.some(([, c]) => QUAIS.some(([q]) => !quaiDe(c, q)?.depart && typeof siteQuai === "function" && !siteQuai(c, q, v)));
+  return `<div class="section-title">Attente aux quais</div>${lignes.join("")}${sansSite ? `<p class="hint">Le GPS note seul l'arrivée et le départ d'un quai dont il connaît l'endroit : il le retient la première fois que l'arrivée est notée (par le chauffeur ou ici) pendant que le camion est sur place, pour ce client et cette ville.</p>` : ""}`;
 }
 if (typeof enregistrerBlocVoyage === "function") enregistrerBlocVoyage({ onglet: ongletArgentOuSuivi, ordre: 45, rendu: blocAttentesVoyage });
 surAction(["commandes", "voyages"], ["attente", "attente-facturer"], async (act, id) => { const c = parId(S.commandes, id); if (!c) return; const l = typeof voyageDeCommande === "function" && voyageDeCommande(c); if (l) voyagesOuverts.add(l.v.id); return act === "attente" ? corrigerQuais(c) : facturerAttente(c); });
@@ -86,3 +87,30 @@ if (VUES.factures) {
       <p style="margin:0">${dureeQuai(s.auDelaMin)} au-delà des franchises sur ${s.quais} quai(s)${s.factureMad ? ` · ${fmt(s.factureMad)} MAD déjà facturés` : ""}${s.sansTarifMin ? ` · <strong>${dureeQuai(s.sansTarifMin)} sans tarif</strong> : fixez un tarif d'attente sur la fiche des clients concernés` : ""}.</p></div>` + html;
   } });
 }
+
+/* ---------- arrivée et départ des quais par le GPS (quais_gps.js) ---------- */
+/** Position GPS du camion à un instant (à 10 minutes près) s'il était arrêté : [lat, lon] ou null. */
+function positionAuMoment(points, t) {
+  const proches = (points || []).filter((p) => Math.abs(p[0] - t) <= 600); if (!proches.length) return null;
+  const p = proches.sort((a, b) => Math.abs(a[0] - t) - Math.abs(b[0] - t))[0];
+  return proches.every((x) => distQuaiM([x[1], x[2]], [p[1], p[2]]) <= 200) ? [p[1], p[2]] : null;
+}
+/** Toutes les 2 minutes : sites appris (arrivée notée à la main pendant un arrêt) puis arrivées et départs posés par le GPS. */
+function surveillerQuais() {
+  if (typeof histDuVoyage !== "function") return;
+  let change = false; const messages = [];
+  for (const v of S.voyages.filter((x) => x.statut === "en_cours")) {
+    const h = histDuVoyage(v); if (!h || h.length < 2) continue;
+    for (const c of [commandeAller(v), commandeRetour(v)].filter(Boolean)) for (const [q] of QUAIS) {
+      const x = quaiDe(c, q);
+      if (x?.arrivee && x.sourceArrivee !== "gps" && !siteQuai(c, q, v)) { const pos = positionAuMoment(h, Date.parse(x.arrivee) / 1000); if (pos && apprendreSiteQuai(c, q, pos)) { change = true; messages.push(`${nomClient(c.clientId)} : emplacement du quai de ${q} retenu`); } }
+      const debut = Date.parse(`${q === "chargement" ? c.dateChargement || v.dateDepart : v.dateDepart}T00:00:00Z`) / 1000 - 86400;
+      const effets = appliquerQuaiGps(c, q, h, { v, depuis: Number.isFinite(debut) ? debut : 0 });
+      if (effets.length) { change = true; messages.push(`${v.ref} · ${c.ref} : ${effets.join(", ")} (GPS)`); }
+    }
+  }
+  if (!change) return;
+  sauver(); for (const m of messages) { toast(m, "ok"); if (typeof ajouterFil === "function") ajouterFil(m); }
+  if (["voyages", "commandes"].includes(ongletActif) && !document.querySelector("dialog[open]")) rafraichir();
+}
+function quaisDemarrer() { setInterval(() => { try { surveillerQuais(); } catch (e) { console.warn("Quais (GPS) :", e); } }, 2 * 60000); setTimeout(() => { try { surveillerQuais(); } catch { /* réessayé */ } }, 9000); }

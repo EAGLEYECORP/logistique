@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.9.0 — Arrivée et départ des quais notés par le GPS
+
+- **L'attente aux quais se mesure seule** pour les camions suivis : quand le camion entre sur le site de chargement ou de livraison (300 m), l'arrivée est notée ; quand il le quitte (au-delà de 400 m, confirmé par deux positions), le départ aussi. L'attente au-delà de la franchise du client part sur la facture comme avant — sans que personne n'ait à y penser.
+- **Le site s'apprend** : la première fois que l'arrivée est notée (par le chauffeur, « Arrivé au quai », ou au bureau) pendant que le camion est arrêté sur place, l'endroit est retenu pour ce client et cette ville ; les fois suivantes, tout est automatique. Plusieurs entrepôts d'un même client sont retenus séparément. La livraison utilise aussi les coordonnées précises de la destination du voyage quand elles sont saisies.
+- **Jamais à la place d'une heure notée à la main** : le GPS ne pose que ce qui manque (par exemple le départ après une arrivée notée par le chauffeur). Les heures posées par le GPS portent « GPS » sur la fiche du voyage ; un message le dit (« départ au chargement (GPS) »).
+- Vérifié tant que l'application est ouverte (au bureau par exemple) : contrôle toutes les 2 minutes.
+
 ## 5.8.0 — La facture en vrai PDF
 
 - **Bouton « PDF »** sur chaque facture (page Factures et fiche du voyage → Argent) : un vrai fichier PDF, prêt à archiver ou à transmettre, sans passer par l'impression du navigateur.

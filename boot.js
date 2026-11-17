@@ -127,7 +127,8 @@ function demarrageModules() {
   if (typeof boiteDemarrer === "function") boiteDemarrer(); // boîte des demandes : message partagé, relève par le relais
   if (typeof itineraireDemarrer === "function") itineraireDemarrer(); // service d'itinéraire poids lourd du relais
   if (typeof liensDemarrer === "function") liensDemarrer();
-  if (typeof coupuresDemarrer === "function") coupuresDemarrer(); // coupures : journal de conduite, alertes au chauffeur // liens de dépôt et liens transitaire : fichiers et étapes reçus
+  if (typeof coupuresDemarrer === "function") coupuresDemarrer();
+  if (typeof quaisDemarrer === "function") quaisDemarrer(); // arrivée et départ des quais par le GPS // coupures : journal de conduite, alertes au chauffeur // liens de dépôt et liens transitaire : fichiers et étapes reçus
 }
 
 function retirerSplash() {

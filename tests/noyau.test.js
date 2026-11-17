@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -2882,6 +2882,33 @@ test("facture en PDF : contenu (numéro, client, lignes, totaux, somme en lettre
   const { spawnSync } = require("child_process"); N.S.clients[0].nom = "Primeurs du Souss";
   const essai = spawnSync("pdftotext", ["-layout", "-", "-"], { input: Buffer.from(N.pdfFacture({ ...f, lignes: f.lignes.slice(0, 2) })) });
   if (!essai.error && essai.status === 0) { const txt = essai.stdout.toString("utf8"); assert.ok(/FAC-2026-0112/.test(txt) && /Échéance : 17\/12\/2026/.test(txt) && /Agadir – Lyon/.test(txt) && /7 200,00 €/.test(txt), txt.slice(0, 400)); }
+});
+
+/* ---------- arrivée et départ des quais par le GPS (quais_gps.js) ---------- */
+// positions toutes les 5 min : approche, 2 h 40 sur le site (Perpignan, Saint-Charles), puis départ
+const SITE_PERP = [42.6750, 2.8650];
+const trajetQuai = (t0) => [...Array.from({ length: 6 }, (_, i) => [t0 + i * 300, 42.60 + i * 0.012, 2.80 + i * 0.011, 70]), ...Array.from({ length: 33 }, (_, i) => [t0 + 1800 + i * 300, SITE_PERP[0] + 0.0004, SITE_PERP[1] - 0.0003, 0]), ...Array.from({ length: 4 }, (_, i) => [t0 + 1800 + 33 * 300 + i * 300, 42.69 + i * 0.01, 2.88 + i * 0.01, 60])];
+test("quais par le GPS : site (voyage, client appris), passage sur le site, arrivée et départ posés sans écraser une heure notée à la main", () => {
+  etatFiche(); const v = N.S.voyages[0], c = N.S.commandes[0], t0 = Date.parse("2026-11-19T07:00:00Z") / 1000;
+  assert.strictEqual(N.siteQuai(c, "livraison", v), null, "aucun endroit connu"); assert.deepStrictEqual(N.appliquerQuaiGps(c, "livraison", trajetQuai(t0), { v }).length, 0);
+  v.destLat = SITE_PERP[0]; v.destLon = SITE_PERP[1]; assert.strictEqual(N.siteQuai(c, "livraison", v).source, "voyage");
+  const p = N.passageSite(trajetQuai(t0), N.siteQuai(c, "livraison", v)); assert.strictEqual(p.arrivee, t0 + 1800); assert.strictEqual(p.depart, t0 + 1800 + 33 * 300, "la première position hors du site, confirmée par la suivante");
+  const e = N.appliquerQuaiGps(c, "livraison", trajetQuai(t0), { v }); assert.deepStrictEqual([...e], ["arrivée à la livraison", "départ à la livraison"]);
+  assert.deepStrictEqual([c.quais.livraison.arrivee, c.quais.livraison.sourceArrivee, c.quais.livraison.sourceDepart], ["2026-11-19T07:30:00.000Z", "gps", "gps"]);
+  assert.strictEqual(N.attenteQuai(c, "livraison").minutes, 165); assert.strictEqual(N.appliquerQuaiGps(c, "livraison", trajetQuai(t0), { v }).length, 0, "déjà fait : rien de plus");
+  // arrivée notée à la main : gardée ; le GPS ajoute le départ
+  c.quais = { livraison: { arrivee: "2026-11-19T07:20:00.000Z" } };
+  assert.deepStrictEqual([...N.appliquerQuaiGps(c, "livraison", trajetQuai(t0), { v })], ["départ à la livraison"]); assert.strictEqual(c.quais.livraison.arrivee, "2026-11-19T07:20:00.000Z"); assert.ok(!c.quais.livraison.sourceArrivee);
+});
+test("quais par le GPS : site appris pour le client et la ville (moyenne des passages), position d'arrêt récente", () => {
+  etatFiche(); const c = N.S.commandes[0], v = N.S.voyages[0], cl = N.S.clients[0];
+  const s1 = N.apprendreSiteQuai(c, "chargement", [30.4201, -9.5502]); assert.deepStrictEqual([s1.ville, s1.n], ["Agadir", 1]);
+  const s2 = N.apprendreSiteQuai(c, "chargement", [30.4203, -9.5504]); assert.strictEqual(cl.sites.length, 1, "même endroit à moins de 600 m : un seul site"); assert.strictEqual(s2.n, 2); assert.strictEqual(s2.lat, 30.4202);
+  N.apprendreSiteQuai(c, "chargement", [30.50, -9.60]); assert.strictEqual(cl.sites.length, 2, "un autre entrepôt du client");
+  assert.strictEqual(N.siteQuai(c, "chargement", v).source, "client"); assert.strictEqual(N.siteQuai(c, "chargement", v).lat, 30.4202, "le site le plus fréquenté");
+  assert.strictEqual(N.siteQuai({ ...c, origine: "Casablanca" }, "chargement", v), null, "pas pour une autre ville");
+  const t = 1800000000; assert.deepStrictEqual([...N.positionArret([[t - 900, 30.42, -9.55, 0], [t - 300, 30.4201, -9.5501, 0], [t - 60, 30.4201, -9.5502, 1]], t)], [30.4201, -9.5502]);
+  assert.strictEqual(N.positionArret([[t - 300, 30.40, -9.55, 60], [t - 60, 30.42, -9.55, 65]], t), null, "en roulage"); assert.strictEqual(N.positionArret([[t - 3600, 30.42, -9.55, 0]], t), null, "trop ancien");
 });
 
 /* ---------- garde-fou : deux fichiers de la page ne déclarent jamais le même nom global (sinon la page s'arrête au second) ---------- */

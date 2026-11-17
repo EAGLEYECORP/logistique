@@ -92,7 +92,7 @@ Chaque élément : logique pure testée, interface, passage réel sur téléphon
 5. (livré en v5.6.0 : `creneaux.js`, `creneaux_ui.js`) **Meilleur créneau au port** d'après l'historique des attentes, au planning et au devis.
 6. **Refonte de la fiche du voyage** (phase B) — à mener en parallèle dès le début : c'est elle que l'exploitant ouvre cinquante fois par jour.
 7. (livré en v5.7.0) **Registre de crochets** à la place des enveloppes, puis **état dans IndexedDB**.
-8. (facture en PDF livrée en v5.8.0 : `pdf.js`, `facture_pdf.js` ; la preuve de livraison est encore jointe en page web) **Facture en PDF**, arrivée au quai par géorepérage du client, mode chauffeur (phase C).
+8. (facture en PDF livrée en v5.8.0 : `pdf.js`, `facture_pdf.js` ; la preuve de livraison est encore jointe en page web ; arrivée au quai par le GPS livrée en v5.9.0 : `quais_gps.js`) **Facture en PDF**, arrivée au quai par géorepérage du client, mode chauffeur (phase C).
 
 ## 6. Texte à donner au nouveau modèle
 

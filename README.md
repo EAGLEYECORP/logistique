@@ -168,6 +168,7 @@ Automatique et sans action de votre part.
 | `aller_retour.js`, `aller_retour_ui.js` | Un dossier par voyage : commande → voyage, retour chargé (seconde commande), suivi unique, recette et rentabilité réparties, facturation sans doublon (testé) |
 | `lecture_commande.js`, `lecture_commande_ui.js` | « Coller un message » : demande reçue par e-mail ou WhatsApp lue sur l'appareil (villes, dates, palettes, poids, température, prix, référence, client), commande pré-remplie (testé) |
 | `documents_commande.js`, `documents_commande_ui.js` | Documents attendus du client par commande (selon le sens et la marchandise), reçus ou manquants, alerte avant chargement, demande au client dans sa langue (testé) |
+| `quais_gps.js` | Arrivée et départ des quais par le GPS : site du client appris d'une arrivée notée sur place, passage dans un rayon de 300 m, rien d'écrasé (testé) |
 | `quais.js`, `quais_ui.js` | Attente aux quais de chargement et de livraison : arrivée notée par le chauffeur, franchise et tarif du client, lignes de facture par demi-heure entamée (testé) |
 | `fret_retour.js`, `fret_retour_ui.js` | Recherche du fret de retour : voyages sans retour, prix plancher, chargeurs proches classés (distance, historique, dernier contact), message de disponibilité dans leur langue, alerte à J-3 (testé) |
 | `devis.js`, `devis_ui.js` | Prix conseillé (coût de l'aller-retour d'après vos voyages passés ou estimé, chance de retour, marge visée), historique des prix, devis imprimable et envoyé, accepté ou perdu, taux de devis gagnés (testé) |
@@ -201,7 +202,7 @@ Automatique et sans action de votre part.
 | `data.js` | Référentiels modifiables (chapitres SH, listes de documents douaniers) |
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 258 tests (221 application, 37 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 260 tests (223 application, 37 relais) |
 
 ```bash
 npm test      # logique métier, coûts, trésorerie, notifications, droits, relais (comptes, chiffrement, temps réel) — moins de 20 s

@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js", "liens_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -2734,6 +2734,38 @@ test("boîte des demandes : au-delà de 500, les plus anciennes déjà triées s
   N.ajouterDemandes(Array.from({ length: 10 }, (_, i) => ({ id: `n${i}`, texte: `nouveau ${i}`, date: new Date(base + (600 + i) * 3600000).toISOString() })), "email");
   assert.strictEqual(N.S.demandes.length, 500); assert.ok(N.S.demandes.some((d) => d.id === "n9") && N.S.demandes.some((d) => d.id === "t300"), "toutes les demandes à trier restent");
   assert.ok(!N.S.demandes.some((d) => d.id === "t0") && N.S.demandes.some((d) => d.id === "t299"), "les 8 plus anciennes triées sont oubliées");
+});
+
+/* ---------- liens sans compte (liens.js) ---------- */
+test("lien de dépôt : documents attendus dans la langue du client (non requis écartés, reçus marqués), fichiers reçus qui marquent les documents, message", () => {
+  etatFiche(); const c = N.S.commandes[0]; N.S.clients[0].langueNotif = "es"; N.S.entreprise = { nom: "Atlas Fret" };
+  N.noterDocument(c, "colisage", { nonRequis: true }); N.noterDocument(c, "facture", { recu: "2026-11-14T10:00:00.000Z" });
+  const b = N.corpsLienDepot(c, { jours: 21 });
+  assert.deepStrictEqual([b.type, b.langue, b.jours, b.entreprise, b.titre], ["depot", "es", 21, "Atlas Fret", "CMD-1 · Agadir → Perpignan"]);
+  assert.ok(!b.docs.some((d) => d.id === "colisage"), "document non requis : pas demandé"); assert.deepStrictEqual({ ...b.docs.find((d) => d.id === "facture") }, { id: "facture", lib: "Factura comercial", recu: true });
+  const avant = N.etatDocuments(c).recus, nouveaux = N.documentsRecusParLien(c, [{ doc: "eur1", t: Date.parse("2026-11-16T09:00:00Z") }, { doc: "eur1", t: 1 }, { doc: "autre" }, { doc: "facture" }]);
+  assert.deepStrictEqual([...nouveaux], ["Certificat d'origine EUR.1 / EUR-MED"], "un seul nouveau document ; « autre » et un déjà reçu ne changent rien"); assert.strictEqual(N.etatDocuments(c).recus, avant + 1);
+  assert.strictEqual(c.documents.eur1.recu, "2026-11-16T09:00:00.000Z", "reçu à la date d'envoi par le client");
+  const m = N.messageLienDepot(c, "https://relais.example/depot/abc"); assert.ok(m.startsWith("Buenos días") && m.includes("https://relais.example/depot/abc") && m.endsWith("Atlas Fret"));
+  assert.strictEqual(N.lienActif({ id: "x", expire: Date.now() / 1000 + 3 * 86400 }), true); assert.strictEqual(N.lienActif({ id: "x", expire: Date.now() / 1000 + 3600 }), false, "moins d'une journée : on en crée un nouveau"); assert.strictEqual(N.lienActif(null), false);
+});
+test("lien transitaire : étapes des deux sens avec ce qui est fait ; les étapes du transitaire s'appliquent (effets compris) sans écraser une étape notée autrement ; annulation limitée aux siennes", () => {
+  etatFiche(); const v = N.S.voyages[0]; v.statut = "en_cours"; v.remorque = "R-44"; N.S.entreprise = { nom: "Atlas Fret" };
+  N.marquerEtapePort(v, "tme_parc", { date: "2026-11-17T08:00:00.000Z" });
+  const b = N.corpsLienTransit(v); assert.strictEqual(b.titre, "V-1 · 111-A-1 · R-44");
+  const ids = b.etapes.map((e) => e.id); assert.ok(ids.includes("tme_douane") && ids.includes("alg_douane") && ids.some((x) => /^alg/.test(x)) && ids.some((x) => /^tmi|tm_import|tme/.test(x)), ids.join());
+  assert.deepStrictEqual([b.etapes[0].id, b.etapes[0].fait, b.etapes[0].port], ["tme_parc", true, N.PORTS_PASSAGE.tmed_export.lib]); assert.ok(b.etapes.find((e) => e.id === "tme_douane").docs.length > 0);
+  v.lienTransit = { id: "L1", vus: 0 }; N.marquerEtapePort(v, "alg_police", { date: "2026-11-17T15:00:00.000Z", note: "noté à la main" });
+  const evs = [{ n: 1, etape: "tme_douane", date: "2026-11-17T09:30:00.000Z", ref: "DUM 309-1", note: "" }, { n: 2, etape: "alg_police", date: "2026-11-17T15:05:00.000Z" }, { n: 3, etape: "alg_sortie", date: "2026-11-17T17:00:00.000Z", note: "sorti sans inspection" }, { n: 4, etape: "inconnue", date: "x" }];
+  const f = N.appliquerEvenementsTransit(v, evs);
+  assert.deepStrictEqual([...f.map((x) => x.etape)], ["tme_douane", "alg_sortie"], "l'étape notée à la main n'est pas écrasée"); assert.strictEqual(v.lienTransit.vus, 4);
+  assert.deepStrictEqual([v.etapesPort.tme_douane.ref, v.etapesPort.tme_douane.par, v.etapesPort.tme_douane.note], ["DUM 309-1", "transitaire", "Noté par le transitaire"]);
+  assert.strictEqual(v.etapesPort.alg_sortie.note, "Transitaire : sorti sans inspection"); assert.strictEqual(v.sortiesPort.alg_entry, "2026-11-17T17:00:00.000Z", "effets de l'étape : sortie du port enregistrée");
+  assert.strictEqual(v.etapesPort.alg_police.note, "noté à la main");
+  assert.strictEqual(N.appliquerEvenementsTransit(v, evs).length, 0, "déjà lus : rien de nouveau");
+  const g = N.appliquerEvenementsTransit(v, [{ n: 5, etape: "alg_police", annule: true, date: "x" }, { n: 6, etape: "tme_douane", annule: true, date: "x" }]);
+  assert.deepStrictEqual([...g.map((x) => [x.etape, x.annule])], [["tme_douane", true]], "une annulation n'efface que ce que le transitaire avait noté"); assert.ok(!v.etapesPort.tme_douane && v.etapesPort.alg_police);
+  assert.ok(N.messageLienTransit(v, "https://r/transit/x").includes("V-1 (camion 111-A-1, remorque R-44)"));
 });
 
 (async () => {

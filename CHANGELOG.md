@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.3.0 — Liens sans compte : le client dépose ses documents, le transitaire marque les étapes de douane
+
+- **Lien de dépôt pour le client** (fiche du voyage → Documents, pour l'aller et pour le retour) : le client ouvre le lien sur son téléphone, voit la liste des documents attendus **dans sa langue** (français, anglais, espagnol ; arabe au choix sur la page) et les envoie **en photo ou en PDF**, sans compte. Les photos sont réduites sur son téléphone avant l'envoi.
+  - Les fichiers arrivent tout seuls dans les **photos du voyage** (relève toutes les 5 minutes, ou « Vérifier ») et **marquent les documents reçus** ; message « Primeurs du Souss a envoyé 2 documents (CMD-…) : Facture commerciale ». Ils sont ensuite effacés du relais.
+  - **« Demander les documents »** met désormais le lien dans le message envoyé au client (WhatsApp ou e-mail), dans sa langue.
+  - Les PDF sont gardés comme les photos (galerie, export, synchronisation) ; une image que le navigateur ne sait pas afficher (HEIC) est gardée telle quelle, jamais perdue.
+- **Lien transitaire** (fiche du voyage → Suivi) : le transitaire voit les étapes de Tanger Med et d'Algeciras, aller et retour, avec les documents à présenter, et appuie sur « Fait » à chaque étape, avec la référence (DUM, MRN, CHED…) et une note ; « Annuler » s'il s'est trompé. L'étape est **appliquée au voyage** avec ses effets (étape du voyage, sortie du port, traversée, séjour Schengen), le chauffeur et l'équipe sont prévenus comme d'habitude ; une étape notée à la main ou par le GPS n'est jamais écrasée. La page du transitaire suit ce que l'application sait (étapes posées par le GPS). Les noms des étapes restent en français ; l'interface de la page existe en français, espagnol, anglais et arabe.
+- Liens servis par votre relais : **identifiant secret** dans l'adresse, **expiration** (3 semaines pour le dépôt, durée du voyage pour le transitaire), **révocation** en un geste, page invisible des moteurs de recherche, 40 fichiers de 12 Mo au plus par lien ; fichiers et liens chiffrés au repos si le chiffrement est activé, effacés 7 jours après l'expiration.
+
 ## 5.2.0 — Boîte des demandes : les demandes reçues par e-mail et WhatsApp, déjà lues
 
 - **Nouvelle page Commandes → Demandes.** Les e-mails de la boîte de l'entreprise y arrivent seuls : le relais relit la boîte **toutes les 5 minutes, en lecture seule** (rien n'est marqué lu ni déplacé dans votre messagerie), sans service payant ni bibliothèque ajoutée.

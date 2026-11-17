@@ -19,6 +19,8 @@ const { peutSuivre } = require("../comptes.js");
 const { page } = require("./page-client.js");
 const { releverBoite } = require("./imap.js");
 const { lireCourriel } = require("./mime.js");
+const { creerLiens } = require("./liens.js");
+const { page: pageLien } = require("./page-lien.js");
 
 const VERSION = "2.0.0";
 const NOEUD_KMH = 1.852;
@@ -42,7 +44,7 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null, ...(temp !== null ? { temp } : {}) };
 }
 
-function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel, coffre = creerCoffre(null), journalAcces = false, purgePhotosMois = 0, multi = null, marches_ = recupererMarches, imap = null, releve_ = releverBoite } = {}) {
+function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel, coffre = creerCoffre(null), journalAcces = false, purgePhotosMois = 0, multi = null, marches_ = recupererMarches, imap = null, releve_ = releverBoite, liensMaxMo = 1024 } = {}) {
   if (!jetonEcriture || !jetonLecture) throw new Error("JETON_ECRITURE et JETON_LECTURE sont obligatoires.");
   const historique = new Map(); // id -> [positions triées]
   const noms = new Map();
@@ -180,6 +182,8 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
     } finally { tickEnCours = false; }
     return faits;
   }
+  /* ---------- liens sans compte : dépôt des documents par le client, étapes de douane par le transitaire (serveur/liens.js) ---------- */
+  const liens = creerLiens({ dossier, coffre, maxMo: liensMaxMo });
   /* ---------- boîte des demandes : la boîte e-mail de l'entreprise relevée par IMAP (lecture seule), messages gardés pour l'application ---------- */
   let boite = { uidValidite: 0, dernierUid: 0, demandes: [], derniere: 0, erreur: "", releves: 0 }, releveEnCours = null, derniereForcee = 0;
   const fichierBoite = () => path.join(dossier, "boite.json");
@@ -290,6 +294,9 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
         res.writeHead(200, entetes({ "Content-Type": "text/html; charset=utf-8", ...ENTETES_PUBLICS })); return res.end(page(lang));
       }
 
+      // --- liens de dépôt et liens transitaire (identifiant secret dans l'adresse) ---
+      if (await liens.traiterPublic(req, res, p, { json, entetes, entetesPublics: ENTETES_PUBLICS, page: pageLien, corpsOctets, corpsJson: async (r) => JSON.parse(await corps(r, 20000)) })) return;
+
       // --- mode multi-utilisateur : comptes, données par enregistrement, application servie par le relais ---
       if (multi && await multi.traiter(req, res, url, p, ip, entetes, !!jetonLecture && egal(jetonDe(req, url), jetonLecture))) return;
       const jeton = jetonDe(req, url);
@@ -377,6 +384,10 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
             if (dossier) { try { coffre.ecrire(fichierSynchro(), JSON.stringify(synchro)); } catch { /* garde en mémoire */ } }
             return json(res, 200, { ok: true, version: synchro.version });
           }
+        }
+        if (p.startsWith("/api/liens")) {
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          if (await liens.traiterApi(req, res, p, { json, entetes, corpsJson: async (r) => JSON.parse(await corps(r, 200000)) })) return;
         }
         if (p === "/api/demandes" && req.method === "GET") { // ?depuis=<ms> : seulement les messages reçus après
           if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
@@ -477,7 +488,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
       return json(res, 404, { erreur: "Introuvable." });
     } catch (e) { return json(res, 500, { erreur: "Erreur du serveur." }); }
   });
-  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif, purgerPhotos, photos, multi, releverDemandes, boite: () => boite };
+  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif, purgerPhotos, photos, multi, releverDemandes, boite: () => boite, liens };
 }
 
 module.exports = { creer, normaliser, VERSION, creerCoffre, chargerCoffre };
@@ -506,9 +517,10 @@ if (require.main === module) {
   const ntfyHotes = String(e.NTFY_HOTES || "ntfy.sh").split(",").map((x) => x.trim()).filter(Boolean);
   const purgePhotosMois = Number(e.PURGE_PHOTOS_MOIS || 0), estMulti = String(e.MULTI_UTILISATEUR || "").toLowerCase() === "true";
   const multi = estMulti ? creerMulti({ dossier, coffre, version: VERSION, jetonLecture: jetons.jetonLecture, smtp, cookieSecurise: String(e.COOKIE_NON_SECURISE || "").toLowerCase() !== "true", retentionAuditJours: Number(e.RETENTION_AUDIT_JOURS || 730), urlPublique: e.URL_PUBLIQUE || "" }) : null;
-  const { serveur, tick, purgerPhotos, releverDemandes } = creer({ imap, ...jetons, dossier, coffre, purgePhotosMois, multi, journalAcces: String(e.JOURNAL_ACCES || "").toLowerCase() === "true", retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
+  const { serveur, tick, purgerPhotos, releverDemandes, liens: { purger: liensPurger } } = creer({ liensMaxMo: Number(e.LIENS_MAX_MO || 1024), imap, ...jetons, dossier, coffre, purgePhotosMois, multi, journalAcces: String(e.JOURNAL_ACCES || "").toLowerCase() === "true", retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
   setInterval(() => { tick().catch(() => { /* réessayé à la minute suivante */ }); }, 60000); // notifications programmées
   if (imap) { const minutes = Math.max(2, Number(e.IMAP_INTERVALLE_MIN || 5)), relever = () => releverDemandes().then((r) => { if (r.erreur) console.log(`Boîte des demandes : ${r.erreur}`); else if (r.nouvelles) console.log(`Boîte des demandes : ${r.nouvelles} nouveau(x) message(s)`); }); setTimeout(relever, 10000); setInterval(relever, minutes * 60000); }
+  setInterval(() => { try { liensPurger(); } catch { /* ignoré */ } }, 6 * 3600000); // liens expirés depuis 7 jours : effacés avec leurs fichiers
   if (purgePhotosMois > 0) { const purge = () => { const b = purgerPhotos(); if (b && (b.marquees || b.supprimees)) console.log(`Purge des photos : ${b.marquees} marquée(s), ${b.supprimees} supprimée(s)`); }; setTimeout(purge, 60000); setInterval(purge, 86400000); }
   const port = Number(e.PORT || 8787);
   serveur.listen(port, e.HOTE || "0.0.0.0", () => {

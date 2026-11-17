@@ -169,6 +169,14 @@ async function photoAjouter(fichier, cible) {
   return rec;
 }
 
+/** Document reçu d'ailleurs (lien de dépôt) : une image passe par la compression des photos ; un PDF est gardé tel quel, sans miniature. */
+async function documentAjouter(blob, cible, nom = "document", type = blob.type) {
+  if (/^image\//.test(type)) { try { return await photoAjouter(new File([blob], nom, { type }), cible); } catch { /* image que ce navigateur ne sait pas lire (HEIC…) : gardée telle quelle, jamais perdue */ } }
+  const rec = { id: uid(), cible, nom, date: new Date().toISOString(), w: 0, h: 0, taille: blob.size, blob: new Blob([blob], { type: type || "application/octet-stream" }), mini: null };
+  try { await photoEnregistrer(rec); } catch (e) { throw new Error(e?.name === "QuotaExceededError" ? "Espace de stockage plein : exportez vos données puis supprimez des photos." : "Enregistrement du document impossible."); }
+  return rec;
+}
+
 /* ---------- persistance et quota ---------- */
 async function stockagePersistant() { try { return (await navigator.storage?.persisted?.()) || false; } catch { return false; } }
 async function stockageDemanderPersistance() { try { return (await navigator.storage?.persist?.()) || false; } catch { return false; } }

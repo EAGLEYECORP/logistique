@@ -86,7 +86,7 @@ Captures de référence de chaque page (téléphone, bureau, clair, sombre) comp
 Chaque élément : logique pure testée, interface, passage réel sur téléphone, CHANGELOG, version, commit, publication vérifiée.
 
 1. **Boîte des demandes** (livrée en v5.2.0 : `boite.js`, `boite_ui.js`, `serveur/imap.js`, `serveur/mime.js`) : le relais lit la boîte e-mail (IMAP sans dépendance, réglage `IMAP_*` comme `SMTP_*`), lit chaque message avec `lireDemande`, l'application les montre à trier (créer la commande, répondre par un devis, ignorer) ; plus le **partage depuis WhatsApp** vers l'application (manifeste `share_target`).
-2. **Lien de dépôt des documents** pour le client et **lien transitaire** pour les étapes de douane, servis par le relais, sans compte, expirables, comme le lien de suivi.
+2. (livré en v5.3.0 : `liens.js`, `liens_ui.js`, `serveur/liens.js`, `serveur/page-lien.js`) **Lien de dépôt des documents** pour le client et **lien transitaire** pour les étapes de douane, servis par le relais, sans compte, expirables, comme le lien de suivi.
 3. **Itinéraire poids lourd** par le relais (openrouteservice ou équivalent gratuit, conditions vérifiées) : kilomètres et durée par pays réutilisés partout ; liens Mappy et Google Maps par tronçon.
 4. **Coupure planifiée** et alertes au chauffeur : prochaine pause et parkings poids lourds possibles, compteurs jour, semaine, deux semaines.
 5. **Meilleur créneau au port** d'après l'historique des attentes, au planning et au devis.

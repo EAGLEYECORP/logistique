@@ -28,6 +28,8 @@ async function hydraterPhotos() {
   } catch { /* sans gravité : pas de pastilles */ }
 }
 
+/** Photo ou miniature affichable (un PDF reçu par un lien de dépôt n'en est pas une). */
+const estImage = (p) => !!p.mini || /^image\/(jpeg|png|webp|gif)$/.test(p.blob?.type || "image/jpeg");
 /** Ajoute des fichiers image à une cible. Renvoie le nombre de photos enregistrées (les erreurs sont signalées une fois). */
 async function photosAjouterFichiers(fichiers, cible) {
   let n = 0, erreur = "";
@@ -60,12 +62,14 @@ async function ouvrirPhotos(cible, titre) {
     const liste = await photosDe(cible).catch(() => []);
     const zone = $("#galerie");
     if (!zone) return;
-    urls = liste.map((p) => URL.createObjectURL(p.mini || p.blob));
+    const images = liste.filter(estImage), fichiers = liste.filter((p) => !estImage(p));
+    urls = [...images.map((p) => URL.createObjectURL(p.mini || p.blob)), ...fichiers.map((p) => URL.createObjectURL(p.blob))];
     zone.innerHTML = message ? `<p class="hint">${esc(message)}</p>` : liste.length
-      ? liste.map((p, i) => `<button type="button" class="vignette" data-ph="${i}" aria-label="Photo du ${esc(dateHeureFr(p.date))}"><img src="${urls[i]}" alt="" loading="lazy"></button>`).join("")
+      ? images.map((p, i) => `<button type="button" class="vignette" data-ph="${i}" aria-label="Photo du ${esc(dateHeureFr(p.date))}"><img src="${urls[i]}" alt="" loading="lazy"></button>`).join("")
+        + fichiers.map((p, i) => `<a class="vignette fichier" href="${urls[images.length + i]}" target="_blank" rel="noopener" download="${esc(p.nom || "document")}" title="${esc(p.nom || "document")}">${ic("file")}<span>${esc(p.nom || "document")}</span></a>`).join("")
       : vide("camera", "Aucune photo", "Prenez une photo ou choisissez des images : CMR, preuve de livraison, ticket, dommage…");
     zone.dataset.n = liste.length;
-    zone._liste = liste;
+    zone._liste = images; // la visionneuse ne montre que les images
   };
 
   d.onchange = async (e) => {

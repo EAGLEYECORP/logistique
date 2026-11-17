@@ -124,7 +124,7 @@ async function sauvegardeConstruire({ photos = true, mdp = "" } = {}) {
     const index = [];
     for (const p of liste) {
       fichiers.push({ nom: `photos/${p.id}.jpg`, donnees: new Uint8Array(await p.blob.arrayBuffer()) });
-      index.push({ id: p.id, cible: p.cible, nom: p.nom, date: p.date, w: p.w, h: p.h, taille: p.taille });
+      index.push({ id: p.id, cible: p.cible, nom: p.nom, date: p.date, w: p.w, h: p.h, taille: p.taille, type: p.blob.type || "image/jpeg" });
     }
     fichiers.push({ nom: "photos/index.json", donnees: _enc.encode(JSON.stringify(index)) });
     fichiers.push({ nom: "LISEZMOI.txt", donnees: _enc.encode(`Sauvegarde Logistique Fret du ${dateFr(dateISO(Date.now()))}\r\n\r\ndonnees.json : toutes vos données\r\nphotos/ : ${index.length} photo(s)\r\n\r\nPour restaurer : Logistique Fret → Réglages → Importer.\r\n`) });
@@ -169,8 +169,8 @@ async function photosRestaurer(photos) {
   await photosVider();
   let n = 0;
   for (const { meta, octets } of photos) {
-    const blob = new Blob([octets], { type: "image/jpeg" });
-    let mini; try { mini = await fabriquerMini(blob); } catch { continue; }
+    const blob = new Blob([octets], { type: meta.type || "image/jpeg" });
+    let mini = null; if (/^image\//.test(blob.type)) { try { mini = await fabriquerMini(blob); } catch { continue; } }
     await photoEnregistrer({ ...meta, blob, mini, taille: blob.size });
     n++;
   }

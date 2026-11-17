@@ -78,15 +78,15 @@ function controlesDocumentsVoyage(v) {
 
 /* ---------- demande au client ---------- */
 const MODELES_DEMANDE_DOCS = {
-  fr: { salut: "Bonjour", corps: (ref, trajet, date) => `pour votre transport ${trajet}${ref ? ` (réf. ${ref})` : ""}, chargement prévu le ${date}, il nous manque :`, fin: "Merci de nous les envoyer avant le chargement pour éviter toute attente au port.", sign: "Cordialement" },
-  en: { salut: "Hello", corps: (ref, trajet, date) => `for your shipment ${trajet}${ref ? ` (ref. ${ref})` : ""}, loading planned on ${date}, we are still missing:`, fin: "Please send them before loading to avoid any waiting time at the port.", sign: "Best regards" },
-  es: { salut: "Buenos días", corps: (ref, trajet, date) => `para su transporte ${trajet}${ref ? ` (ref. ${ref})` : ""}, con carga prevista el ${date}, nos faltan:`, fin: "Les rogamos que nos los envíen antes de la carga para evitar esperas en el puerto.", sign: "Saludos cordiales" },
+  fr: { lien: "Vous pouvez aussi les envoyer en photo ou en PDF depuis votre téléphone, sans compte :", salut: "Bonjour", corps: (ref, trajet, date) => `pour votre transport ${trajet}${ref ? ` (réf. ${ref})` : ""}, chargement prévu le ${date}, il nous manque :`, fin: "Merci de nous les envoyer avant le chargement pour éviter toute attente au port.", sign: "Cordialement" },
+  en: { lien: "You can also send them as photos or PDF from your phone, no account needed:", salut: "Hello", corps: (ref, trajet, date) => `for your shipment ${trajet}${ref ? ` (ref. ${ref})` : ""}, loading planned on ${date}, we are still missing:`, fin: "Please send them before loading to avoid any waiting time at the port.", sign: "Best regards" },
+  es: { lien: "También puede enviarlos en foto o PDF desde su teléfono, sin cuenta:", salut: "Buenos días", corps: (ref, trajet, date) => `para su transporte ${trajet}${ref ? ` (ref. ${ref})` : ""}, con carga prevista el ${date}, nos faltan:`, fin: "Les rogamos que nos los envíen antes de la carga para evitar esperas en el puerto.", sign: "Saludos cordiales" },
 };
 /** Message de demande des documents manquants : { langue, sujet, texte, manquants }. */
-function demandeDocuments(c) {
+function demandeDocuments(c, { lien = "" } = {}) {
   const cl = parId(S.clients, c.clientId), langue = MODELES_DEMANDE_DOCS[cl?.langueNotif] ? cl.langueNotif : "fr", M = MODELES_DEMANDE_DOCS[langue], e = etatDocuments(c);
   const date = c.dateChargement ? c.dateChargement.split("-").reverse().join("/") : "—", trajet = `${c.origine || "?"} → ${c.destination || "?"}`;
   const lignes = e.manquants.map((x) => `- ${libDoc(x.id, langue)}`).join("\n");
-  const texte = `${M.salut}${cl?.contact ? " " + cl.contact : ""},\n\n${M.corps(c.refClient || c.ref, trajet, date)}\n${lignes}\n\n${M.fin}\n\n${M.sign},\n${S.entreprise?.nom || ""}`.trim();
+  const texte = `${M.salut}${cl?.contact ? " " + cl.contact : ""},\n\n${M.corps(c.refClient || c.ref, trajet, date)}\n${lignes}\n\n${lien ? `${M.lien}\n${lien}\n\n` : ""}${M.fin}\n\n${M.sign},\n${S.entreprise?.nom || ""}`.trim();
   return { langue, sujet: `${c.ref}${c.refClient ? " / " + c.refClient : ""} — ${langue === "en" ? "documents" : langue === "es" ? "documentos" : "documents"} ${trajet}`, texte, manquants: e.manquants };
 }

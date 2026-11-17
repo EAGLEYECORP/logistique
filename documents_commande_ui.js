@@ -34,7 +34,7 @@ async function ouvrirDocuments(c) {
   if (f.demander && apres.manquants.length) await envoyerDemandeDocuments(c);
 }
 async function envoyerDemandeDocuments(c) {
-  const d = demandeDocuments(c), cl = parId(S.clients, c.clientId) || {};
+  const d = demandeDocuments(c, { lien: typeof lienDepotPour === "function" ? await lienDepotPour(c) : "" }), cl = parId(S.clients, c.clientId) || {};
   const r = await modale({ titre: `Demander les documents — ${c.ref}`, valider: "Préparer l'envoi", corps: `<label class="f full">Message (${{ fr: "français", en: "anglais", es: "espagnol" }[d.langue]}, langue du client)<textarea name="texte" rows="10">${esc(d.texte)}</textarea></label>` });
   if (!r) return;
   const texte = String(r.texte || d.texte), tel = typeof telInternational === "function" ? telInternational(cl.tel) : "", liens = [];

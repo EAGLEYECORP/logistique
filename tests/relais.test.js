@@ -3,6 +3,7 @@ const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const crypto = require("crypto");
 const { creer, normaliser } = require("../serveur/relais.js");
 const { creerCoffre, chargerCoffre, estChiffre } = require("../serveur/coffre.js");
 const { planPurge } = require("../serveur/purge-photos.js");
@@ -883,6 +884,60 @@ test("boîte des demandes : le relais relève, écarte nos messages et les doubl
     finally { await s2.arreter(); }
     const s3 = await demarrer(null); try { assert.strictEqual((await s3.appel("/api/demandes/relever", { methode: "POST", jeton: "lit" })).code, 503); assert.strictEqual((await s3.appel("/api/demandes", { jeton: "lit" })).json.boite.active, false); } finally { await s3.arreter(); }
   } finally { await f.fermer(); }
+});
+
+/* ---------- liens sans compte : dépôt des documents, étapes du transitaire ---------- */
+test("lien de dépôt : création par l'application, page publique, envoi d'une photo et d'un PDF, refus (type, taille, document inconnu), récupération à l'identique puis effacement, révocation", async () => {
+  const s = await demarrer(); const pub = (chemin, opts = {}) => fetch(s.base + chemin, opts);
+  try {
+    assert.strictEqual((await s.appel("/api/liens", { methode: "POST", corps: { type: "depot", docs: [{ id: "facture", lib: "Facture" }] } })).code, 401);
+    assert.strictEqual((await s.appel("/api/liens", { methode: "POST", jeton: "lit", corps: { type: "depot", docs: [] } })).code, 400);
+    const c = await s.appel("/api/liens", { methode: "POST", jeton: "lit", corps: { type: "depot", titre: "CMD-2026-0087 · Primeurs du Souss", entreprise: "Atlas Fret", langue: "es", jours: 7, docs: [{ id: "facture", lib: "Factura comercial" }, { id: "phyto", lib: "Certificado fitosanitario", recu: true }] } });
+    assert.strictEqual(c.code, 201); assert.ok(/^\/depot\/[A-Za-z0-9_-]{32}$/.test(c.json.chemin)); const id = c.json.id;
+    const html = await pub(c.json.chemin); assert.strictEqual(html.status, 200); const h = await html.text(); assert.ok(h.includes('lang="es"') && h.includes("Envíe sus documentos")); assert.strictEqual(html.headers.get("x-robots-tag"), "noindex, nofollow");
+    assert.ok((await (await pub(c.json.chemin + "?lang=ar")).text()).includes('dir="rtl"'));
+    const d = await (await pub(c.json.chemin + "/donnees")).json(); assert.deepStrictEqual(d.docs.map((x) => [x.id, x.recu, x.envoyes]), [["facture", false, 0], ["phyto", true, 0]]); assert.strictEqual(d.entreprise, "Atlas Fret"); assert.ok(!("fichiers" in d));
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), crypto.randomBytes(5000)]), pdf = Buffer.from("%PDF-1.4\n%essai\n");
+    const envoi = (doc, corps, type, nom = "f") => pub(`${c.json.chemin}/fichier?doc=${doc}&nom=${encodeURIComponent(nom)}`, { method: "POST", headers: { "content-type": type }, body: corps });
+    assert.strictEqual((await envoi("facture", jpeg, "image/jpeg", "facture 12.jpg")).status, 201); assert.strictEqual((await envoi("autre", pdf, "application/pdf", "colisage.pdf")).status, 201);
+    assert.strictEqual((await envoi("facture", Buffer.from("MZ"), "application/x-msdownload")).status, 415); assert.strictEqual((await envoi("inconnu", pdf, "application/pdf")).status, 400);
+    assert.strictEqual((await envoi("facture", Buffer.alloc(13 * 1024 * 1024), "image/jpeg")).status, 413, "12 Mo au plus");
+    const l = await s.appel(`/api/liens/${id}`, { jeton: "lit" }); assert.deepStrictEqual(l.json.fichiers.map((f) => [f.n, f.doc, f.nom, f.type, f.taille]), [[1, "facture", "facture 12.jpg", "image/jpeg", jpeg.length], [2, "autre", "colisage.pdf", "application/pdf", pdf.length]]);
+    const f1 = await fetch(`${s.base}/api/liens/${id}/fichiers/1`, { headers: { authorization: "Bearer lit" } }); assert.strictEqual(f1.headers.get("content-type"), "image/jpeg"); assert.ok(Buffer.from(await f1.arrayBuffer()).equals(jpeg), "fichier rendu à l'identique");
+    assert.strictEqual((await fetch(`${s.base}/api/liens/${id}/fichiers/1`)).status, 401, "le public ne relit pas les fichiers");
+    assert.strictEqual((await s.appel(`/api/liens/${id}/fichiers/1`, { methode: "DELETE", jeton: "lit" })).code, 200); assert.strictEqual((await s.appel(`/api/liens/${id}`, { jeton: "lit" })).json.fichiers.length, 1, "récupéré par l'application : effacé du relais");
+    assert.strictEqual((await (await pub(c.json.chemin + "/donnees")).json()).envoyes, 2, "le client voit toujours ce qu'il a envoyé");
+    assert.strictEqual((await s.appel(`/api/liens/${id}`, { methode: "PUT", jeton: "lit", corps: { docs: [{ id: "facture", lib: "Factura comercial", recu: true }] } })).code, 200);
+    assert.strictEqual((await (await pub(c.json.chemin + "/donnees")).json()).docs[0].recu, true);
+    assert.strictEqual((await s.appel(`/api/liens/${id}`, { methode: "DELETE", jeton: "lit" })).code, 200); assert.strictEqual((await pub(c.json.chemin)).status, 404); assert.strictEqual((await envoi("facture", jpeg, "image/jpeg")).status, 404);
+    assert.strictEqual((await pub("/depot/court")).status, 404);
+  } finally { await s.arreter(); }
+});
+test("lien transitaire : étapes marquées par le transitaire (référence, note, annulation), lues par l'application, mises à jour par elle ; expiration ; liens gardés au redémarrage et chiffrés au repos", async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), "liens-")), { coffre } = chargerCoffre(dossier, { CHIFFRER_DONNEES: "true" });
+  const s = await demarrer(dossier, { coffre }); const pub = (chemin, opts = {}) => fetch(s.base + chemin, opts);
+  try {
+    const etapes = [{ id: "alg_debarquement", lib: "Débarquement", port: "Algeciras", fait: true, date: "2026-11-17T08:00:00Z" }, { id: "alg_douane", lib: "Douane espagnole", port: "Algeciras", refLib: "MRN", docs: ["T1", "CMR"] }];
+    const c = await s.appel("/api/liens", { methode: "POST", jeton: "lit", corps: { type: "transit", titre: "V-2026-0041 · 111-A-1", entreprise: "Atlas Fret", etapes } }); assert.strictEqual(c.code, 201);
+    const poste = (b) => pub(`${c.json.chemin}/etape`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
+    assert.strictEqual((await poste({ etape: "inexistante" })).status, 400);
+    const r = await poste({ etape: "alg_douane", ref: "26ES00481234567", note: "passage rapide" }); assert.strictEqual(r.status, 200);
+    let d = await (await pub(`${c.json.chemin}/donnees`)).json(); assert.deepStrictEqual([d.etapes[1].fait, d.etapes[1].ref, d.etapes[1].docs], [true, "26ES00481234567", ["T1", "CMR"]]);
+    await poste({ etape: "alg_douane", annuler: true }); d = await (await pub(`${c.json.chemin}/donnees`)).json(); assert.strictEqual(d.etapes[1].fait, false);
+    await poste({ etape: "alg_douane", ref: "26ES00481234567" });
+    const a = await s.appel(`/api/liens/${c.json.id}`, { jeton: "lit" }); assert.deepStrictEqual(a.json.evenements.map((e) => [e.n, e.etape, e.ref, e.annule]), [[1, "alg_douane", "26ES00481234567", false], [2, "alg_douane", "", true], [3, "alg_douane", "26ES00481234567", false]]);
+    assert.strictEqual(a.json.evenements[0].note, "passage rapide");
+    await s.appel(`/api/liens/${c.json.id}`, { methode: "PUT", jeton: "lit", corps: { etapes: [...etapes, { id: "alg_sortie", lib: "Sortie du port", port: "Algeciras", fait: true, date: "2026-11-17T11:00:00Z" }] } });
+    assert.strictEqual((await (await pub(`${c.json.chemin}/donnees`)).json()).etapes.length, 3, "l'application tient la page à jour (étapes posées par le GPS)");
+    const brut = fs.readFileSync(path.join(dossier, "liens.json")); assert.ok(estChiffre(brut) && !brut.toString("latin1").includes("Douane"), "chiffré au repos");
+    await s.arreter();
+    const s2 = await demarrer(dossier, { coffre });
+    try { assert.strictEqual((await fetch(`${s2.base}${c.json.chemin}/donnees`)).status, 200, "gardé au redémarrage");
+      const e = await s2.appel("/api/liens", { methode: "POST", jeton: "lit", corps: { type: "transit", etapes, jours: 1 } }); s2.liens.liens.get(e.json.id).expire = Math.floor(Date.now() / 1000) - 10;
+      assert.strictEqual((await fetch(`${s2.base}${e.json.chemin}`)).status, 410); assert.ok((await (await fetch(`${s2.base}${e.json.chemin}`)).text()).includes("expiré"));
+      s2.liens.liens.get(e.json.id).expire = Math.floor(Date.now() / 1000) - 8 * 86400; assert.strictEqual(s2.liens.purger(), 1, "effacé 7 jours après l'expiration"); }
+    finally { await s2.arreter(); }
+  } finally { if (s.serveur.listening) await s.arreter(); }
 });
 
 (async () => {

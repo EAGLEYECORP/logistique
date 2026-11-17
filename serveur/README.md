@@ -131,6 +131,9 @@ Routes (jeton de lecture) :
 | `POST /api/notifications/document` | E-mail avec pièces jointes `{ a, sujet, texte, pieces: [{ nom, type, base64 }] }` : facture, preuve de livraison, photos du CMR. Types : PDF, HTML, JPEG, PNG ; 8 pièces et 8 Mo au plus ; serveur SMTP requis. |
 | `POST /api/notifications/test` | Essaie chaque canal configuré et dit ce qui est arrivé. |
 | `GET /api/demandes?depuis=<ms>` | Boîte des demandes : messages relevés (expéditeur, sujet, date, texte sans l'historique cité, noms des pièces jointes) reçus après `depuis`, et l'état de la relève. Nos propres messages, les réponses automatiques et les doublons (même Message-ID) sont écartés ; 300 messages gardés. |
+| `POST /api/liens` | Crée un lien sans compte : `{ type: "depot", titre, entreprise, langue, jours, docs: [{ id, lib, recu }] }` (le client dépose ses documents) ou `{ type: "transit", titre, entreprise, jours, etapes: [{ id, lib, port, refLib, detail, docs, fait, date, ref }] }` (le transitaire marque les étapes). Renvoie `{ id, chemin, expire }` ; la page publique est servie à `/depot/<id>` ou `/transit/<id>`. |
+| `GET /api/liens/<id>` · `PUT` · `DELETE` | État (fichiers reçus, étapes notées), mise à jour (documents reçus, étapes connues de l'application, durée), révocation (fichiers effacés). |
+| `GET /api/liens/<id>/fichiers/<n>` · `DELETE` | Fichier déposé par le client (photo ou PDF), puis effacement une fois récupéré par l'application. 40 fichiers de 12 Mo au plus par lien ; `LIENS_MAX_MO` (1024 par défaut) pour l'ensemble. |
 | `POST /api/demandes/relever` | Relève la boîte tout de suite (une fois toutes les 20 secondes au plus). |
 
 Le plan est enregistré dans `donnees/scheduler.json` ; il survit à un redémarrage. Un message en retard de plus de 6 h (relais arrêté) n'est plus envoyé. 300 messages par heure au plus.

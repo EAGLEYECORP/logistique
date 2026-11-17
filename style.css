@@ -1069,3 +1069,11 @@ details.fiche .menu-plus > summary { display: inline-flex; padding: 5px 10px; li
 .card.demande .row { margin-top: 2px; }
 pre.bloc-code { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: .82rem; overflow-x: auto; white-space: pre; }
 @media (max-width: 560px) { .card.demande { padding: 14px 16px; } .card.demande .row .btn { flex: 1 1 auto; justify-content: center; } }
+
+/* ============================================================
+   Liens sans compte (v5.3) : documents reçus en PDF dans la galerie
+   ============================================================ */
+.vignette.fichier { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; text-decoration: none; color: var(--text); background: var(--surface-2); text-align: center; }
+.vignette.fichier svg.i { width: 26px; height: 26px; color: var(--primary); }
+.vignette.fichier span { font-size: .72rem; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.trav.lien-transit { border-style: dashed; }

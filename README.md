@@ -158,6 +158,7 @@ Automatique et sans action de votre part.
 | `planning.js`, `calendrier.js` | Disponibilités, conflits d'affectation, ressources libres, duplication, programme du chauffeur (testé) ; page Planning |
 | `passages.js`, `passages_ui.js` | Événements de passage, suite de chaque étape, alertes, routage des messages (testé) ; page Passages douane |
 | `pdf.js`, `facture_pdf.js` | PDF sans dépendance (texte Helvetica en WinAnsi, traits, rectangles, logo JPEG, plusieurs pages) et facture en PDF pour le téléchargement et l'e-mail (testé, relu par `pdftotext` quand il est installé) |
+| `preuve_pdf.js` | Preuve de livraison en PDF (signature, réserves, position) : téléchargement, partage depuis le téléphone, pièce jointe de la facture |
 | `creneaux.js`, `creneaux_ui.js` | Meilleur créneau au port d'après vos attentes mesurées : grille jour × tranche de 3 heures, conseil par voyage avec l'arrivée estimée, planning et devis (testé) |
 | `chauffeur_ui.js` | Mode chauffeur (phase C) : glisser pour confirmer (étape, quai, fin de service), « Ma route » en tête (pause, plein), bandeau de connexion, vibration |
 | `coupures.js`, `coupures_ui.js` | Coupures planifiées : prochaine pause et fin de journée d'après le GPS, compteurs jour, semaine, deux semaines (journal par chauffeur), aires poids lourds (OpenStreetMap), alerte au chauffeur, mode chauffeur (testé) |
@@ -204,7 +205,7 @@ Automatique et sans action de votre part.
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
 | `serveur/empreintes.js` | Empreinte de chaque fichier préchargé, posée à la publication : une mise à jour ne télécharge que les fichiers qui ont changé |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 263 tests (225 application, 38 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 264 tests (226 application, 38 relais) |
 | `tests/captures.js`, `tests/donnees-captures.js` | Captures de référence de chaque page (téléphone, bureau, clair, sombre) comparées à chaque livraison — outil de développement, demande Playwright |
 
 ```bash

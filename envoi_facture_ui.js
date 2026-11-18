@@ -15,13 +15,21 @@ const tailleLisible = (o) => (o > 1048576 ? `${fmt(o / 1048576, 1)} Mo` : `${fmt
 /** Pièces d'une facture : [{ id, nom, type, blob, taille, libelle }] — facture, preuves de livraison, photos (6 au plus). */
 /** Logo de l'entreprise en JPEG pour le PDF : { octets, largeurPx, hauteurPx } ou null (image PNG convertie sur fond blanc). */
 async function logoPourPdf() {
-  const url = typeof logoSur === "function" ? logoSur(S.entreprise) : ""; if (!url) return null;
+  const url = typeof logoSur === "function" ? logoSur(S.entreprise) : ""; return url ? imageJpegPourPdf(url) : null;
+}
+/** Une image (adresse ou data:) en JPEG sur fond blanc pour le PDF : { octets, largeurPx, hauteurPx } ou null. */
+async function imageJpegPourPdf(url, max = 400) {
   try {
     const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
-    const k = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
     const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
     const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.9)); return b ? { octets: new Uint8Array(await b.arrayBuffer()), largeurPx: c.width, hauteurPx: c.height } : null;
   } catch { return null; }
+}
+/** Preuve de livraison en PDF (Blob), avec le logo et la signature du destinataire. */
+async function blobPreuvePdf(v) {
+  const octets = pdfPreuve(v, { logo: await logoPourPdf(), signature: v.pod?.signature ? await imageJpegPourPdf(v.pod.signature, 600) : null });
+  return octets ? new Blob([octets], { type: "application/pdf" }) : null;
 }
 /** Facture en PDF (Blob). */
 async function blobFacturePdf(f) { return new Blob([pdfFacture(f, { logo: await logoPourPdf() })], { type: "application/pdf" }); }
@@ -30,7 +38,12 @@ async function piecesFacture(f) {
   const r = [], pdf = await blobFacturePdf(f);
   r.push({ id: "facture", nom: `${f.numero}.pdf`, type: "application/pdf", blob: pdf, taille: pdf.size, libelle: `Facture ${f.numero} (PDF)` });
   if (pertesPdf(texteFacturePdf(f)).length) { const fac = new Blob([htmlPieceJointe(f.numero, corpsFacture(f))], { type: "text/html" }); r.push({ id: "facture-html", nom: `${f.numero}.html`, type: "text/html", blob: fac, taille: fac.size, libelle: `Facture ${f.numero} (page web : écritures non latines du client ou des lignes)` }); }
-  for (const v of voyagesFacture(f)) if (v.pod && typeof corpsPreuve === "function") { const b = new Blob([htmlPieceJointe(`Preuve de livraison ${v.ref}`, corpsPreuve(v))], { type: "text/html" }); r.push({ id: `pod:${v.id}`, nom: `Preuve de livraison ${v.ref}.html`, type: "text/html", blob: b, taille: b.size, libelle: `Preuve de livraison ${v.ref} (signature${v.pod.reserves ? ", réserves" : ""})` }); }
+  for (const v of voyagesFacture(f)) {
+    if (!v.pod) continue;
+    const pdf = await blobPreuvePdf(v);
+    if (pdf) r.push({ id: `pod:${v.id}`, nom: `Preuve de livraison ${v.ref}.pdf`, type: "application/pdf", blob: pdf, taille: pdf.size, libelle: `Preuve de livraison ${v.ref} (PDF${v.pod.signature ? ", signée" : ""}${v.pod.reserves ? ", avec réserves" : ""})` });
+    if ((!pdf || pertesPdf(textePreuvePdf(v)).length) && typeof corpsPreuve === "function") { const b = new Blob([htmlPieceJointe(`Preuve de livraison ${v.ref}`, corpsPreuve(v))], { type: "text/html" }); r.push({ id: `pod-html:${v.id}`, nom: `Preuve de livraison ${v.ref}.html`, type: "text/html", blob: b, taille: b.size, libelle: `Preuve de livraison ${v.ref} (page web : écritures non latines)` }); }
+  }
   let photos = [];
   for (const cible of ciblesPhotosFacture(f)) { try { photos.push(...(await photosDe(cible)).map((p) => ({ ...p, cible }))); } catch { /* photos indisponibles */ } }
   photos = photos.sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 6);

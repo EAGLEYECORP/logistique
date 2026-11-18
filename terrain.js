@@ -88,6 +88,16 @@ async function ouvrirPreuve(voyageId) {
   sauver(); toast(`Livraison enregistrée${f.reserves ? " avec réserves" : ""}`); if (typeof partagesSynchroniser === "function") partagesSynchroniser(true); rafraichir();
 }
 function imprimerPreuve(v) { if (v.pod) ouvrirImpression(`Preuve de livraison ${v.ref}`, corpsPreuve(v)); }
+/** Preuve en PDF : téléchargée, ou partagée par le téléphone (WhatsApp, e-mail…) quand il sait partager des fichiers. */
+async function telechargerPreuvePdf(v) { const b = v?.pod && (await blobPreuvePdf(v)); if (b) telecharger(`Preuve de livraison ${v.ref}.pdf`, new Uint8Array(await b.arrayBuffer()), "application/pdf"); }
+const peutPartagerFichiers = () => { try { return !!navigator.canShare?.({ files: [new File(["x"], "x.pdf", { type: "application/pdf" })] }); } catch { return false; } };
+async function partagerPreuve(v) {
+  const b = v?.pod && (await blobPreuvePdf(v)); if (!b) return;
+  const fichier = new File([b], `Preuve de livraison ${v.ref}.pdf`, { type: "application/pdf" }), cl = parId(S.clients, v.clientId);
+  const texte = `Preuve de livraison ${v.ref}${cl?.nom ? ` — ${cl.nom}` : ""} : livré le ${dateHeureFr(v.pod.date)}${v.pod.signataire ? ` à ${v.pod.signataire}` : ""}${v.pod.reserves ? `, avec réserves : ${v.pod.reserves}` : ", sans réserve"}.`;
+  if (peutPartagerFichiers()) { try { await navigator.share({ title: fichier.name, text: texte, files: [fichier] }); return; } catch (e) { if (e?.name === "AbortError") return; } }
+  telecharger(fichier.name, new Uint8Array(await b.arrayBuffer()), "application/pdf"); toast("Preuve enregistrée en PDF : joignez-la à votre message");
+}
 /** Corps HTML de la preuve de livraison (impression, pièce jointe). */
 function corpsPreuve(v) {
   const p = v.pod; if (!p) return "";
@@ -161,7 +171,7 @@ const rendreChauffeurBase = VUES.chauffeur.rendu;
 VUES.chauffeur.rendu = function () {
   const html = rendreChauffeurBase.call(this), ch = chauffeurCourant();
   const voyages = ch ? S.voyages.filter((v) => v.chauffeurId === ch.id && v.statut === "en_cours") : [];
-  const blocs = (voyages.length ? `<div class="section-title">Mon voyage</div>${voyages.map((v) => `<div class="card chf-mission"><div class="chf-route"><span>${esc(v.origine)}</span><span class="fl">⇄</span><span>${esc(v.destination)}</span></div><div class="chf-actions">${btn("preuve", v.pod ? "Preuve enregistrée ✓" : "Preuve de livraison", { id: v.id, icone: "check", cls: "btn lg" })}</div></div>`).join("")}` : "") + (ch ? `<div class="section-title">Position</div>${carteBalise()}` : "");
+  const blocs = (voyages.length ? `<div class="section-title">Mon voyage</div>${voyages.map((v) => `<div class="card chf-mission"><div class="chf-route"><span>${esc(v.origine)}</span><span class="fl">⇄</span><span>${esc(v.destination)}</span></div><div class="chf-actions">${btn("preuve", v.pod ? "Preuve enregistrée" : "Preuve de livraison", { id: v.id, icone: "check", cls: "btn lg" })}${v.pod ? btn("preuve-partager", "Envoyer la preuve (PDF)", { id: v.id, icone: "upload", cls: "btn ghost lg" }) : ""}</div></div>`).join("")}` : "") + (ch ? `<div class="section-title">Position</div>${carteBalise()}` : "");
   const marque = '<div class="row" style="justify-content:center;margin-top:24px">';
   return html.includes(marque) ? html.replace(marque, blocs + marque) : html + blocs;
 };
@@ -169,6 +179,7 @@ surAction("chauffeur", "*", async function (act, id) {
   if (act === "balise-start") return baliseDemarrer();
   if (act === "balise-stop") return baliseArreter();
   if (act === "preuve") return ouvrirPreuve(id);
+  if (act === "preuve-partager") return partagerPreuve(parId(S.voyages, id));
   return PASSER;
 });
 const soumettreChauffeurBase = VUES.chauffeur.soumettre;
@@ -181,5 +192,7 @@ surAction("voyages", "*", async function (act, id, bouton) {
   if (act === "cmr") return ouvrirCMR(String(id).split("|")[0]);
   if (act === "releve-eu") return importerReleveEu(String(id).split("|")[0]);
   if (act === "preuve-imprimer") return imprimerPreuve(parId(S.voyages, String(id).split("|")[0]));
+  if (act === "preuve-pdf") return telechargerPreuvePdf(parId(S.voyages, String(id).split("|")[0]));
+  if (act === "preuve-partager") return partagerPreuve(parId(S.voyages, String(id).split("|")[0]));
   return PASSER;
 });

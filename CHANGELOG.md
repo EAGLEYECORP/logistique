@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.13.0 — La preuve de livraison en vrai PDF, à envoyer depuis le téléphone
+
+- **La preuve de livraison devient un vrai fichier PDF** (A4) : livré le, à qui, où (position relevée par le téléphone), avec ou sans réserves (bandeau vert ou orange), le texte des réserves, la **signature du destinataire**, le client, la marchandise, la commande, le n° de CMR, le chauffeur et le camion ; logo et identifiants de l'entreprise ; et le rappel qu'elle ne remplace pas le CMR papier signé. Une très longue réserve continue sur une deuxième page.
+- **« Envoyer » et « PDF »** à côté de « Imprimer » dans la fiche du voyage (onglet Documents) : « Envoyer » ouvre le partage du téléphone avec le PDF (WhatsApp, e-mail…) ; sur un ordinateur, le PDF est enregistré pour être joint au message.
+- **Le chauffeur peut l'envoyer tout de suite** : « Envoyer la preuve (PDF) » sur son écran, dès que la preuve est signée — au bureau ou au client, sans attendre le retour.
+- **L'e-mail de la facture joint la preuve en PDF** (au lieu d'une page web). Si le nom du destinataire ou les réserves sont écrits en arabe (lettres absentes des polices standard du PDF), la page web est jointe en plus, pour que rien ne soit perdu.
+- Fabriqué sur l'appareil, sans service extérieur, même hors ligne. « Preuve enregistrée » n'affiche plus deux coches.
+
 ## 5.12.0 — Mises à jour légères pour les données mobiles ; hors ligne réparé sur le serveur multi-utilisateur
 
 - **Une nouvelle version ne retélécharge plus toute l'application** : chaque publication pose l'empreinte de chaque fichier, et le téléphone garde de sa copie hors ligne tout ce qui n'a pas changé. Avant, chaque mise à jour rechargeait toute l'application (≈ 730 Ko compressés), même pour une correction d'une ligne ; maintenant seuls les fichiers modifiés partent, plus le service worker et ses trois fichiers de base toujours revérifiés — environ 40 Ko dans l'essai où un seul fichier changeait. La mise à jour vers cette version-ci recharge encore tout une dernière fois. Vérifié sur le site publié : copie hors ligne de 108 fichiers, tous reconnus par leur empreinte. Pour les chauffeurs en données mobiles, au Maroc comme en roaming en Europe, c'est autant de forfait gardé.

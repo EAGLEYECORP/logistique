@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -2882,6 +2882,29 @@ test("facture en PDF : contenu (numéro, client, lignes, totaux, somme en lettre
   const { spawnSync } = require("child_process"); N.S.clients[0].nom = "Primeurs du Souss";
   const essai = spawnSync("pdftotext", ["-layout", "-", "-"], { input: Buffer.from(N.pdfFacture({ ...f, lignes: f.lignes.slice(0, 2) })) });
   if (!essai.error && essai.status === 0) { const txt = essai.stdout.toString("utf8"); assert.ok(/FAC-2026-0112/.test(txt) && /Échéance : 17\/12\/2026/.test(txt) && /Agadir – Lyon/.test(txt) && /7 200,00 €/.test(txt), txt.slice(0, 400)); }
+});
+
+test("preuve de livraison en PDF : livré le / à qui / où, réserves, signature, rappel du CMR, pied ; longue réserve sur deux pages ; écritures non latines signalées", () => {
+  N.S.entreprise = { nom: "Atlas Fret SARL", ville: "Agadir", ice: "001234567000089", rc: "12345" };
+  N.S.clients = [{ id: "k1", nom: "Roussillon Emballages" }]; N.S.camions = [{ id: "c1", immat: "111-A-1" }]; N.S.chauffeurs = [{ id: "h1", nom: "Youssef El Amrani" }];
+  N.S.commandes = [{ id: "o1", ref: "CMD-2026-0087", marchandise: "Tomates cerises" }];
+  const v = { id: "v1", ref: "V-2026-0041", clientId: "k1", camionId: "c1", chauffeurId: "h1", commandeId: "o1", origine: "Agadir", destination: "Perpignan", cmrNumero: "MA-778812",
+    pod: { date: "2026-11-17T13:32:00.000Z", signataire: "Mme Durand", reserves: "", signature: "data:image/png;base64,xx", lat: 42.67521, lon: 2.86483, precision: 12 } };
+  assert.strictEqual(N.pdfPreuve({ ...v, pod: null }), null, "sans preuve, pas de PDF");
+  const sig = { octets: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), largeurPx: 600, hauteurPx: 220 };
+  let t = lirePdf(N.pdfPreuve(v, { signature: sig }));
+  for (const x of ["(PREUVE DE LIVRAISON) Tj", "(Voyage V-2026-0041) Tj", "(SANS R\\311SERVE) Tj", "(Agadir \\226 Perpignan) Tj", "(Roussillon Emballages) Tj", "(Tomates cerises) Tj", "(CMD-2026-0087) Tj", "(MA-778812) Tj",
+    "(Re\\347u par) Tj", "(Mme Durand) Tj", "(42.67521, 2.86483 \\(\\261 12 m\\)) Tj", "(Youssef El Amrani) Tj", "(111-A-1) Tj", "(Aucune r\\351serve formul\\351e \\340 la livraison.) Tj", "Conservez le CMR papier sign\\351.) Tj", "(Atlas Fret SARL \\267 ICE 001234567000089 \\267 RC 12345) Tj"])
+    assert.ok(t.includes(x), x);
+  assert.ok(/LIVR\\311 LE [^)]* \\300 MME DURAND\) Tj/.test(t), "bandeau : livré le … à MME DURAND");
+  assert.ok(/\/Subtype \/Image/.test(t) && / Do Q/.test(t) && !t.includes("(Non sign\\351e)"), "signature dessinée"); assert.ok(/\/Count 1/.test(t));
+  t = lirePdf(N.pdfPreuve({ ...v, pod: { ...v.pod, signature: "", lat: undefined, reserves: "Deux palettes abîmées\nFilm déchiré" } }));
+  assert.ok(t.includes("(AVEC R\\311SERVES) Tj") && t.includes("(Deux palettes ab\\356m\\351es) Tj") && t.includes("(Film d\\351chir\\351) Tj") && t.includes("(Non sign\\351e) Tj") && t.includes("(non disponible) Tj"));
+  t = lirePdf(N.pdfPreuve({ ...v, pod: { ...v.pod, reserves: Array.from({ length: 70 }, (_, i) => `Colis ${i + 1} : carton enfoncé, contenu à vérifier par le destinataire.`).join("\n") } }));
+  const pages = Number(t.match(/\/Count (\d+)/)[1]); assert.ok(pages >= 2, `${pages} pages`); assert.ok(t.includes("(Preuve de livraison V-2026-0041 \\(suite\\)) Tj") && t.includes(`(${pages}/${pages}) Tj`));
+  assert.strictEqual(N.pertesPdf(N.textePreuvePdf(v)).length, 0); assert.ok(N.pertesPdf(N.textePreuvePdf({ ...v, pod: { ...v.pod, signataire: "محمد" } })).length > 0, "nom en arabe : la page web sera jointe en plus");
+  const { spawnSync } = require("child_process"), essai = spawnSync("pdftotext", ["-layout", "-", "-"], { input: Buffer.from(N.pdfPreuve(v)) });
+  if (!essai.error && essai.status === 0) { const txt = essai.stdout.toString("utf8"); assert.ok(/PREUVE DE LIVRAISON/.test(txt) && /Reçu par/.test(txt) && /Agadir – Perpignan/.test(txt) && /Non signée/.test(txt), txt.slice(0, 500)); }
 });
 
 /* ---------- arrivée et départ des quais par le GPS (quais_gps.js) ---------- */

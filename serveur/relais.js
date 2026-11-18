@@ -21,9 +21,10 @@ const { releverBoite } = require("./imap.js");
 const { lireCourriel } = require("./mime.js");
 const { creerLiens } = require("./liens.js");
 const { creerItineraire } = require("./itineraire.js");
+const { creerVeille } = require("./veille.js");
 const { page: pageLien } = require("./page-lien.js");
 
-const VERSION = "2.0.0";
+const VERSION = "2.1.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -224,6 +225,9 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
     if (dossier) { try { fs.appendFileSync(fichierAlertes(), coffre.ligne(JSON.stringify(a)) + "\n", { mode: 0o600 }); } catch { /* garde en mémoire */ } }
   }
   if (multi) multi.brancherAlertes((a) => { noterAlerte({ t: Date.now(), texte: a.texte, niveau: a.niveau, cle: a.cle, envoyes: [] }); diffuserAlerte(a).catch?.(() => {}); });
+  /* ---------- veille : coupures des chauffeurs et passages aux quais, surveillés par le relais jour et nuit (serveur/veille.js) ---------- */
+  const veille = creerVeille({ dossier, coffre, moteur, historique, envoyer: envoyerNotif, valider: validerNotif, quota: quotaNotif,
+    alerterEquipe: async (a) => { const r = await diffuserAlerte(a); noterAlerte({ t: Date.now(), texte: a.texte, niveau: a.niveau, cle: a.cle, envoyes: r.envoyes }); return r; } });
   /* ---------- journal d'accès (option JOURNAL_ACCES) : qui a lu quoi, adresse tronquée, 30 jours ---------- */
   const fichierAcces = (t) => path.join(dossier, `acces-${new Date(t).toISOString().slice(0, 10)}.jsonl`);
   const ipTronquee = (ip) => (ip.includes(":") && !/^::ffff:/.test(ip) ? ip.split(":").slice(0, 3).join(":") + "::" : ip.replace(/^::ffff:/, "").replace(/\.\d+$/, ".0"));
@@ -437,6 +441,12 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           const r = await diffuserAlerte({ texte, niveau, cle }); noterAlerte({ t: maintenant, texte, niveau, cle, envoyes: r.envoyes });
           return json(res, 200, { ok: true, ...r });
         }
+        if (p === "/api/veille") { // ce que le relais surveille pour l'application (coupures, quais) et ce qu'il a vu
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          if (req.method === "GET") return json(res, 200, veille.lire());
+          if (req.method === "PUT") { let b; try { b = JSON.parse(await corps(req, 512 * 1024)); } catch { return json(res, 400, { erreur: "JSON invalide." }); } const r = veille.remplacer(b); return json(res, r.erreur ? 400 : 200, r); }
+          return json(res, 405, { erreur: "Méthode non permise." });
+        }
         const mpn = p.match(/^\/api\/notifications\/(plan|scheduler|manuelle|test|document)(?:\/(.+))?$/);
         if (mpn) {
           if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
@@ -491,12 +501,12 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           }
           return json(res, 405, { erreur: "Méthode non permise." });
         }
-        if (p === "/api/etat") return json(res, 200, { version: VERSION, notifications: canauxNotif(), planifies: planif.messages.filter((m) => !planif.etats[m.id]).length, appareils: historique.size, positions: total, retentionJours, partages: partages.size, boite: etatBoite(), itineraire: routes.etat(), moteur: moteur.disponible, canaux: Object.keys(canaux), synchro: synchro.version, maintenant: Math.floor(Date.now() / 1000) });
+        if (p === "/api/etat") return json(res, 200, { version: VERSION, veille: veille.resume(), notifications: canauxNotif(), planifies: planif.messages.filter((m) => !planif.etats[m.id]).length, appareils: historique.size, positions: total, retentionJours, partages: partages.size, boite: etatBoite(), itineraire: routes.etat(), moteur: moteur.disponible, canaux: Object.keys(canaux), synchro: synchro.version, maintenant: Math.floor(Date.now() / 1000) });
       }
       return json(res, 404, { erreur: "Introuvable." });
     } catch (e) { return json(res, 500, { erreur: "Erreur du serveur." }); }
   });
-  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif, purgerPhotos, photos, multi, releverDemandes, boite: () => boite, liens };
+  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif, purgerPhotos, photos, multi, releverDemandes, boite: () => boite, liens, veille };
 }
 
 module.exports = { creer, normaliser, VERSION, creerCoffre, chargerCoffre };
@@ -526,8 +536,9 @@ if (require.main === module) {
   const purgePhotosMois = Number(e.PURGE_PHOTOS_MOIS || 0), estMulti = String(e.MULTI_UTILISATEUR || "").toLowerCase() === "true";
   const multi = estMulti ? creerMulti({ dossier, coffre, version: VERSION, jetonLecture: jetons.jetonLecture, smtp, cookieSecurise: String(e.COOKIE_NON_SECURISE || "").toLowerCase() !== "true", retentionAuditJours: Number(e.RETENTION_AUDIT_JOURS || 730), urlPublique: e.URL_PUBLIQUE || "" }) : null;
   const itineraire = { url: e.ITINERAIRE_URL || "", cle: e.ITINERAIRE_CLE || "", quotaJour: Number(e.ITINERAIRE_QUOTA_JOUR || 1500) };
-  const { serveur, tick, purgerPhotos, releverDemandes, liens: { purger: liensPurger } } = creer({ itineraire, liensMaxMo: Number(e.LIENS_MAX_MO || 1024), imap, ...jetons, dossier, coffre, purgePhotosMois, multi, journalAcces: String(e.JOURNAL_ACCES || "").toLowerCase() === "true", retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
+  const { serveur, tick, purgerPhotos, releverDemandes, liens: { purger: liensPurger }, veille } = creer({ itineraire, liensMaxMo: Number(e.LIENS_MAX_MO || 1024), imap, ...jetons, dossier, coffre, purgePhotosMois, multi, journalAcces: String(e.JOURNAL_ACCES || "").toLowerCase() === "true", retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
   setInterval(() => { tick().catch(() => { /* réessayé à la minute suivante */ }); }, 60000); // notifications programmées
+  setInterval(() => { veille.verifier().catch(() => { /* réessayé à la minute suivante */ }); }, 60000); // coupures des chauffeurs, passages aux quais
   if (imap) { const minutes = Math.max(2, Number(e.IMAP_INTERVALLE_MIN || 5)), relever = () => releverDemandes().then((r) => { if (r.erreur) console.log(`Boîte des demandes : ${r.erreur}`); else if (r.nouvelles) console.log(`Boîte des demandes : ${r.nouvelles} nouveau(x) message(s)`); }); setTimeout(relever, 10000); setInterval(relever, minutes * 60000); }
   setInterval(() => { try { liensPurger(); } catch { /* ignoré */ } }, 6 * 3600000); // liens expirés depuis 7 jours : effacés avec leurs fichiers
   if (purgePhotosMois > 0) { const purge = () => { const b = purgerPhotos(); if (b && (b.marquees || b.supprimees)) console.log(`Purge des photos : ${b.marquees} marquée(s), ${b.supprimees} supprimée(s)`); }; setTimeout(purge, 60000); setInterval(purge, 86400000); }

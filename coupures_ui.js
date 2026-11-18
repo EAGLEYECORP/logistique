@@ -4,7 +4,8 @@
    · fiche du voyage → Suivi, voyage en cours avec balise : prochaine pause de 45 min et fin de la conduite du jour (dans combien de temps,
      vers quelle heure, à combien de km), compteurs du jour, de la semaine et des deux semaines, aires poids lourds vers le lieu estimé
      de la pause (carte, ou liste OpenStreetMap), « Prévenir le chauffeur » ;
-   · alerte au chauffeur 30 minutes avant (son canal : ntfy ou WhatsApp par le relais), une fois par série, tant que l'application est ouverte ;
+   · alerte au chauffeur 30 minutes avant (son canal : ntfy ou WhatsApp par le relais), une fois par série : par le relais jour et nuit
+     quand il est en place (veille_relais.js), sinon tant que l'application est ouverte ;
    · mode chauffeur : la prochaine pause sur la mission ;
    · journal de conduite par chauffeur tenu avec le GPS vu par l'application (compteurs de la semaine).
    Estimation GPS : le tachygraphe fait foi. Logique pure dans coupures.js.
@@ -75,10 +76,14 @@ async function surveillerCoupures() {
     const h = histDuVoyage(v); if (!h || h.length < 2) continue;
     if (v.chauffeurId) { const j = noterConduite(S.conduiteJournal[v.chauffeurId], h, t); if (JSON.stringify(j) !== JSON.stringify(S.conduiteJournal[v.chauffeurId] || {})) { S.conduiteJournal[v.chauffeurId] = j; change = true; } }
     if (S.params.alerteCoupureAuto === false || t - h[h.length - 1][0] > 20 * 60) continue; // signal trop ancien : pas d'alerte
-    const c = coupuresVoyage(v); if (!c || c.enArret) continue;
+    if (typeof veilleCouvre === "function" && veilleCouvre(v.id)) continue; // le relais prévient déjà ce chauffeur, jour et nuit
+    const c = coupuresVoyage(v); if (!c) continue;
+    // un message par pause et par journée : réarmé quand la pause est faite (série remise à zéro) ou après le repos de la nuit
+    for (const [type, fait] of [["pause", c.serieH < 1], ["finJour", c.jourH < 1]]) if (fait && S.notifsCoupure[`${v.id}:${type}`]) { delete S.notifsCoupure[`${v.id}:${type}`]; change = true; }
+    if (c.enArret) continue;
     for (const type of ["pause", "finJour"]) {
       const b = c[type]; if (b.depasse || b.dansMin > avant || b.dansMin <= 0) continue;
-      const cle = `${v.id}:${type}:${Math.round(b.heure / 3600)}`; if (S.notifsCoupure[cle]) continue;
+      const cle = `${v.id}:${type}`; if (S.notifsCoupure[cle]) continue;
       S.notifsCoupure[cle] = t; change = true;
       await prevenirChauffeurCoupure(v, type, c, { auto: true });
     }
@@ -102,7 +107,8 @@ enregistrerCarteReglages({
   rendu: () => `<div class="card" id="carte-coupures"><div class="card-head"><h2>Coupures et alertes au chauffeur</h2></div>
     <form id="f-coupures"><label class="check full"><input type="checkbox" name="auto" ${S.params.alerteCoupureAuto === false ? "" : "checked"}><span>Prévenir le chauffeur avant sa pause de 45 min et avant la fin de sa conduite du jour (ntfy ou WhatsApp, son canal habituel)</span></label>
       <div class="form-grid"><label class="f">Combien de minutes avant<input type="number" name="minutes" min="10" max="90" step="5" value="${num(S.params.alerteCoupureMin, 30)}"></label></div>
+      <label class="check full"><input type="checkbox" name="equipe" ${S.params.alerteCoupureEquipe === false ? "" : "checked"}><span>Prévenir le bureau (canaux de l'équipe du relais) quand une pause est dépassée de plus de 15 minutes</span></label>
       <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn">Enregistrer</button></div></form>
-    <p class="hint">D'après la position GPS des camions suivis, tant que l'application est ouverte (au bureau par exemple) ; un message par pause. Estimation : le tachygraphe fait foi.</p></div>`,
-  soumettre(fid, val) { if (fid !== "f-coupures") return false; S.params.alerteCoupureAuto = !!val.auto; S.params.alerteCoupureMin = Math.min(90, Math.max(10, num(val.minutes, 30))); sauver(); toast("Alertes de coupure enregistrées"); rafraichir(); return true; },
+    <p class="hint">${typeof veilleActive === "function" && veilleActive() ? `<strong>Surveillé par le relais, jour et nuit</strong> (${veilleRelais.voyages} voyage(s) en cours, ${veilleRelais.quais} quai(s) à relever) : même application fermée.` : "Sans relais : tant que l'application est ouverte (au bureau par exemple)."} D'après la position GPS des camions suivis ; un message par pause. Estimation : le tachygraphe fait foi.</p></div>`,
+  soumettre(fid, val) { if (fid !== "f-coupures") return false; S.params.alerteCoupureAuto = !!val.auto; S.params.alerteCoupureEquipe = !!val.equipe; S.params.alerteCoupureMin = Math.min(90, Math.max(10, num(val.minutes, 30))); sauver(); toast("Alertes de coupure enregistrées"); rafraichir(); return true; },
 });

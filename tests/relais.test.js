@@ -606,6 +606,53 @@ test("multi-utilisateur : cookie de session (HttpOnly, SameSite) et protection i
   } finally { await s.arreter(); }
 });
 
+test("veille du relais : chauffeur prévenu avant la pause (sa langue, heure du bureau), une seule fois ; bureau alerté si la pause est dépassée ; passages aux quais gardés ; persistance", async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), "relais-veille-")), appels = [];
+  const http_ = async (url, o) => { appels.push({ url, corps: String(o.body || ""), titre: o.headers?.Title }); return { ok: true, status: 200 }; };
+  const opts = { http_, canaux: { ntfy: { url: "https://ntfy.sh/atlas-bureau-x9k2" } } };
+  let s = await demarrer(dossier, opts); const T = Math.floor(Date.now() / 1000), SITE = [36.0, -5.6];
+  // 1 h 55 à l'arrêt sur le site de livraison, puis 4 h 05 de route à 80 km/h (une position toutes les 5 min)
+  const pos = []; for (let k = 0; k <= 23; k++) pos.push({ id: "B1", t: T - 6 * 3600 + k * 300, lat: SITE[0] + (k % 2) * 0.0002, lon: SITE[1], v: 0 });
+  for (let k = 1; k <= 49; k++) pos.push({ id: "B1", t: T - 6 * 3600 + 23 * 300 + k * 300, lat: SITE[0] + k * 0.06, lon: SITE[1] + k * 0.01, v: 80 });
+  s.enregistrer(pos);
+  try {
+    const liste = { fuseau: "Africa/Casablanca", voyages: [
+      { id: "v1", reference: "V-2026-0041", balise: "B1", jusqua: T + 86400, coupures: { chauffeur: "Youssef", langue: "ar", avantMin: 30, canal: "ntfy", destination: "https://ntfy.sh/youssef-camion-1", equipe: true }, quais: [{ cle: "o1:livraison", lat: SITE[0], lon: SITE[1], depuis: T - 86400 }] },
+      { id: "v2", reference: "V-2", balise: "B2", coupures: { canal: "ntfy", destination: "https://evil.example/abcdefgh" } },
+      { id: "v3", balise: "B3", jusqua: T - 10 },
+    ] };
+    assert.strictEqual((await s.appel("/api/veille", { methode: "PUT", jeton: "ecrit", corps: liste })).code, 401, "le jeton des balises ne règle rien");
+    const r = await s.appel("/api/veille", { methode: "PUT", jeton: "lit", corps: liste });
+    assert.strictEqual(r.code, 200); assert.strictEqual(r.json.voyages, 2, "voyage terminé écarté"); assert.strictEqual(r.json.coupures, 1); assert.strictEqual(r.json.quais, 1);
+    assert.ok(r.json.refus.some((x) => x.id === "v2" && /non autorisé/.test(x.raison)), "canal du chauffeur refusé, le voyage reste surveillé pour le bureau");
+    let j = await s.veille.verifier(T * 1000);
+    const pause = j.find((x) => x.type === "pause"); assert.ok(pause && pause.statut === "envoye", JSON.stringify(j));
+    const msg = appels.find((a) => a.url === "https://ntfy.sh/youssef-camion-1"); assert.ok(msg && /استراحة 45 دقيقة/.test(msg.corps), "message au chauffeur, en arabe");
+    const attendue = new Date((T + 25 * 60) * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Casablanca" }); assert.ok(msg.corps.includes(attendue), `heure du bureau ${attendue} : ${msg.corps}`);
+    assert.ok(/google\.com\/maps\/search\/aire\+poids\+lourds/.test(msg.corps), "lien des aires poids lourds");
+    const quai = j.find((x) => x.quai === "o1:livraison"); assert.strictEqual(quai.arrivee, T - 6 * 3600); assert.strictEqual(quai.depart, T - 6 * 3600 + 24 * 300, "départ : première position hors du site");
+    assert.strictEqual((await s.veille.verifier(T * 1000 + 60000)).filter((x) => x.type).length, 0, "pas deux fois le même message");
+    assert.strictEqual((await s.veille.verifier((T + 600) * 1000)).filter((x) => x.type).length, 0, "l'heure prévue glisse sans nouvelle position : toujours un seul message");
+    const lu = await s.appel("/api/veille", { jeton: "lit" }); assert.strictEqual(lu.json.quais["o1:livraison"].depart, T - 6 * 3600 + 24 * 300); assert.ok(Object.keys(lu.json.envoyes).includes("v1:pause"));
+    assert.strictEqual((await s.appel("/api/etat", { jeton: "lit" })).json.veille.voyages, 2);
+    // la route continue 50 min sans pause : le bureau est alerté une fois
+    const T2 = T + 50 * 60; const suite = []; for (let k = 1; k <= 10; k++) suite.push({ id: "B1", t: T + k * 300, lat: SITE[0] + (49 + k) * 0.06, lon: SITE[1] + (49 + k) * 0.01, v: 80 }); s.enregistrer(suite);
+    j = await s.veille.verifier(T2 * 1000);
+    const dep = j.find((x) => x.type === "depasse"); assert.ok(dep && dep.statut === "envoye", JSON.stringify(j));
+    const bureau = appels.filter((a) => a.url === "https://ntfy.sh/atlas-bureau-x9k2"); assert.strictEqual(bureau.length, 1); assert.ok(/V-2026-0041 · Youssef : 4 h 5\d de conduite sans pause de 45 min \(estimation GPS/.test(bureau[0].corps), bureau[0].corps);
+    assert.strictEqual((await s.veille.verifier(T2 * 1000 + 60000)).filter((x) => x.type === "depasse").length, 0, "une seule alerte jusqu'à la pause");
+    const hist = await s.appel("/api/alertes", { jeton: "lit" }); if (hist.code === 200) assert.ok(JSON.stringify(hist.json).includes("sans pause de 45 min"), "alerte gardée dans l'historique du relais");
+    // pause de 50 min : la prochaine alerte redevient possible
+    const arret = []; for (let k = 1; k <= 10; k++) arret.push({ id: "B1", t: T2 + k * 300, lat: SITE[0] + 59 * 0.06, lon: SITE[1] + 59 * 0.01, v: 0 }); s.enregistrer(arret);
+    await s.veille.verifier((T2 + 3000) * 1000); assert.ok(!Object.keys(s.veille.lire().envoyes).includes("v1:depasse")); assert.ok(!Object.keys(s.veille.lire().envoyes).includes("v1:pause"), "pause faite : le prochain message de pause redevient possible");
+    // redémarrage : la liste et les messages déjà envoyés sont repris
+    const envoyesAvant = JSON.stringify(s.veille.lire().envoyes);
+    await s.arreter(); s = await demarrer(dossier, opts); s.enregistrer(pos);
+    assert.strictEqual(JSON.stringify(s.veille.lire().envoyes), envoyesAvant, "messages déjà envoyés repris (rien ne repart)");
+    assert.strictEqual(s.veille.lire().voyages.length, 2); assert.deepStrictEqual(s.veille.lire().quais["o1:livraison"].depart, T - 6 * 3600 + 24 * 300, "passages repris");
+  } finally { await s.arreter(); }
+});
+
 test("hors ligne : la liste préchargée couvre chaque script de la page et la carte ; empreintes de chaque fichier posées à la publication", () => {
   const { fichiersPrecharges, preparerSw, empreinte } = require("../serveur/empreintes.js"), racine = path.join(__dirname, "..");
   const sw = fs.readFileSync(path.join(racine, "sw.js"), "utf8"), liste = fichiersPrecharges(sw), html = fs.readFileSync(path.join(racine, "index.html"), "utf8");

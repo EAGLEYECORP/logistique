@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -2935,6 +2935,34 @@ test("quais par le GPS : site appris pour le client et la ville (moyenne des pas
 });
 
 /* ---------- garde-fou : deux fichiers de la page ne déclarent jamais le même nom global (sinon la page s'arrête au second) ---------- */
+test("veille par le relais : liste confiée (balise, chauffeur si le relais sait le prévenir, quais ouverts avec un site), stable ; passages du relais posés sans écraser la main", () => {
+  const T = Date.parse("2026-11-18T10:00:00Z");
+  N.S.camions = [{ id: "c1", immat: "111-A-1", balise: " B111 " }, { id: "c2", immat: "222-B-2" }];
+  N.S.chauffeurs = [{ id: "h1", nom: "Youssef", ntfy: "https://ntfy.sh/youssef-camion-1", langueNotif: "ar" }, { id: "h2", nom: "Karim", tel: "0663000003" }];
+  N.S.clients = [{ id: "k1", nom: "Primeurs du Souss", sites: [{ quai: "chargement", ville: "Agadir", lat: 30.42, lon: -9.55, n: 2 }] }];
+  N.S.commandes = [{ id: "o1", ref: "CMD-1", clientId: "k1", origine: "Agadir", destination: "Perpignan", dateChargement: "2026-11-15", quais: { chargement: { arrivee: "2026-11-15T07:00:00.000Z", depart: "2026-11-15T09:00:00.000Z" } } }];
+  N.S.voyages = [
+    { id: "v1", ref: "V-1", statut: "en_cours", camionId: "c1", chauffeurId: "h1", commandeId: "o1", dateDepart: "2026-11-15", dateRetourPrevue: "2026-11-23", destLat: 42.675, destLon: 2.865 },
+    { id: "v2", ref: "V-2", statut: "en_cours", camionId: "c2", chauffeurId: "h2" }, { id: "v3", ref: "V-3", statut: "termine", camionId: "c1" }];
+  let l = N.listeVeille(["equipe", "ntfy", "email"], T);
+  assert.strictEqual(l.voyages.length, 1, "sans balise ou terminé : rien à surveiller");
+  const v = l.voyages[0]; assert.strictEqual(v.balise, "B111"); assert.strictEqual(v.jusqua, Date.parse("2026-11-26T00:00:00Z") / 1000, "jusqu'à 3 jours après le retour prévu");
+  assert.deepStrictEqual({ ...v.coupures }, { chauffeur: "Youssef", langue: "ar", avantMin: 30, etendusSemaine: 0, equipe: true, canal: "ntfy", destination: "https://ntfy.sh/youssef-camion-1" });
+  assert.deepStrictEqual([...v.quais.map((q) => ({ ...q }))], [{ cle: "o1:livraison", lat: 42.675, lon: 2.865, depuis: Date.parse("2026-11-14T00:00:00Z") / 1000, arrivee: null }], "chargement fait : seule la livraison reste, au point précis du voyage");
+  assert.strictEqual(JSON.stringify(N.listeVeille(["equipe", "ntfy", "email"], T + 90000)), JSON.stringify(l), "même liste une minute plus tard (pas d'envoi inutile)");
+  N.S.voyages[1].camionId = "c1"; N.S.camions[0].balise = "B111";
+  l = N.listeVeille(["equipe", "ntfy"], T); assert.strictEqual(l.voyages[1].coupures.canal, undefined, "WhatsApp non géré par ce relais : le bureau seulement, l'application garde ses propres alertes");
+  N.S.params.alerteCoupureAuto = false; N.S.params.alerteCoupureEquipe = false; assert.strictEqual(N.listeVeille(["ntfy"], T).voyages[0].coupures, undefined, "alertes coupées dans les réglages");
+  // passages vus par le relais
+  const m = N.appliquerQuaisRelais({ quais: { "o1:livraison": { arrivee: Date.parse("2026-11-17T13:05:00Z") / 1000, depart: Date.parse("2026-11-17T15:40:00Z") / 1000 }, "inconnue:livraison": { arrivee: 1 }, "o1:pirate": { arrivee: 1 } } });
+  assert.deepStrictEqual([...m], ["V-1 · CMD-1 : arrivée à la livraison, départ de la livraison (GPS, vu par le relais)"].map((x) => x.replace("arrivée à la livraison", N.AU_QUAI ? `arrivée ${N.AU_QUAI.livraison}` : x).replace("départ de la livraison", `départ ${N.AU_QUAI.livraison}`)));
+  const q = N.S.commandes[0].quais.livraison; assert.strictEqual(q.arrivee, "2026-11-17T13:05:00.000Z"); assert.strictEqual(q.sourceArrivee, "gps"); assert.strictEqual(q.sourceDepart, "gps");
+  assert.deepStrictEqual([...N.appliquerQuaisRelais({ quais: { "o1:livraison": { arrivee: 2, depart: 3 } } })], [], "déjà posé : rien ne change");
+  N.S.commandes[0].quais.livraison = { arrivee: "2026-11-17T13:00:00.000Z" }; // noté à la main par le chauffeur
+  N.appliquerQuaisRelais({ quais: { "o1:livraison": { arrivee: Date.parse("2026-11-17T13:05:00Z") / 1000, depart: Date.parse("2026-11-17T12:00:00Z") / 1000 } } });
+  assert.strictEqual(N.S.commandes[0].quais.livraison.arrivee, "2026-11-17T13:00:00.000Z", "heure notée à la main gardée"); assert.ok(!N.S.commandes[0].quais.livraison.depart, "départ avant l'arrivée : ignoré");
+});
+
 test("chargement : aucun nom global déclaré deux fois dans les scripts de index.html", () => {
   const html = fs.readFileSync(path.join(racine, "index.html"), "utf8"), fichiers = [...html.matchAll(/<script src="([^"]+\.js)"/g)].map((m) => m[1]).filter((f) => !f.startsWith("vendor/"));
   assert.ok(fichiers.length > 60, `${fichiers.length} scripts`); const vus = new Map(), doublons = [];

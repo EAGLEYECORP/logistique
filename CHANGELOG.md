@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.14.0 — Le relais veille jour et nuit : pauses des chauffeurs et attente aux quais, même application fermée
+
+- **Les alertes de pause ne dépendent plus d'un écran allumé au bureau.** Quand le relais est en place, c'est lui qui surveille les camions suivis, jour et nuit : 30 minutes avant la pause de 45 min et avant la fin de la conduite du jour, le chauffeur reçoit son message (ntfy, WhatsApp ou e-mail, dans sa langue, l'heure dite à l'heure du bureau), même si personne n'a ouvert l'application.
+- **Nouveau : le bureau est prévenu quand une pause est dépassée** de plus de 15 minutes en roulant (canaux de l'équipe du relais : ntfy, Telegram, WhatsApp…), une seule fois jusqu'à ce que la pause soit faite. Réglages → Général → « Coupures et alertes au chauffeur » : la case permet de le couper. Estimation d'après le GPS : le tachygraphe fait foi.
+- **L'attente aux quais se relève aussi application fermée** : le relais note l'arrivée et le départ du camion sur les sites de chargement et de livraison ; à l'ouverture suivante, l'application les pose (« GPS, vu par le relais ») et l'attente au-delà de la franchise part sur la facture comme avant. Jamais à la place d'une heure notée à la main.
+- **Corrigé : un même message de pause pouvait partir deux fois** quand l'heure prévue de la pause passait d'une heure à l'autre (par exemple 10 h 59 puis 11 h 01). Maintenant : un message par pause, qui ne repart qu'une fois la pause faite (et un par journée pour la fin de conduite, après le repos).
+- Sans relais (ou avec un relais plus ancien que la version 2.1), rien ne change : l'application surveille tant qu'elle est ouverte. Réglages dit lequel des deux surveille.
+
 ## 5.13.0 — La preuve de livraison en vrai PDF, à envoyer depuis le téléphone
 
 - **La preuve de livraison devient un vrai fichier PDF** (A4) : livré le, à qui, où (position relevée par le téléphone), avec ou sans réserves (bandeau vert ou orange), le texte des réserves, la **signature du destinataire**, le client, la marchandise, la commande, le n° de CMR, le chauffeur et le camion ; logo et identifiants de l'entreprise ; et le rappel qu'elle ne remplace pas le CMR papier signé. Une très longue réserve continue sur une deuxième page.

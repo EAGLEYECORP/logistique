@@ -40,12 +40,20 @@ function passageSite(points, site, { depuis = 0 } = {}) {
  */
 function appliquerQuaiGps(c, q, points, { v = null, depuis = 0 } = {}) {
   const site = siteQuai(c, q, v); if (!site) return [];
+  const x = quaiDe(c, q); if (x?.arrivee && x.depart) return [];
+  const debut = x?.arrivee ? Date.parse(x.arrivee) / 1000 - 600 : depuis;
+  return appliquerPassageQuai(c, q, passageSite(points, site, { depuis: debut }));
+}
+/**
+ * Pose un passage { arrivee, depart } (secondes) vu par le GPS — par l'application ou par le relais (serveur/veille.js) :
+ * seulement ce qui manque, jamais à la place d'une heure notée à la main ; un départ n'est posé qu'après l'arrivée.
+ */
+function appliquerPassageQuai(c, q, p) {
   const x = quaiDe(c, q), effets = [], hm = (t) => new Date(t * 1000).toISOString();
-  if (x?.arrivee && x.depart) return [];
-  const debut = x?.arrivee ? Date.parse(x.arrivee) / 1000 - 600 : depuis, p = passageSite(points, site, { depuis: debut });
-  if (!x?.arrivee && p.arrivee) { const y = arriveeQuai(c, q, hm(p.arrivee)); y.sourceArrivee = "gps"; effets.push(`arrivée ${AU_QUAI[q]}`); }
+  if (!p || (x?.arrivee && x.depart)) return [];
+  if (!x?.arrivee && Number.isFinite(p.arrivee)) { const y = arriveeQuai(c, q, hm(p.arrivee)); y.sourceArrivee = "gps"; effets.push(`arrivée ${AU_QUAI[q]}`); }
   const y = quaiDe(c, q);
-  if (y?.arrivee && !y.depart && p.depart && hm(p.depart) > y.arrivee) { departQuai(c, q, hm(p.depart)); y.sourceDepart = "gps"; effets.push(`départ ${AU_QUAI[q]}`); }
+  if (y?.arrivee && !y.depart && Number.isFinite(p.depart) && hm(p.depart) > y.arrivee) { departQuai(c, q, hm(p.depart)); y.sourceDepart = "gps"; effets.push(`départ ${AU_QUAI[q]}`); }
   return effets;
 }
 /** Retient l'endroit où le camion est arrêté comme site du client pour ce quai et cette ville (moyenne avec un site proche déjà appris). */

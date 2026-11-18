@@ -139,6 +139,22 @@ Routes (jeton de lecture) :
 
 Le plan est enregistré dans `donnees/scheduler.json` ; il survit à un redémarrage. Un message en retard de plus de 6 h (relais arrêté) n'est plus envoyé. 300 messages par heure au plus.
 
+## Veille : coupures des chauffeurs et quais, même application fermée
+
+Avec les positions qu'il reçoit, le relais surveille **jour et nuit** ce que l'application ne faisait que tant qu'elle était ouverte :
+
+- **Coupures** : 30 minutes avant la pause de 45 min (après 4 h 30 de conduite) et avant la fin de la conduite du jour, un message au chauffeur, sur son canal (ntfy, WhatsApp, e-mail) et dans sa langue, l'heure étant dite à l'heure du bureau. Un seul message par pause : il ne repart qu'une fois la pause faite. Pause dépassée de plus de 15 minutes en roulant : **une alerte au bureau** (canaux de l'équipe : `NTFY_URL`, Telegram, WhatsApp, webhook), gardée dans l'historique des alertes. Estimation d'après le GPS : le tachygraphe fait foi.
+- **Quais** : arrivée (moins de 300 m du site) et départ (au-delà de 400 m, confirmé par deux positions) sur les sites de chargement et de livraison. L'application les reprend et les pose comme ses propres relevés GPS, sans jamais remplacer une heure notée à la main : l'attente facturable est comptée même si personne n'a ouvert l'application ce jour-là.
+
+L'application confie la liste à surveiller (voyages en cours avec balise, moyen de prévenir le chauffeur, sites des quais encore ouverts) après chaque enregistrement et toutes les 15 minutes. Tant que le relais prévient un chauffeur, l'application ne le prévient plus elle-même. Aucun réglage sur le serveur : il suffit du relais (version 2.1 ou plus) et, pour les messages, des canaux déjà décrits plus haut.
+
+| Route (jeton de lecture) | Rôle |
+|---|---|
+| `PUT /api/veille` | Remplace la liste à surveiller `{ fuseau, voyages: [{ id, reference, balise, jusqua, coupures: { chauffeur, langue, avantMin, etendusSemaine, equipe, canal, destination, repli }, quais: [{ cle, lat, lon, depuis, arrivee }] }] }` (200 voyages au plus). |
+| `GET /api/veille` | Ce que le relais surveille, les passages aux quais vus (`quais`) et les messages de coupure déjà envoyés. |
+
+La liste et les messages envoyés sont enregistrés dans `donnees/veille.json` (chiffré si le chiffrement est actif) ; ils survivent à un redémarrage.
+
 ## Alertes sur le téléphone du bureau
 
 Suivi en direct → Réglages de la source → « Alertes sur le téléphone du bureau » : adresse d'un sujet [ntfy](https://ntfy.sh) (`https://ntfy.sh/<sujet-long-et-secret>`). Installez l'application ntfy sur le téléphone du bureau et abonnez-vous au sujet. Chaque nouvelle alerte du suivi (signal perdu, conduite continue, température, retard…) y est envoyée. Le sujet fait office de mot de passe : choisissez un nom long et imprévisible, ou hébergez votre propre serveur ntfy.

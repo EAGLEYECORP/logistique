@@ -84,7 +84,7 @@ const MESSAGES_COUPURE = {
   pause: { fr: (m, h) => `Pause de 45 min à prévoir dans ${m} min (vers ${h}).`, ar: (m, h) => `استراحة 45 دقيقة بعد ${m} دقيقة (حوالي ${h}).`, es: (m, h) => `Pausa de 45 min dentro de ${m} min (hacia las ${h}).`, en: (m, h) => `45-minute break due in ${m} min (around ${h}).` },
   finJour: { fr: (m, h) => `Fin de la conduite du jour dans ${m} min (vers ${h}) : prévoyez votre repos.`, ar: (m, h) => `نهاية السياقة اليومية بعد ${m} دقيقة (حوالي ${h}): خطط لراحتك.`, es: (m, h) => `Fin de la conducción diaria dentro de ${m} min (hacia las ${h}): prevea su descanso.`, en: (m, h) => `Daily driving ends in ${m} min (around ${h}): plan your rest.` },
 };
-function messageCoupure(type, dansMin, heure, langue = "fr", lien = "") {
-  const f = MESSAGES_COUPURE[type][langue] || MESSAGES_COUPURE[type].fr, h = new Date(heure * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+function messageCoupure(type, dansMin, heure, langue = "fr", lien = "", fuseau = "") { // fuseau : heure dite à l'heure du bureau quand le relais (serveur en UTC) envoie le message
+  const f = MESSAGES_COUPURE[type][langue] || MESSAGES_COUPURE[type].fr, h = new Date(heure * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", ...(fuseau ? { timeZone: fuseau } : {}) });
   return `${f(dansMin, h)}${lien ? ` ${langue === "ar" ? "مواقف الشاحنات" : langue === "es" ? "Áreas para camiones" : langue === "en" ? "Truck parkings" : "Aires poids lourds"} : ${lien}` : ""}`;
 }

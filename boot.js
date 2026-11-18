@@ -128,6 +128,7 @@ function demarrageModules() {
   if (typeof itineraireDemarrer === "function") itineraireDemarrer(); // service d'itinéraire poids lourd du relais
   if (typeof liensDemarrer === "function") liensDemarrer();
   if (typeof coupuresDemarrer === "function") coupuresDemarrer();
+  if (typeof veilleDemarrer === "function") veilleDemarrer(); // coupures et quais surveillés par le relais, même application fermée
   if (typeof quaisDemarrer === "function") quaisDemarrer(); // arrivée et départ des quais par le GPS // coupures : journal de conduite, alertes au chauffeur // liens de dépôt et liens transitaire : fichiers et étapes reçus
 }
 

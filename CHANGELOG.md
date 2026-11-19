@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.15.0 — Relance automatique des documents manquants, deux jours avant le chargement
+
+- **Le client est relancé tout seul** : deux jours avant le chargement, à 9 h (heure du Maroc), un client à qui il manque encore des documents reçoit la liste de ce qui manque, dans sa langue (français, anglais, espagnol), par e-mail ou WhatsApp, avec son lien de dépôt s'il en a un. Seulement pour les commandes confirmées et les clients qui acceptent d'être prévenus (case de la fiche du client, dont le libellé le dit maintenant).
+- **Par le relais, même application fermée — et jamais à côté de la plaque** : au moment d'envoyer, le relais retire de la liste ce que le client a déposé entre-temps par son lien, et n'envoie rien s'il ne manque plus rien (« inutile » dans les messages programmés).
+- **Sans relais pour ce canal** : à l'heure de la relance, un message prêt à envoyer apparaît dans le fil (WhatsApp ou e-mail en un geste).
+- **On sait ce qui va se passer** : la fenêtre des documents d'une commande dit « Relance automatique au client vendredi 20 novembre à 9 h (e-mail)… », ou pourquoi elle ne partira pas (client sans accord, date passée). Réglages → Rappels → « Relance des documents manquants » : nombre de jours avant le chargement (0 pour ne jamais relancer), relances prévues dans les 14 jours, commandes sans relance possible.
+- Relais : version 2.2.0 pour retirer les documents déjà déposés ; un relais plus ancien envoie la relance telle quelle.
+
 ## 5.14.0 — Le relais veille jour et nuit : pauses des chauffeurs et attente aux quais, même application fermée
 
 - **Les alertes de pause ne dépendent plus d'un écran allumé au bureau.** Quand le relais est en place, c'est lui qui surveille les camions suivis, jour et nuit : 30 minutes avant la pause de 45 min et avant la fin de la conduite du jour, le chauffeur reçoit son message (ntfy, WhatsApp ou e-mail, dans sa langue, l'heure dite à l'heure du bureau), même si personne n'a ouvert l'application.

@@ -137,6 +137,8 @@ Routes (jeton de lecture) :
 | `GET /api/liens/<id>/fichiers/<n>` · `DELETE` | Fichier déposé par le client (photo ou PDF), puis effacement une fois récupéré par l'application. 40 fichiers de 12 Mo au plus par lien ; `LIENS_MAX_MO` (1024 par défaut) pour l'ensemble. |
 | `POST /api/demandes/relever` | Relève la boîte tout de suite (une fois toutes les 20 secondes au plus). |
 
+**Relance des documents manquants** (J-2 à 9 h par défaut) : le message porte une ligne par document et l'identifiant du lien de dépôt (`docs: { lien, avant, lignes: [{ id, texte }], apres }`). Au moment d'envoyer, le relais retire les documents déjà déposés sur ce lien (fichier envoyé ou marqué reçu) ; s'il ne manque plus rien, rien ne part (état `inutile`).
+
 Le plan est enregistré dans `donnees/scheduler.json` ; il survit à un redémarrage. Un message en retard de plus de 6 h (relais arrêté) n'est plus envoyé. 300 messages par heure au plus.
 
 ## Veille : coupures des chauffeurs et quais, même application fermée

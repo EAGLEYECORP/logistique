@@ -986,6 +986,30 @@ test("lien de dépôt : création par l'application, page publique, envoi d'une 
     assert.strictEqual((await pub("/depot/court")).status, 404);
   } finally { await s.arreter(); }
 });
+test("relance des documents (J-2) : le relais ne redemande pas ce que le client a déposé par son lien, et n'envoie rien s'il ne manque plus rien", async () => {
+  const appels = [], mails = [], http_ = async (url, o) => { appels.push({ url, corps: String(o.body || "") }); return { ok: true, status: 200 }; };
+  const s = await demarrer(null, { http_, courriel_: async (cfg, m) => { mails.push(m); return { ok: true }; }, smtp: { hote: "smtp.exemple.org", de: "relais@atlas.example" } }); const T = Date.now();
+  try {
+    const c = await s.appel("/api/liens", { methode: "POST", jeton: "lit", corps: { type: "depot", titre: "CMD-1", docs: [{ id: "facture", lib: "Facture" }, { id: "colisage", lib: "Colisage" }, { id: "phyto", lib: "Phyto" }] } });
+    const envoi = (doc) => fetch(`${s.base}${c.json.chemin}/fichier?doc=${doc}&nom=x.pdf`, { method: "POST", headers: { "content-type": "application/pdf" }, body: Buffer.from("%PDF-1.4\n") });
+    const relance = (id, quand, lien) => ({ id, quand, canal: "email", destination: "achats@client.example", sujet: "CMD-1 — documents", texte: "Bonjour,\n\nil nous manque :\n- Facture\n- Colisage\n- Phyto\n\nMerci,\nAtlas",
+      docs: { lien, avant: "Bonjour,\n\nil nous manque :\n", apres: "\n\nMerci,\nAtlas", lignes: [{ id: "facture", texte: "- Facture" }, { id: "colisage", texte: "- Colisage" }, { id: "phyto", texte: "- Phyto" }] } });
+    const r = await s.appel("/api/notifications/plan", { methode: "PUT", jeton: "lit", corps: { messages: [relance("docs:o1:relance", T + 3600000, c.json.id), relance("docs:o2:relance", T + 3600000, c.json.id), relance("docs:o3:relance", T + 3600000, "")] } });
+    assert.strictEqual(r.json.programmes, 3);
+    assert.strictEqual((await envoi("facture")).status, 201);
+    await s.appel(`/api/liens/${c.json.id}`, { methode: "PUT", jeton: "lit", corps: { docs: [{ id: "facture", lib: "Facture" }, { id: "colisage", lib: "Colisage", recu: true }, { id: "phyto", lib: "Phyto" }] } });
+    let f = await s.tick(T + 3600000 + 1000);
+    assert.deepStrictEqual(f.map((x) => [x.id, x.statut]), [["docs:o1:relance", "envoye"], ["docs:o2:relance", "envoye"], ["docs:o3:relance", "envoye"]]);
+    assert.strictEqual(mails[0].texte, "Bonjour,\n\nil nous manque :\n- Phyto\n\nMerci,\nAtlas", "facture déposée et colisage reçu : seul le phyto est redemandé");
+    assert.strictEqual(mails[2].texte, "Bonjour,\n\nil nous manque :\n- Facture\n- Colisage\n- Phyto\n\nMerci,\nAtlas", "sans lien : le message tel quel");
+    await envoi("phyto");
+    await s.appel("/api/notifications/plan", { methode: "PUT", jeton: "lit", corps: { messages: [relance("docs:o4:relance", T + 7200000, c.json.id)] } });
+    f = await s.tick(T + 7200000 + 1000); assert.deepStrictEqual(f.map((x) => [x.id, x.statut]), [["docs:o4:relance", "inutile"]]); assert.strictEqual(mails.length, 3, "plus rien ne manque : aucun message");
+    const sch = await s.appel(`/api/notifications/scheduler?debut=${T}&fin=${T + 9000000}`, { jeton: "lit" }); assert.ok(sch.json.messages.some((m) => m.id === "docs:o4:relance" && m.statut === "inutile"), JSON.stringify(sch.json.messages.map((m) => [m.id, m.statut])));
+    const piege = await s.appel("/api/notifications/plan", { methode: "PUT", jeton: "lit", corps: { messages: [{ ...relance("p", T + 1, "../../etc"), docs: { lien: "../../etc", lignes: [{ id: "x", texte: "y" }] } }] } }); assert.strictEqual(piege.code, 200);
+    assert.strictEqual(s.planif().messages.find((m) => m.id === "p").docs.lien, "", "identifiant de lien invalide écarté");
+  } finally { await s.arreter(); }
+});
 test("lien transitaire : étapes marquées par le transitaire (référence, note, annulation), lues par l'application, mises à jour par elle ; expiration ; liens gardés au redémarrage et chiffrés au repos", async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), "liens-")), { coffre } = chargerCoffre(dossier, { CHIFFRER_DONNEES: "true" });
   const s = await demarrer(dossier, { coffre }); const pub = (chemin, opts = {}) => fetch(s.base + chemin, opts);

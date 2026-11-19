@@ -71,8 +71,9 @@ let planMinuteur = null, planDernier = "";
 function planifierEnvoiPlan() { clearTimeout(planMinuteur); planMinuteur = setTimeout(envoyerPlan, 4000); }
 async function envoyerPlan() {
   const caps = await canauxRelais(); if (!caps.length) return;
-  const p = planNotifications({ jusqua: Date.now() + 8 * 86400000 }).filter((m) => caps.includes(m.canal));
-  const corps = { messages: p.map(({ id, quand, canal, destination, repli, sujet, texte, cle, voyageId }) => ({ id, quand, canal, destination, repli, sujet, texte, cle, voyageId })) }, empreinte = JSON.stringify(corps);
+  const jusqua = Date.now() + 8 * 86400000, url = typeof urlLien === "function" ? urlLien : () => "";
+  const p = [...planNotifications({ jusqua }), ...planRelancesDocuments({ jusqua, urlLien: url })].filter((m) => caps.includes(m.canal));
+  const corps = { messages: p.map(({ id, quand, canal, destination, repli, sujet, texte, cle, voyageId, docs }) => ({ id, quand, canal, destination, repli, sujet, texte, cle, voyageId, ...(docs ? { docs } : {}) })) }, empreinte = JSON.stringify(corps);
   if (empreinte === planDernier) return;
   try { await partageAppel("PUT", "/api/notifications/plan", corps); planDernier = empreinte; } catch (e) { console.warn("Plan de notifications :", e.message); }
 }
@@ -84,10 +85,23 @@ async function remettreRappelsLocaux() {
   for (const m of nouveaux) S.notifsEtat.remis[m.cle] = new Date().toISOString();
   await envoyerNotifications(nouveaux); sauverSansNotif();
 }
+/** Sans relais pour ce canal : la relance des documents arrivée à l'heure devient un message prêt à envoyer dans le fil (WhatsApp ou e-mail en un geste). */
+async function remettreRelancesLocales() {
+  const caps = await canauxRelais(), maintenant = Date.now(), url = typeof urlLien === "function" ? urlLien : () => "";
+  const dues = planRelancesDocuments({ depuis: maintenant - 6 * 3600000, jusqua: maintenant, maintenant: maintenant - 6 * 3600000, urlLien: url }).filter((m) => !caps.includes(m.canal));
+  S.notifsEtat ||= { annulees: {}, reports: {} }; S.notifsEtat.remis ||= {};
+  const nouvelles = dues.filter((m) => !S.notifsEtat.remis[m.cle]); if (!nouvelles.length) return;
+  for (const m of nouvelles) {
+    S.notifsEtat.remis[m.cle] = new Date().toISOString();
+    const r = await envoyerNotifications([m]), c = parId(S.commandes, m.commandeId);
+    if (r.liens.length) ajouterFil(`${c?.ref || "Commande"} — chargement dans ${num(S.params.relanceDocsJours, 2)} j, documents manquants : relance à envoyer au client`, { id: `liens:${m.id}`, liens: r.liens });
+  }
+  sauverSansNotif();
+}
 /** Enregistrer sans déclencher les notifications automatiques (quand l'enregistrement vient des notifications elles-mêmes). */
 const sauverSansNotif = () => sauver({ sansNotif: true });
 apresSauver("notifications des étapes", (o) => { if (o.sansNotif) return; if (jalonsANotifier().length) setTimeout(notifierEtapesAuto, 0); planifierEnvoiPlan(); }, 20);
-setInterval(() => { remettreRappelsLocaux().catch(() => {}); }, 60000);
+setInterval(() => { remettreRappelsLocaux().catch(() => {}); remettreRelancesLocales().catch(() => {}); }, 60000);
 setTimeout(() => { remettreRappelsLocaux().catch(() => {}); planifierEnvoiPlan(); }, 3000);
 
 /* ---------- « Notifier » sur une étape ---------- */

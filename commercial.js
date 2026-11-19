@@ -164,7 +164,7 @@ const champsClient = (c = {}) => [
   { name: "tarifAttente", label: "Tarif d'attente au-delà (par heure, 0 = à fixer)", type: "number", value: c.tarifAttente ?? "", min: 0, step: 5 },
   { name: "deviseAttente", label: "Devise du tarif d'attente", type: "select", options: optsDevise, value: c.deviseAttente || "EUR" },
   { name: "adresse", label: "Adresse", type: "textarea", full: true, value: c.adresse },
-  { name: "notificationsClientAutorisees", label: "Le client accepte d'être prévenu aux étapes de ses voyages (WhatsApp ou e-mail)", type: "checkbox", full: true, value: c.notificationsClientAutorisees },
+  { name: "notificationsClientAutorisees", label: "Le client accepte d'être prévenu aux étapes de ses voyages et relancé pour ses documents manquants (WhatsApp ou e-mail)", type: "checkbox", full: true, value: c.notificationsClientAutorisees },
   { name: "canalNotifPrefere", label: "Canal préféré du client", type: "select", options: [["whatsapp", "WhatsApp"], ["email", "E-mail"], ["sms", "SMS"]], value: c.canalNotifPrefere || "whatsapp" },
   { name: "langueNotif", label: "Langue des messages", type: "select", options: [["fr", "Français"], ["en", "English"], ["es", "Español"], ["ar", "العربية"]], value: c.langueNotif || "fr" },
 ];

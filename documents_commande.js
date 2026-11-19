@@ -82,11 +82,44 @@ const MODELES_DEMANDE_DOCS = {
   en: { lien: "You can also send them as photos or PDF from your phone, no account needed:", salut: "Hello", corps: (ref, trajet, date) => `for your shipment ${trajet}${ref ? ` (ref. ${ref})` : ""}, loading planned on ${date}, we are still missing:`, fin: "Please send them before loading to avoid any waiting time at the port.", sign: "Best regards" },
   es: { lien: "También puede enviarlos en foto o PDF desde su teléfono, sin cuenta:", salut: "Buenos días", corps: (ref, trajet, date) => `para su transporte ${trajet}${ref ? ` (ref. ${ref})` : ""}, con carga prevista el ${date}, nos faltan:`, fin: "Les rogamos que nos los envíen antes de la carga para evitar esperas en el puerto.", sign: "Saludos cordiales" },
 };
-/** Message de demande des documents manquants : { langue, sujet, texte, manquants }. */
+/**
+ * Message de demande des documents manquants : { langue, sujet, texte, manquants, avant, lignes, apres }.
+ * avant + lignes (une par document) + apres = texte : le relais retire à l'envoi les documents déjà déposés par le lien.
+ */
 function demandeDocuments(c, { lien = "" } = {}) {
   const cl = parId(S.clients, c.clientId), langue = MODELES_DEMANDE_DOCS[cl?.langueNotif] ? cl.langueNotif : "fr", M = MODELES_DEMANDE_DOCS[langue], e = etatDocuments(c);
   const date = c.dateChargement ? c.dateChargement.split("-").reverse().join("/") : "—", trajet = `${c.origine || "?"} → ${c.destination || "?"}`;
-  const lignes = e.manquants.map((x) => `- ${libDoc(x.id, langue)}`).join("\n");
-  const texte = `${M.salut}${cl?.contact ? " " + cl.contact : ""},\n\n${M.corps(c.refClient || c.ref, trajet, date)}\n${lignes}\n\n${lien ? `${M.lien}\n${lien}\n\n` : ""}${M.fin}\n\n${M.sign},\n${S.entreprise?.nom || ""}`.trim();
-  return { langue, sujet: `${c.ref}${c.refClient ? " / " + c.refClient : ""} — ${langue === "en" ? "documents" : langue === "es" ? "documentos" : "documents"} ${trajet}`, texte, manquants: e.manquants };
+  const lignes = e.manquants.map((x) => ({ id: x.id, texte: `- ${libDoc(x.id, langue)}` }));
+  const avant = `${M.salut}${cl?.contact ? " " + cl.contact : ""},\n\n${M.corps(c.refClient || c.ref, trajet, date)}\n`, apres = `\n\n${lien ? `${M.lien}\n${lien}\n\n` : ""}${M.fin}\n\n${M.sign},\n${S.entreprise?.nom || ""}`;
+  const texte = `${avant}${lignes.map((x) => x.texte).join("\n")}${apres}`.trim();
+  return { langue, sujet: `${c.ref}${c.refClient ? " / " + c.refClient : ""} — ${langue === "en" ? "documents" : langue === "es" ? "documentos" : "documents"} ${trajet}`, texte, manquants: e.manquants, avant, lignes, apres };
+}
+
+/* ---------- relance automatique des documents manquants (J-2 par défaut, 9 h heure du Maroc) ---------- */
+const HEURE_RELANCE_DOCS = "09:00";
+/** Jour et heure (ms) de la relance d'une commande, ou null. S.params.relanceDocsJours : jours avant le chargement (0 : jamais). */
+function quandRelanceDocuments(c) {
+  const jours = Math.round(num(S.params?.relanceDocsJours, 2)); if (jours <= 0 || !c?.dateChargement) return null;
+  const t = Date.parse(`${c.dateChargement}T12:00:00Z`); if (!Number.isFinite(t)) return null;
+  return dateHeureMaroc(new Date(t - jours * 86400000).toISOString().slice(0, 10), HEURE_RELANCE_DOCS);
+}
+/**
+ * Relances programmées entre deux instants (ms) : commandes confirmées à charger, documents manquants, client qui accepte les notifications.
+ * Même forme que planNotifications, avec docs : { lien, avant, lignes, apres } (le relais ne redemande pas ce qui est arrivé par le lien).
+ * urlLien(l) : adresse du lien de dépôt de la commande (fourni par l'interface). Les clients sans accord sont dans `manques`.
+ */
+function planRelancesDocuments({ depuis = Date.now(), jusqua = Date.now() + 7 * 86400000, maintenant = Date.now(), urlLien = () => "" } = {}) {
+  const res = [], manques = [], annulees = S.notifsEtat?.annulees || {};
+  for (const c of S.commandes || []) {
+    if (c.statut !== "confirme" || c.perdu) continue;
+    const quand = quandRelanceDocuments(c), id = `docs:${c.id}:relance`;
+    if (quand === null || annulees[id] || quand < depuis || quand > jusqua || quand < maintenant - 5 * 60000) continue;
+    if (!etatDocuments(c).manquants.length) continue;
+    const d = destinataireNotif("client_externe", "prefere", { clientId: c.clientId }); if (d.manque) { manques.push({ id, commandeId: c.id, quand, texte: `${c.ref} : ${d.manque}` }); continue; }
+    const lien = lienActif(c.lienDepot, quand) ? urlLien(c.lienDepot) || "" : "", dem = demandeDocuments(c, { lien });
+    res.push({ id, commandeId: c.id, type: "relance_docs", quand, audience: "client_externe", canal: d.canal, destination: d.destination, repli: d.repli, langue: dem.langue, nom: d.nom,
+      sujet: dem.sujet, texte: dem.texte, cle: `${id}:${Math.round(quand / 60000)}`, docs: { lien: lien ? c.lienDepot.id : "", avant: dem.avant, lignes: dem.lignes, apres: dem.apres } });
+  }
+  res.sort((a, b) => a.quand - b.quand);
+  return Object.assign(res, { manques });
 }

@@ -206,7 +206,7 @@ Automatique et sans action de votre part.
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
 | `serveur/empreintes.js` | Empreinte de chaque fichier préchargé, posée à la publication : une mise à jour ne télécharge que les fichiers qui ont changé |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 266 tests (227 application, 39 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 268 tests (228 application, 40 relais) |
 | `tests/captures.js`, `tests/donnees-captures.js` | Captures de référence de chaque page (téléphone, bureau, clair, sombre) comparées à chaque livraison — outil de développement, demande Playwright |
 
 ```bash

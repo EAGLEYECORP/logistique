@@ -26,6 +26,7 @@ async function ouvrirDocuments(c) {
   const f = await modale({ titre: `Documents — ${c.ref}`, valider: "Enregistrer", corps: `<p class="doc-tete">${esc(nomClient(c.clientId))} · ${esc(c.origine || "?")} → ${esc(c.destination || "?")} · chargement ${dateFr(c.dateChargement)}${e.frais ? " · marchandise fraîche" : ""}</p>
     <div class="doc-liste">${e.attendus.map(ligne).join("")}</div>
     <label class="check" style="margin-top:10px"><input type="checkbox" name="demander" ${e.manquants.length ? "checked" : ""}><span>Après l'enregistrement, préparer le message au client pour les manquants${cl?.tel || cl?.email ? "" : " (aucun téléphone ni e-mail sur la fiche du client)"}</span></label>
+    ${e.manquants.length && c.statut === "confirme" ? `<p class="hint relance-docs">${esc(texteRelanceDocuments(c))}</p>` : ""}
     <p class="hint">Liste selon le sens (${e.sens === "export" ? "export du Maroc" : e.sens === "import" ? "import au Maroc" : e.sens}) et la marchandise, à confirmer avec votre transitaire.</p>` });
   if (!f) return;
   for (const x of e.attendus) noterDocument(c, x.id, { recu: f[`recu__${x.id}`] ? (x.recu || true) : false, ref: f[`ref__${x.id}`] || "", nonRequis: !!f[`nr__${x.id}`] });
@@ -46,6 +47,32 @@ async function envoyerDemandeDocuments(c) {
 if (VUES.commandes) {
   surAction("commandes", "*", async function (act, id, b) { if (act === "documents") { const c = parId(S.commandes, id); return c ? ouvrirDocuments(c) : undefined; } return PASSER; });
 }
+
+/** Ce qui va se passer pour la relance automatique d'une commande (une phrase). */
+function texteRelanceDocuments(c, maintenant = Date.now()) {
+  const q = quandRelanceDocuments(c), jours = Math.round(num(S.params.relanceDocsJours, 2));
+  if (jours <= 0) return "Relance automatique des documents désactivée (Réglages → Rappels).";
+  if (q === null) return "";
+  if (q < maintenant) return `Relance automatique : le ${dateFr(new Date(q).toISOString().slice(0, 10))} est passé ; utilisez « Demander les manquants ».`;
+  const d = destinataireNotif("client_externe", "prefere", { clientId: c.clientId }), quand = new Date(q).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  if (d.manque) return `Pas de relance automatique : ${d.manque.replace(/^[^:]+ : /, "")} (fiche du client).`;
+  return `Relance automatique au client ${quand} à 9 h (${d.canal === "whatsapp" ? "WhatsApp" : "e-mail"}) s'il manque encore des documents ; ce qu'il aura déposé par son lien ne sera pas redemandé.`;
+}
+
+/* ---------- réglages : relance automatique ---------- */
+enregistrerCarteReglages({
+  onglet: "rappels", ordre: 23,
+  rendu: () => {
+    const p = planRelancesDocuments({ jusqua: Date.now() + 14 * 86400000 }), jours = Math.round(num(S.params.relanceDocsJours, 2));
+    return `<div class="card" id="carte-relance-docs"><div class="card-head"><h2>Relance des documents manquants</h2></div>
+    <form id="f-relance-docs"><div class="form-grid">
+      <label class="f">Jours avant le chargement (0 : jamais)<input type="number" name="jours" min="0" max="7" step="1" value="${jours}"></label>
+    </div><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn">Enregistrer</button></div></form>
+    <p class="hint">À 9 h (heure du Maroc), le client reçoit dans sa langue la liste des documents qui manquent encore, avec son lien de dépôt s'il en a un. Par le relais, même application fermée : ce que le client a déposé entre-temps n'est pas redemandé, et rien ne part s'il ne manque plus rien. Seulement pour les clients qui acceptent d'être prévenus (fiche du client).</p>
+    ${jours > 0 ? `<p class="hint">${p.length ? `${p.length} relance(s) prévue(s) dans les 14 jours.` : "Aucune relance prévue dans les 14 jours."}${p.manques.length ? ` ${p.manques.length} commande(s) sans relance possible : ${esc(p.manques.slice(0, 3).map((m) => m.texte).join(" ; "))}${p.manques.length > 3 ? "…" : ""}.` : ""}</p>` : ""}</div>`;
+  },
+  soumettre(fid, v) { if (fid !== "f-relance-docs") return false; S.params.relanceDocsJours = Math.max(0, Math.min(7, Math.round(num(v.jours, 2)))); sauver(); toast(S.params.relanceDocsJours ? `Relance ${S.params.relanceDocsJours} jour(s) avant le chargement` : "Relance automatique désactivée"); rafraichir(); return true; },
+});
 
 /* ---------- fiche du voyage ---------- */
 function blocDocumentsVoyage(v) {

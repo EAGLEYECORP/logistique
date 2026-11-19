@@ -24,7 +24,7 @@ const { creerItineraire } = require("./itineraire.js");
 const { creerVeille } = require("./veille.js");
 const { page: pageLien } = require("./page-lien.js");
 
-const VERSION = "2.1.0";
+const VERSION = "2.2.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -146,6 +146,10 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
     if (canal === "email" && !adresseValide(destination)) return { refus: "adresse e-mail invalide" };
     const r = { id, canal, destination: canal === "equipe" ? "" : destination, texte, sujet: String(m.sujet ?? "").slice(0, 200).replace(/[\r\n]+/g, " "), cle: String(m.cle ?? id).slice(0, 200), quand: Number.isFinite(quand) ? quand : Date.now(), voyageId: String(m.voyageId ?? "").slice(0, 60), niveau: m.niveau === "danger" ? "danger" : "warn" };
     if (m.repli && m.repli.canal === "email" && adresseValide(String(m.repli.destination ?? ""))) r.repli = { canal: "email", destination: String(m.repli.destination).trim() };
+    if (m.docs && typeof m.docs === "object" && Array.isArray(m.docs.lignes)) { // relance des documents : une ligne par document, retirée à l'envoi s'il a été déposé par le lien
+      const lien = String(m.docs.lien ?? ""), lignes = m.docs.lignes.slice(0, 30).map((x) => ({ id: String(x?.id ?? "").slice(0, 40), texte: String(x?.texte ?? "").slice(0, 200) })).filter((x) => x.id && x.texte);
+      if (lignes.length) r.docs = { lien: /^[A-Za-z0-9_-]{24,64}$/.test(lien) ? lien : "", avant: String(m.docs.avant ?? "").slice(0, 2000), apres: String(m.docs.apres ?? "").slice(0, 2000), lignes };
+    }
     return { message: r };
   }
   async function envoyerNotif(m) {
@@ -166,6 +170,14 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
     }
     return { envoyes, erreurs };
   }
+  /** Relance des documents : les documents déjà déposés par le client sur son lien ne sont plus demandés ; null s'il ne manque plus rien. */
+  function documentsRestants(m) {
+    if (!m.docs) return m;
+    const l = m.docs.lien ? liens.liens.get(m.docs.lien) : null;
+    const recu = (id) => !!l && ((l.docs || []).some((d) => d.id === id && d.recu) || (l.fichiers || []).some((f) => f.doc === id));
+    const restantes = m.docs.lignes.filter((x) => !recu(x.id)); if (!restantes.length) return null;
+    return restantes.length === m.docs.lignes.length ? m : { ...m, texte: `${m.docs.avant}${restantes.map((x) => x.texte).join("\n")}${m.docs.apres}`.trim() };
+  }
   let notifHeure = { h: 0, n: 0 }; const notifsVues = new Map();
   const quotaNotif = (maintenant) => { const h = Math.floor(maintenant / 3600000); if (notifHeure.h !== h) notifHeure = { h, n: 0 }; return notifHeure.n++ < 300; };
   let tickEnCours = false;
@@ -176,8 +188,10 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
       for (const m of planif.messages) {
         if (planif.etats[m.id] || m.quand > maintenant) continue;
         if (maintenant - m.quand > 6 * 3600000) { planif.etats[m.id] = { statut: "perime", t: maintenant }; faits.push({ id: m.id, statut: "perime" }); continue; }
+        const pret = documentsRestants(m);
+        if (!pret) { planif.etats[m.id] = { statut: "inutile", t: maintenant }; faits.push({ id: m.id, statut: "inutile" }); continue; } // tout est arrivé par le lien de dépôt
         if (!quotaNotif(maintenant)) break;
-        const r = await envoyerNotif(m), statut = r.envoyes.length ? "envoye" : "erreur";
+        const r = await envoyerNotif(pret), statut = r.envoyes.length ? "envoye" : "erreur";
         planif.etats[m.id] = { statut, t: maintenant, envoyes: r.envoyes, erreurs: r.erreurs.slice(0, 5) }; faits.push({ id: m.id, statut, ...r });
       }
       if (faits.length) sauverPlanif();

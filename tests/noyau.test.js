@@ -2963,6 +2963,32 @@ test("veille par le relais : liste confiée (balise, chauffeur si le relais sait
   assert.strictEqual(N.S.commandes[0].quais.livraison.arrivee, "2026-11-17T13:00:00.000Z", "heure notée à la main gardée"); assert.ok(!N.S.commandes[0].quais.livraison.depart, "départ avant l'arrivée : ignoré");
 });
 
+test("relance des documents : J-2 à 9 h (heure du Maroc) au client qui accepte, lignes par document, lien de dépôt ; rien si devis, complet, sans accord (signalé) ou désactivé", () => {
+  const T = Date.parse("2026-11-18T10:00:00Z");
+  N.S.entreprise = { nom: "Atlas Fret" };
+  N.S.clients = [{ id: "k1", nom: "Roussillon Emballages", tel: "+33 4 68 00 00 01", email: "achats@roussillon.example", langueNotif: "es", notificationsClientAutorisees: true }, { id: "k2", nom: "Primeurs du Souss", email: "a@b.ma" }];
+  N.S.commandes = [
+    { id: "o1", ref: "CMD-1", clientId: "k1", statut: "confirme", origine: "Agadir", destination: "Perpignan", marchandise: "Tomates", dateChargement: "2026-11-22", lienDepot: { id: "L".repeat(32), chemin: "/depot/" + "L".repeat(32), expire: Math.floor(T / 1000) + 10 * 86400 } },
+    { id: "o2", ref: "CMD-2", clientId: "k2", statut: "confirme", origine: "Agadir", destination: "Lyon", marchandise: "Tomates", dateChargement: "2026-11-21" },
+    { id: "o3", ref: "CMD-3", clientId: "k1", statut: "devis", origine: "Agadir", destination: "Lyon", dateChargement: "2026-11-21" },
+  ];
+  const url = (l) => `https://relais.example${l.chemin}`;
+  const p = N.planRelancesDocuments({ depuis: T, jusqua: T + 7 * 864e5, maintenant: T, urlLien: url });
+  assert.strictEqual(p.length, 1, "devis : pas de relance ; client sans accord : signalé");
+  const m = p[0]; assert.strictEqual(m.quand, Date.parse("2026-11-20T09:00:00+01:00")); assert.strictEqual(m.canal, "whatsapp"); assert.strictEqual(m.destination, "33468000001"); assert.strictEqual(m.repli.destination, "achats@roussillon.example");
+  assert.strictEqual(m.langue, "es"); assert.ok(m.texte.includes("https://relais.example/depot/" + "L".repeat(32)), "lien de dépôt dans le message");
+  assert.strictEqual(m.docs.lien, "L".repeat(32)); assert.strictEqual(`${m.docs.avant}${[...m.docs.lignes].map((x) => x.texte).join("\n")}${m.docs.apres}`.trim(), m.texte, "le relais peut refaire le message ligne par ligne");
+  assert.ok(m.docs.lignes.length >= 2 && m.docs.lignes.every((x) => /^- /.test(x.texte)));
+  assert.strictEqual(m.texte, N.demandeDocuments(N.S.commandes[0], { lien: "https://relais.example/depot/" + "L".repeat(32) }).texte, "même message que « Demander les manquants »");
+  assert.deepStrictEqual([...p.manques].map((x) => x.commandeId), ["o2"]); assert.ok(/notifications non autorisées/.test(p.manques[0].texte));
+  for (const x of N.etatDocuments(N.S.commandes[0]).manquants) N.noterDocument(N.S.commandes[0], x.id, { recu: true });
+  assert.strictEqual(N.planRelancesDocuments({ depuis: T, jusqua: T + 7 * 864e5, maintenant: T }).length, 0, "tout est reçu : rien");
+  N.noterDocument(N.S.commandes[0], N.etatDocuments(N.S.commandes[0]).attendus[0].id, { recu: false }); N.S.params.relanceDocsJours = 0;
+  assert.strictEqual(N.planRelancesDocuments({ depuis: T, jusqua: T + 7 * 864e5, maintenant: T }).length, 0, "désactivé");
+  N.S.params.relanceDocsJours = 3; assert.strictEqual(N.quandRelanceDocuments(N.S.commandes[0]), Date.parse("2026-11-19T09:00:00+01:00"));
+  assert.strictEqual(N.planRelancesDocuments({ depuis: T, jusqua: T + 7 * 864e5, maintenant: Date.parse("2026-11-19T12:00:00Z") }).length, 0, "heure passée : plus de relance automatique");
+});
+
 test("chargement : aucun nom global déclaré deux fois dans les scripts de index.html", () => {
   const html = fs.readFileSync(path.join(racine, "index.html"), "utf8"), fichiers = [...html.matchAll(/<script src="([^"]+\.js)"/g)].map((m) => m[1]).filter((f) => !f.startsWith("vendor/"));
   assert.ok(fichiers.length > 60, `${fichiers.length} scripts`); const vus = new Map(), doublons = [];

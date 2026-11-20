@@ -3055,6 +3055,33 @@ test("dictée : ponctuation dite (fr, es, en, ar) sans toucher « point de livra
   assert.strictEqual(N.LANGUES_DICTEE.ar, "ar-MA");
 });
 
+test("ticket du chauffeur : rangé seul sur le voyage en cours (péage Europe en €, Maroc en MAD), photo gardée de l'attente au voyage, jamais jointe aux factures", () => {
+  N.S.camions = [{ id: "c1", immat: "111-A-1" }]; N.S.chauffeurs = [{ id: "h1", nom: "Youssef", camionId: "c1" }]; N.S.clients = [{ id: "k1", nom: "Client" }];
+  N.S.voyages = [{ id: "v1", ref: "V-1", statut: "en_cours", camionId: "c1", chauffeurId: "h1", clientId: "k1", dateDepart: "2026-11-15", dateRetourPrevue: "2026-11-23", jalons: [{ type: "depart", date: "2026-11-15T06:00:00Z" }] }];
+  const v = N.S.voyages[0];
+  assert.deepStrictEqual({ ...N.proposeTicket(v) }, { zone: "maroc", devise: "MAD", peage: "peage_ma" });
+  let r = N.enregistrerTicket({ chauffeurId: "h1", camionId: "c1", type: "peage", montant: "84,50", date: "2026-11-15" });
+  assert.strictEqual(r.voyage.id, "v1"); assert.deepStrictEqual([r.ligne.type, r.ligne.montant, r.ligne.devise, r.ligne.source, r.ligne.libelle], ["peage_ma", 84.5, "MAD", "ticket", "Ticket du chauffeur"]); assert.strictEqual(r.ligne.pieceId, r.pieceId);
+  v.jalons.push({ type: "embarque_aller", date: "2026-11-16T10:00:00Z" });
+  r = N.enregistrerTicket({ chauffeurId: "h1", camionId: "c1", type: "peage", montant: 12.4, date: "2026-11-18", note: "AP-7 Murcie" });
+  assert.deepStrictEqual([r.ligne.type, r.ligne.devise, r.ligne.libelle], ["peage_eu", "EUR", "Ticket du chauffeur · AP-7 Murcie"], "en Europe : péage Europe en euros");
+  r = N.enregistrerTicket({ chauffeurId: "h1", camionId: "c1", type: "parking_securise", montant: 25, devise: "EUR", date: "2026-11-19" }); assert.strictEqual(r.ligne.type, "parking_securise");
+  v.jalons.push({ type: "debarque_tmed", date: "2026-11-22T10:00:00Z" }); assert.strictEqual(N.zoneVoyage(v), "maroc", "de retour au Maroc");
+  // sans montant : attend le bureau avec sa photo ; rattaché ensuite, la photo suit
+  r = N.enregistrerTicket({ chauffeurId: "h1", camionId: "c1", type: "hebergement", date: "2026-11-20" });
+  assert.ok(r.attente && r.attente.raison === "montant à lire sur le ticket" && r.attente.voyageSuggere === "v1" && r.attente.pieceId === r.pieceId);
+  assert.deepStrictEqual([...N.retenterAttente()], [], "sans montant : jamais rattaché tout seul");
+  const l = N.affecterAttente(r.attente.id, "v1", { montant: 61, devise: "EUR" }); assert.strictEqual(l.pieceId, r.pieceId, "la photo reste attachée"); assert.strictEqual(l.source, "ticket");
+  // hors de tout voyage : en attente, rattaché dès que le voyage existe
+  r = N.enregistrerTicket({ chauffeurId: "h1", camionId: "c1", type: "autre", montant: 9, devise: "EUR", date: "2026-12-02" });
+  assert.strictEqual(r.attente.raison, "aucun voyage à cette date");
+  N.S.voyages.push({ id: "v2", ref: "V-2", statut: "prevu", camionId: "c1", chauffeurId: "h1", dateDepart: "2026-12-01", dateRetourPrevue: "2026-12-08", jalons: [] });
+  assert.deepStrictEqual([...N.retenterAttente()], ["v2"]); assert.strictEqual(N.S.voyages[1].lignesCout[0].pieceId, r.pieceId);
+  assert.throws(() => N.enregistrerTicket({ chauffeurId: "h1", camionId: "c1", type: "carburant", montant: 500, date: "2026-11-18" }), /inconnu/, "le gasoil passe par « Saisir un plein »");
+  const f = { id: "f1", numero: "FAC-1", clientId: "k1", voyageIds: ["v1"], lignes: [] };
+  assert.ok(N.ciblesPhotosFacture(f).every((x) => !x.startsWith("ligne:")), "les tickets ne partent jamais avec la facture");
+});
+
 test("chargement : aucun nom global déclaré deux fois dans les scripts de index.html", () => {
   const html = fs.readFileSync(path.join(racine, "index.html"), "utf8"), fichiers = [...html.matchAll(/<script src="([^"]+\.js)"/g)].map((m) => m[1]).filter((f) => !f.startsWith("vendor/"));
   assert.ok(fichiers.length > 60, `${fichiers.length} scripts`); const vus = new Map(), doublons = [];

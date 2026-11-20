@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.18.0 — Le ticket photographié se range tout seul sur le bon voyage
+
+- **Mode chauffeur : « Photo d'un ticket »** ouvre directement l'appareil photo. Ensuite, une fenêtre courte : le type en un geste (péage, parking, hôtel, dépannage ou pneus, autre), le montant s'il est lisible, la devise déjà proposée (euros en Europe, dirhams au Maroc, d'après l'avancement du voyage : de l'embarquement à Tanger Med au retour). Un péage pris en Europe compte en péages Europe, au Maroc en péages Maroc.
+- **Rangé tout seul** sur le voyage en cours du chauffeur, comme dépense du voyage, **avec la photo jointe** : la marge suit tout de suite, et le bureau voit le reçu d'un clic dans la fiche du voyage (onglet Argent).
+- **Sans montant** (ticket abîmé, pas le temps) ou **sans voyage en cours** : le ticket attend dans « Dépenses à rattacher » avec sa photo ; le bureau lit le montant sur la photo et le rattache (le voyage du moment est proposé). Un ticket hors voyage se range seul dès que le voyage existe.
+- **Les tickets de gasoil** (« Saisir un plein », qui compte aussi la consommation) apparaissent maintenant dans la fiche du voyage : « Pleins du voyage », avec la photo de chaque ticket.
+- Les photos de tickets ne partent jamais avec les factures envoyées au client.
+- Corrigé au passage : dans les fenêtres de l'application, un choix parmi plusieurs boutons ronds (radio) était mal lu (la dernière option l'emportait toujours). Seul le nouveau choix du type de ticket en dépendait.
+
 ## 5.17.0 — Dicter au lieu de taper : les réserves à la livraison, et toutes les notes
 
 - **Un bouton micro dans chaque zone de texte** : les réserves de la preuve de livraison en premier (le chauffeur, devant le destinataire, dicte « deux palettes abîmées virgule film déchiré point »), mais aussi les notes des commandes, des voyages, l'adresse ou les mentions de l'entreprise.

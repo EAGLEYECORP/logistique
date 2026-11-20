@@ -25,7 +25,7 @@ function blocLignesCout(v) {
   const l = [...(v.lignesCout || [])].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   return `<div class="section-title">Dépenses enregistrées · ${l.length}</div>
     ${blocInvites(v)}<div class="lignes-cout" data-lignes="${v.id}">${l.map((x) => `<div class="trav"><div><strong>${esc(libTypeCout(x.type))}${x.sens ? ` (${esc(x.sens)})` : ""}</strong><span class="sub">${[x.date && dateFr(x.date), libSourceCout(x.source), x.ref, x.libelle].filter(Boolean).map(esc).join(" · ")}</span></div>
-      <div class="r"><strong class="num">${fmt(x.montant, x.devise === "EUR" ? 2 : 0)} ${esc(x.devise)}</strong>${typeof boutonPhotos === "function" ? boutonPhotos(`ligne:${x.id}`, `Reçu — ${libTypeCout(x.type)} ${v.ref || ""}`) : ""}${iconBtn("ligne-modifier", "edit", "Modifier cette dépense", `${v.id}|${x.id}`)}${iconBtn("ligne-supprimer", "trash", "Supprimer cette dépense", `${v.id}|${x.id}`, true)}</div></div>`).join("")}
+      <div class="r"><strong class="num">${fmt(x.montant, x.devise === "EUR" ? 2 : 0)} ${esc(x.devise)}</strong>${typeof boutonPhotos === "function" ? boutonPhotos(`ligne:${x.pieceId || x.id}`, `Reçu — ${libTypeCout(x.type)} ${v.ref || ""}`) : ""}${iconBtn("ligne-modifier", "edit", "Modifier cette dépense", `${v.id}|${x.id}`)}${iconBtn("ligne-supprimer", "trash", "Supprimer cette dépense", `${v.id}|${x.id}`, true)}</div></div>`).join("")}
       <div class="row">${btn("ligne-ajouter", "Ajouter une dépense", { id: v.id, icone: "plus", cls: "btn sm" })}</div>
       <p class="hint">Une dépense enregistrée remplace l'estimation du même type (carburant, péages, traversée…) : la marge suit ce qui est réellement payé.</p></div>${typeof blocHistorique === "function" ? blocHistorique(v) : ""}`;
 }

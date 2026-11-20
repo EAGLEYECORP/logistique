@@ -103,12 +103,34 @@ function affecterAttente(id, voyageId, { montant, devise } = {}) {
 function retenterAttente() {
   const touches = [];
   for (const a of [...(S.depensesAttente || [])]) {
-    if (!["MAD", "EUR"].includes(a.devise)) continue;
+    if (!["MAD", "EUR"].includes(a.devise) || !(num(a.montant) > 0)) continue; // un ticket sans montant attend que le bureau le lise
     const cam = a.camionId ? parId(S.camions, a.camionId) : camionDeLigne({ plaque: a.vehicule, carte: a.vehicule });
-    const v = a.type === "amendes" ? voyageALaDate({ camionId: cam?.id, chauffeurId: a.chauffeurId }, a.date) : cam && voyageALaDate({ camionId: cam.id }, a.date, { avant: 1 });
+    const v = a.type === "amendes" ? voyageALaDate({ camionId: cam?.id, chauffeurId: a.chauffeurId }, a.date) : a.source === "ticket" ? voyageALaDate({ camionId: cam?.id, chauffeurId: a.chauffeurId }, a.date, { avant: 1 }) : cam && voyageALaDate({ camionId: cam.id }, a.date, { avant: 1 });
     if (v && affecterAttente(a.id, v.id) && !touches.includes(v.id)) touches.push(v.id);
   }
   return touches;
+}
+
+/* ---------- ticket photographié par le chauffeur : rattaché seul au bon voyage ---------- */
+/** Ce que le chauffeur photographie sur la route (le gasoil passe par « Saisir un plein », qui compte aussi la consommation). */
+const TYPES_TICKET = [["peage", "Péage"], ["parking_securise", "Parking"], ["hebergement", "Hôtel"], ["maintien", "Dépannage, pneus"], ["autre", "Autre"]];
+/** Où en est un voyage : « europe » de l'embarquement aller au débarquement à Tanger Med au retour, sinon « maroc ». */
+function zoneVoyage(v) { const fait = (t) => (v?.jalons || []).some((j) => j.type === t); return fait("embarque_aller") && !fait("debarque_tmed") ? "europe" : "maroc"; }
+/** Devise et péage proposés pour un ticket pris maintenant sur ce voyage. */
+const proposeTicket = (v) => (zoneVoyage(v) === "europe" ? { zone: "europe", devise: "EUR", peage: "peage_eu" } : { zone: "maroc", devise: "MAD", peage: "peage_ma" });
+/**
+ * Enregistre un ticket du chauffeur : sur son voyage (ou celui du camion) à cette date, sinon en attente comme une ligne de relevé.
+ * Sans montant : en attente « montant à lire sur le ticket ». La photo se range sous « ligne:<pieceId> » (jamais jointe aux factures du client).
+ * Renvoie { voyage, ligne, pieceId } ou { attente, pieceId }.
+ */
+function enregistrerTicket({ chauffeurId = "", camionId = "", type, montant, devise, date, note = "", maintenant = Date.now() } = {}) {
+  const jour = String(date || dateISO(maintenant)).slice(0, 10), pieceId = uid(), v = voyageALaDate({ chauffeurId, camionId }, jour, { avant: 1 }), p = proposeTicket(v);
+  const t = type === "peage" ? p.peage : type; if (!TYPES_TICKET.some(([k]) => k === type) || !typeCout(t)) throw new Error("Type de ticket inconnu");
+  const m = num(montant), d = { type: t, montant: m, devise: ["MAD", "EUR"].includes(devise) ? devise : p.devise, source: "ticket", date: jour, pieceId, libelle: String(note || "").trim() ? `Ticket du chauffeur · ${String(note).trim().slice(0, 120)}` : "Ticket du chauffeur" };
+  if (v && m > 0) return { voyage: v, ligne: ajouterLigneCout(v, { ...d, chauffeurId: chauffeurId || undefined, camionId: camionId || undefined }), pieceId };
+  const a = { id: uid(), ...d, chauffeurId, camionId, vehicule: "", raison: m > 0 ? "aucun voyage à cette date" : "montant à lire sur le ticket", ...(v ? { voyageSuggere: v.id } : {}) };
+  (S.depensesAttente ||= []).push(a);
+  return { attente: a, pieceId };
 }
 
 /** Enregistre une amende : sur le voyage en cours du chauffeur (ou du camion) à cette date, sinon en attente. Renvoie { voyage, ligne } ou { attente }. */

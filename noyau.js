@@ -483,7 +483,7 @@ const TYPES_COUT = [
   ["frais_douane_destination", "Douane à destination", "douane"], ["froid_energie", "Énergie du groupe froid", "froid"], ["amendes", "Amendes", "amendes"], ["maintien", "Dépannage, pneus en route", "maintien"],
   ["autre", "Autre", "autres"], ["amortissement_camion", "Amortissement camion", null], ["amortissement_remorque", "Amortissement remorque", null], ["charges_fixes", "Charges fixes", null], ["charges_generales", "Charges générales", null],
 ];
-const SOURCES_COUT = [["saisie", "Saisie"], ["gps", "Mesuré par GPS"], ["fuel_card_csv", "Carte carburant"], ["facture_armateur", "Facture de l'armateur"], ["calcule", "Calculé"]];
+const SOURCES_COUT = [["saisie", "Saisie"], ["gps", "Mesuré par GPS"], ["fuel_card_csv", "Carte carburant"], ["facture_armateur", "Facture de l'armateur"], ["calcule", "Calculé"], ["ticket", "Ticket du chauffeur"]];
 const typeCout = (t) => TYPES_COUT.find((x) => x[0] === t);
 const libTypeCout = (t) => typeCout(t)?.[1] || t;
 const libSourceCout = (s) => SOURCES_COUT.find((x) => x[0] === s)?.[1] || s;

@@ -35,7 +35,7 @@ function blocAttente() {
   const l = S.depensesAttente || []; if (!l.length) return "";
   return `<div class="card fin" id="bloc-attente"><div class="card-head"><h2>Dépenses à rattacher</h2>${badge(String(l.length), "warn")}</div>
     ${l.map((a) => `<div class="trav"><div><strong>${esc(libTypeCout(a.type))} · ${fmt(a.montant, 2)} ${esc(a.devise)}</strong><span class="sub">${[dateFr(a.date), a.vehicule || (a.camionId && nomCamion(a.camionId)) || (a.chauffeurId && nomChauffeur(a.chauffeurId)), a.libelle, a.ref].filter(Boolean).map(esc).join(" · ")} — ${esc(a.raison || "")}</span></div>
-      <div class="r">${btn("attente-affecter", "Rattacher", { id: a.id, cls: "btn sm" })}${iconBtn("attente-supprimer", "trash", "Écarter cette dépense", a.id, true)}</div></div>`).join("")}
+      <div class="r">${a.pieceId && typeof boutonPhotos === "function" ? boutonPhotos(`ligne:${a.pieceId}`, `Ticket — ${libTypeCout(a.type)}`) : ""}${btn("attente-affecter", "Rattacher", { id: a.id, cls: "btn sm" })}${iconBtn("attente-supprimer", "trash", "Écarter cette dépense", a.id, true)}</div></div>`).join("")}
     <p class="hint">Ces dépenses n'ont pas trouvé leur voyage. Elles se rattachent seules dès que le voyage ou le camion correspondant existe.</p></div>`;
 }
 
@@ -68,7 +68,7 @@ surAction("voyages", ["carte-carburant", "attente-affecter", "attente-supprimer"
     const a = (S.depensesAttente || []).find((x) => x.id === id); if (!a) return;
     const opts = optsVoyages(a.camionId); if (!opts.length) return toast("Créez d'abord le voyage correspondant.", "warn");
     const f = await formulaire("Rattacher la dépense", [
-      { name: "voyageId", label: "Voyage", type: "select", options: opts, value: opts[0][0], full: true },
+      { name: "voyageId", label: "Voyage", type: "select", options: opts, value: opts.some(([k]) => k === a.voyageSuggere) ? a.voyageSuggere : opts[0][0], full: true },
       { name: "montant", label: "Montant", type: "number", min: 0, value: a.montant, required: true },
       { name: "devise", label: "Devise", type: "select", options: [["MAD", "MAD"], ["EUR", "EUR"]], value: ["MAD", "EUR"].includes(a.devise) ? a.devise : "EUR" },
     ], { valider: "Rattacher", aide: ["MAD", "EUR"].includes(a.devise) ? "" : `Montant d'origine : ${fmt(a.montant, 2)} ${esc(a.devise)}. Saisissez sa contre-valeur en euros ou en dirhams.` });

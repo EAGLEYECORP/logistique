@@ -96,7 +96,7 @@ function carteCamion(ch) {
   if (!c) return "";
   return `<div class="card"><div class="card-head"><h2>Mon camion · ${esc(c.immat)}</h2><span class="sub num">${fmt(c.km)} km</span></div>
     <div class="gauges" style="margin-bottom:14px">${etatCamion(c).filter((e) => e.pct !== undefined).map((e) => `<div class="gauge ${e.niveau}"><span class="lbl">${e.type}</span><span class="bar"><i style="width:${e.pct}%"></i></span><span class="txt">${esc(e.texte)}</span></div>`).join("")}</div>
-    <div class="chf-actions">${btn("chf-plein", "Saisir un plein", { icone: "fuel", cls: "btn lg ghost" })}${boutonPhotos(`camion:${c.id}`, `Photos — ${c.immat}`, { texte: true, cls: "btn lg ghost" })}</div></div>`;
+    <div class="chf-actions">${btn("chf-plein", "Saisir un plein", { icone: "fuel", cls: "btn lg ghost" })}${btn("chf-ticket", "Photo d'un ticket", { icone: "receipt", cls: "btn lg ghost" })}${boutonPhotos(`camion:${c.id}`, `Photos — ${c.immat}`, { texte: true, cls: "btn lg ghost" })}</div></div>`;
 }
 
 VUES.chauffeur = {

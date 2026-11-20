@@ -131,6 +131,7 @@ function lireForm(form) {
   const o = {};
   for (const el of form.elements) {
     if (!el.name) continue;
+    if (el.type === "radio") { if (el.checked) o[el.name] = el.value; else if (!(el.name in o)) o[el.name] = ""; continue; } // groupe de choix : la valeur cochée
     o[el.name] = el.type === "checkbox" ? el.checked : el.type === "file" ? [...el.files] : el.value.trim();
   }
   return o;

@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.19.0 — Le bateau réservé : à quelle heure entrer au port pour l'attraper
+
+- **Fiche du voyage, onglet Suivi : un bloc « Bateau »** pour la prochaine traversée : ligne, jour et heure du départ, armateur, référence de réservation, et **l'heure limite pour entrer au port**. À Tanger Med, elle vient de **vos propres passages mesurés** ce jour-là à cette heure-là (le cas lent, 9 fois sur 10), jamais moins que la présentation de 3 h demandée par les armateurs ; si une tranche plus tardive est trop lente pour ce bateau, la phrase le dit (« plus tard, le lundi entre 09:00 et 12:00, le passage prend jusqu'à 4 h 20 : trop long pour ce bateau »). Ailleurs, ou faute de mesures, la présentation de 3 h.
+- **Comparée à l'arrivée estimée du camion** : « 3 h 00 d'avance », « c'est juste », ou « trop tard de 1 h 15 — décaler la réservation ou partir plus tôt », avec une alerte en tête de la fiche quand c'est juste ou trop tard.
+- **Pas encore réservé** : le départ à réserver au plus tôt (arrivée estimée + passage habituel, à la demi-heure).
+- **Le chauffeur voit son bateau dans « Ma route »** : jour, heure, référence de réservation à donner au port, et l'heure limite pour y être.
+- Les heures sont celles du port de départ : Maroc pour Tanger Med, Espagne pour Algeciras (une heure de plus l'été, indiqué « heure d'Espagne »), France pour Sète.
+
 ## 5.18.0 — Le ticket photographié se range tout seul sur le bon voyage
 
 - **Mode chauffeur : « Photo d'un ticket »** ouvre directement l'appareil photo. Ensuite, une fenêtre courte : le type en un geste (péage, parking, hôtel, dépannage ou pneus, autre), le montant s'il est lisible, la devise déjà proposée (euros en Europe, dirhams au Maroc, d'après l'avancement du voyage : de l'embarquement à Tanger Med au retour). Un péage pris en Europe compte en péages Europe, au Maroc en péages Maroc.

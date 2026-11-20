@@ -3082,6 +3082,30 @@ test("ticket du chauffeur : rangé seul sur le voyage en cours (péage Europe en
   assert.ok(N.ciblesPhotosFacture(f).every((x) => !x.startsWith("ligne:")), "les tickets ne partent jamais avec la facture");
 });
 
+test("bateau réservé : heure limite d'entrée au port d'après vos passages (tranche lente qui oblige à venir plus tôt), arrivée estimée trop juste, départ à réserver, retour à l'heure d'Espagne", () => {
+  const H = 3600000, m = (j, h, d) => ({ portId: "tmed_export", jourSemaine: j, heureEntree: h, dureeMs: d, scanRouge: false });
+  N.S.attentesPort = [m(2, 9, 3 * H), m(2, 10, 3.33 * H), m(2, 11, 4.33 * H), m(2, 6, 1.5 * H), m(2, 7, 1.67 * H), m(2, 8, 2 * H)];
+  const base = { id: "v1", ref: "V-1", statut: "prevu", origine: "Agadir", destination: "Perpignan", dateDepart: "2026-11-24", itineraire: { troncons: [{ heures: 4 }] }, jalons: [] };
+  const trav = (heure, statut = "reservee") => ({ sens: "aller", ligne: "tmed-alg", date: "2026-11-24", heure, statut, armateur: "Baleària", ref: "482193" });
+  let v = { ...base, traversees: [trav("16:00")] }, b = N.bateauVoyage(v);
+  assert.strictEqual(new Date(b.arrivee).toISOString(), "2026-11-24T09:00:00.000Z", "arrivée estimée : 10:00 heure du Maroc");
+  assert.strictEqual(N.heurePort(b.limite, b.fuseau), "13:00"); assert.deepStrictEqual([b.passage.source, b.margeMin, b.niveau], ["presentation", 180, "ok"]);
+  assert.ok(N.texteBateau(b).startsWith("Tanger Med → Algeciras mardi 24/11 à 16:00 · Baleària · réf. 482193 — entrer au port avant 13:00 (présentation 3 h avant le départ). Arrivée estimée vers 10:00 : 3 h 00 d'avance."), N.texteBateau(b));
+  v = { ...base, traversees: [trav("13:00")] }; b = N.bateauVoyage(v);
+  assert.strictEqual(N.heurePort(b.limite, b.fuseau), "08:45", "de 9 h à 12 h le passage prend jusqu'à 4 h 20 : entrer avant 9 h");
+  assert.deepStrictEqual([b.contrainte.tranche, b.niveau, b.margeMin], [9, "danger", -75]);
+  const t = N.texteBateau(b); assert.ok(t.includes("entrer au port avant 08:45 (plus tard, le mardi entre 09:00 et 12:00, le passage prend jusqu'à 4 h 20 dans 9 cas sur 10 (habituellement 3 h 20) : trop long pour ce bateau)") && t.includes("trop tard de 1 h 15"), t);
+  const pa = [...N.pointsAttention(v)]; assert.ok(pa.some((x) => x.cle === "bateau" && x.niveau === "danger" && /Bateau de 13:00 : arrivée estimée trop tard de 1 h 15/.test(x.texte) && x.act === "trav" && x.id === "v1|aller"), JSON.stringify(pa));
+  v = { ...base, traversees: [{ ...trav(""), statut: "a_reserver", heure: "" }] }; b = N.bateauVoyage(v);
+  assert.strictEqual(b.depart, null); assert.strictEqual(N.heurePort(b.reserverApres, b.fuseau), "14:30", "arrivée 10:00 + 4 h 20 dans 9 cas sur 10, arrondi à la demi-heure");
+  assert.ok(N.texteBateau(b).startsWith("Tanger Med → Algeciras à réserver : arrivée estimée mardi 24/11 vers 10:00 ; réserver un départ à partir de 14:30"), N.texteBateau(b));
+  // retour d'Algeciras, l'été : heure d'Espagne (UTC+2), aller déjà embarqué
+  v = { ...base, statut: "en_cours", dateDepart: "2026-07-10", jalons: [{ type: "embarque_aller", date: "2026-07-11T10:00:00Z" }], traversees: [{ ...trav("10:00"), statut: "effectuee", date: "2026-07-11" }, { sens: "retour", ligne: "alg-tmed", date: "2026-07-14", heure: "20:00", statut: "reservee", ref: "R-77" }] };
+  b = N.bateauVoyage(v); assert.strictEqual(b.sens, "retour"); assert.strictEqual(new Date(b.depart).toISOString(), "2026-07-14T18:00:00.000Z"); assert.strictEqual(N.heurePort(b.limite, b.fuseau), "17:00");
+  assert.ok(N.texteBateau(b).includes("à 20:00 (heure d'Espagne) · réf. R-77 — entrer au port avant 17:00 (présentation 3 h avant le départ).")); assert.strictEqual(b.niveau, "");
+  assert.strictEqual(N.bateauVoyage({ ...v, statut: "termine" }), null);
+});
+
 test("chargement : aucun nom global déclaré deux fois dans les scripts de index.html", () => {
   const html = fs.readFileSync(path.join(racine, "index.html"), "utf8"), fichiers = [...html.matchAll(/<script src="([^"]+\.js)"/g)].map((m) => m[1]).filter((f) => !f.startsWith("vendor/"));
   assert.ok(fichiers.length > 60, `${fichiers.length} scripts`); const vus = new Map(), doublons = [];

@@ -1166,3 +1166,7 @@ td.cel:focus-visible, tr.cliquable:focus-visible, [role="button"][data-act]:focu
 .puce-choix span { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-weight: 600; font-size: .9rem; }
 .puce-choix input:checked + span { background: var(--primary-plein); color: var(--on-primary); border-color: transparent; }
 .puce-choix input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* bateau réservé : la consigne en gros, l'arrivée estimée colorée selon la marge */
+.bateau-port { border-inline-start: 4px solid var(--border); } .bateau-port.ok { border-inline-start-color: var(--ok); } .bateau-port.warn { border-inline-start-color: var(--warn); } .bateau-port.danger { border-inline-start-color: var(--danger); }
+.bateau-port > div > span { display: block; } .bateau-consigne { font-weight: 700; font-size: 1.02rem; margin-top: 6px; }
+.bateau-arrivee { font-weight: 600; margin: 4px 0; } .bateau-port.ok .bateau-arrivee { color: var(--ok); } .bateau-port.warn .bateau-arrivee { color: var(--warn); } .bateau-port.danger .bateau-arrivee { color: var(--danger); }

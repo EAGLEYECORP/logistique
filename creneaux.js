@@ -79,3 +79,91 @@ function conseilCreneau(v) {
   if (tArr && tArr.h !== c.meilleur.h && tArr.p50 - c.meilleur.p50 >= 30 * 60000) conseil += `. Arrivée prévue vers ${new Date(arrivee + 3600000).toISOString().slice(11, 16)} : ${dureeTexte(tArr.p50)} d'attente habituelle, ${dureeTexte(tArr.p50 - c.meilleur.p50)} de plus qu'au meilleur créneau`;
   return { port, arrivee, attenteArrivee: tArr?.p50 ?? null, creneau: c, n, conseil: conseil + "." };
 }
+
+/* ---------- le bateau réservé et l'heure limite pour l'attraper (v5.19.0) ---------- */
+const PRESENTATION_BATEAU_H = 3; // présentation demandée par les armateurs du détroit (DFDS : 3 h avant le départ)
+/** Port de départ de chaque ligne : fuseau de l'heure saisie (« maroc » = UTC+1 comme le reste de l'application) et mesures de passage utilisables. */
+const DEPARTS_TRAVERSEE = {
+  "tmed-alg": { port: "Tanger Med", fuseau: "maroc", portId: "tmed_export" }, "tmed-sete": { port: "Tanger Med", fuseau: "maroc", portId: "tmed_export" },
+  "alg-tmed": { port: "Algeciras", fuseau: "Europe/Madrid", portId: null }, "sete-tmed": { port: "Sète", fuseau: "Europe/Paris", portId: null },
+};
+/** Décalage (ms) d'un fuseau à un instant. */
+function decalageFuseau(fuseau, t) {
+  if (fuseau === "maroc") return 3600000;
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: fuseau, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(t).map((x) => [x.type, x.value]));
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(t / 1000) * 1000;
+}
+/** Instant (ms) d'une heure locale : « 2026-11-24 », « 14:00 », fuseau. */
+function instantPort(iso, hm, fuseau) {
+  const base = Date.parse(`${String(iso).slice(0, 10)}T${hm}:00Z`); if (!Number.isFinite(base)) return null;
+  const t = base - decalageFuseau(fuseau, base); return base - decalageFuseau(fuseau, t);
+}
+/** Heure (« 09:40 ») et jour (« mardi 24/11 ») d'un instant dans le fuseau du port. */
+const heurePort = (ms, fuseau) => new Date(ms + decalageFuseau(fuseau, ms)).toISOString().slice(11, 16);
+const jourPort = (ms, fuseau) => { const d = new Date(ms + decalageFuseau(fuseau, ms)); return `${JOURS_PORT_LONGS[d.getUTCDay()]} ${d.toISOString().slice(8, 10)}/${d.toISOString().slice(5, 7)}`; };
+/** Passage habituel au port de départ pour une entrée à cet instant : vos mesures (jour et tranche, 3 passages au moins), sinon la présentation demandée. */
+function passageAuPort(portId, entree) {
+  if (portId && Number.isFinite(entree)) { const c = grilleAttentes(portId).grille[jourMaroc(entree)]?.[trancheDe(heureMaroc(entree))]; if (c && c.n >= 3) return { p50: c.p50, p90: c.p90 ?? c.p50, n: c.n, tranche: trancheDe(heureMaroc(entree)), jour: jourMaroc(entree), source: "mesures" }; }
+  return { p50: PRESENTATION_BATEAU_H * 3600000, p90: PRESENTATION_BATEAU_H * 3600000, n: 0, source: "presentation" };
+}
+/**
+ * Le prochain bateau d'un voyage (aller puis retour, pas encore embarqué) et ce qu'il demande :
+ * { sens, ligne, lib, port, fuseau, armateur, ref, statut, depart, limite, passage, arrivee, margeMin, niveau, reserverApres }.
+ * · réservé (date et heure) : entrer au port avant `limite`, la plus tardive des entrées (par quarts d'heure, à partir de 3 h avant le départ)
+ *   dont le passage habituel dans 9 cas sur 10 — jamais moins que la présentation de 3 h — laisse attraper le bateau ; `contrainte` : la tranche
+ *   mesurée, plus lente, qui a obligé à entrer plus tôt ;
+ *   comparé à l'arrivée estimée (aller, avant le port) : « danger » si elle tombe après la limite, « warn » à moins d'une heure ;
+ * · pas encore réservé : réserver un départ après `reserverApres` = arrivée estimée + même délai (arrondi à la demi-heure).
+ */
+function bateauVoyage(v) {
+  if (!v || !["prevu", "en_cours"].includes(v.statut)) return null;
+  const fait = (t) => (v.jalons || []).some((j) => j.type === t);
+  const t = ["aller", "retour"].map((s) => (v.traversees || []).find((x) => x.sens === s)).find((x) => x && x.statut !== "effectuee" && !fait(x.sens === "aller" ? "embarque_aller" : "embarque_retour"));
+  if (!t) return null;
+  const D = DEPARTS_TRAVERSEE[t.ligne] || { port: "port de départ", fuseau: "maroc", portId: null };
+  const depart = t.date && /^\d{2}:\d{2}$/.test(t.heure || "") ? instantPort(t.date, t.heure, D.fuseau) : null;
+  const arrivee = t.sens === "aller" && !fait("port_tmed") && D.portId ? arriveePortEstimee(v) : null;
+  const delai = (p) => Math.max(p.p90, PRESENTATION_BATEAU_H * 3600000);
+  let limite = null, passage = null, reserverApres = null, contrainte = null;
+  if (depart !== null) {
+    for (let e = depart - PRESENTATION_BATEAU_H * 3600000; e >= depart - 18 * 3600000; e -= 15 * 60000) {
+      const p = passageAuPort(D.portId, e);
+      if (e + delai(p) <= depart) { limite = e; passage = p; break; }
+      if (!contrainte && p.source === "mesures") contrainte = p;
+    }
+    if (limite === null) { limite = depart - 18 * 3600000; passage = passageAuPort(D.portId, limite); }
+  }
+  else if (arrivee !== null) { passage = passageAuPort(D.portId, arrivee); reserverApres = Math.ceil((arrivee + delai(passage)) / 1800000) * 1800000; }
+  const margeMin = limite !== null && arrivee !== null ? Math.round((limite - arrivee) / 60000) : null;
+  return { sens: t.sens, ligne: t.ligne, lib: LIGNES_TRAVERSEE[t.ligne]?.lib || "Traversée", port: D.port, fuseau: D.fuseau, armateur: t.armateur || "", ref: t.ref || "", statut: t.statut,
+    depart, limite, passage, contrainte, arrivee, margeMin, niveau: margeMin === null ? "" : margeMin < 0 ? "danger" : margeMin < 60 ? "warn" : "ok", reserverApres };
+}
+/** Le bateau en morceaux pour l'affichage : { titre, sousTitre, consigne, raison, arrivee } (chaînes, vides si sans objet). */
+function partiesBateau(b) {
+  if (!b) return null;
+  const h = (ms) => heurePort(ms, b.fuseau), esp = b.fuseau === "Europe/Madrid" ? " (heure d'Espagne)" : b.fuseau === "Europe/Paris" ? " (heure de France)" : "";
+  const tranche = (p) => `le ${JOURS_PORT_LONGS[p.jour]} entre ${libTranche(p.tranche).replace("–", " et ")}`;
+  const passage = (p) => (p.source !== "mesures" ? `présentation ${PRESENTATION_BATEAU_H} h avant le départ` : p.p90 <= PRESENTATION_BATEAU_H * 3600000 ? `présentation ${PRESENTATION_BATEAU_H} h avant le départ ; passage habituel ${dureeTexte(p.p50)} ${tranche(p)}` : `passage habituel ${dureeTexte(p.p50)} ${tranche(p)}, jusqu'à ${dureeTexte(p.p90)} dans 9 cas sur 10`);
+  const sousTitre = [b.armateur, b.ref && `réf. ${b.ref}`].filter(Boolean).join(" · ");
+  if (b.depart !== null) return { titre: `${b.lib} · ${jourPort(b.depart, b.fuseau)} à ${h(b.depart)}${esp}`, sousTitre, consigne: `Entrer au port avant ${h(b.limite)}`,
+    raison: b.contrainte ? `Plus tard, ${tranche(b.contrainte)}, le passage prend jusqu'à ${dureeTexte(b.contrainte.p90)} dans 9 cas sur 10 (habituellement ${dureeTexte(b.contrainte.p50)}) : trop long pour ce bateau.` : `${passage(b.passage).replace(/^./, (c) => c.toUpperCase())}.`,
+    arrivee: b.margeMin === null ? "" : b.margeMin < 0 ? `Arrivée estimée vers ${h(b.arrivee)} : trop tard de ${dureeTexte(-b.margeMin * 60000)} — décaler la réservation ou partir plus tôt.` : `Arrivée estimée vers ${h(b.arrivee)} : ${dureeTexte(b.margeMin * 60000)} d'avance${b.margeMin < 60 ? ", c'est juste" : ""}.` };
+  if (b.reserverApres !== null) return { titre: `${b.lib} à réserver`, sousTitre: "", consigne: `Réserver un départ à partir de ${h(b.reserverApres)}${jourPort(b.reserverApres, b.fuseau) !== jourPort(b.arrivee, b.fuseau) ? ` (${jourPort(b.reserverApres, b.fuseau)})` : ""}`,
+    raison: `Arrivée estimée ${jourPort(b.arrivee, b.fuseau)} vers ${h(b.arrivee)} ; ${passage(b.passage)}.`, arrivee: "" };
+  return null;
+}
+/** Le bateau en une phrase (fiche du voyage, mode chauffeur). */
+function texteBateau(b) {
+  if (!b) return "";
+  const h = (ms) => heurePort(ms, b.fuseau), esp = b.fuseau === "Europe/Madrid" ? " (heure d'Espagne)" : b.fuseau === "Europe/Paris" ? " (heure de France)" : "";
+  const tranche = (p) => `le ${JOURS_PORT_LONGS[p.jour]} entre ${libTranche(p.tranche).replace("–", " et ")}`;
+  const passage = (p) => (p.source !== "mesures" ? `présentation ${PRESENTATION_BATEAU_H} h avant le départ` : p.p90 <= PRESENTATION_BATEAU_H * 3600000 ? `présentation ${PRESENTATION_BATEAU_H} h avant le départ ; passage habituel ${dureeTexte(p.p50)} ${tranche(p)}` : `passage habituel ${dureeTexte(p.p50)} ${tranche(p)}, jusqu'à ${dureeTexte(p.p90)} dans 9 cas sur 10`);
+  if (b.depart !== null) {
+    const raison = b.contrainte ? `plus tard, ${tranche(b.contrainte)}, le passage prend jusqu'à ${dureeTexte(b.contrainte.p90)} dans 9 cas sur 10 (habituellement ${dureeTexte(b.contrainte.p50)}) : trop long pour ce bateau` : passage(b.passage);
+    let s = `${b.lib} ${jourPort(b.depart, b.fuseau)} à ${h(b.depart)}${esp}${b.armateur ? ` · ${b.armateur}` : ""}${b.ref ? ` · réf. ${b.ref}` : ""} — entrer au port avant ${h(b.limite)} (${raison}).`;
+    if (b.margeMin !== null) s += b.margeMin < 0 ? ` Arrivée estimée vers ${h(b.arrivee)} : trop tard de ${dureeTexte(-b.margeMin * 60000)} — décaler la réservation ou partir plus tôt.` : ` Arrivée estimée vers ${h(b.arrivee)} : ${dureeTexte(b.margeMin * 60000)} d'avance${b.margeMin < 60 ? ", c'est juste" : ""}.`;
+    return s;
+  }
+  if (b.reserverApres !== null) return `${b.lib} à réserver : arrivée estimée ${jourPort(b.arrivee, b.fuseau)} vers ${h(b.arrivee)} ; réserver un départ à partir de ${h(b.reserverApres)}${jourPort(b.reserverApres, b.fuseau) !== jourPort(b.arrivee, b.fuseau) ? ` (${jourPort(b.reserverApres, b.fuseau)})` : ""} (${passage(b.passage)}).`;
+  return "";
+}

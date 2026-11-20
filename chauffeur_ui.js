@@ -60,6 +60,8 @@ function blocRouteChauffeur() {
   }
   const p = typeof planPlein === "function" && !(v.jalons || []).some((j) => j.type === "livre") ? planPlein(v) : null;
   if (p?.achats?.length) lignes.push(`<div class="chf-route-ligne plein">${ic("gauge")}<div><strong>Plein : ${esc(p.achats.map((a) => `${NOM_PAYS_PLEIN?.[a.pays] || a.pays} ${a.litres >= p.reservoir - 5 ? "plein complet" : `${fmt(a.litres)} L`}`).join(" · "))}</strong><span class="sub">Pas de plein en France · réservoirs d'origine seulement</span></div></div>`);
+  const b = typeof bateauVoyage === "function" ? bateauVoyage(v) : null; // le bateau réservé : référence à donner au port, heure limite
+  if (b?.depart) lignes.unshift(`<div class="chf-route-ligne ${b.niveau === "danger" ? "danger" : b.niveau === "warn" ? "warn" : ""}">${ic("ship")}<div><strong>${esc(`Bateau ${jourPort(b.depart, b.fuseau)} à ${heurePort(b.depart, b.fuseau)}${b.ref ? ` · réf. ${b.ref}` : ""}`)}</strong><span class="sub">${esc(`${b.lib}${b.armateur ? ` · ${b.armateur}` : ""} · au port avant ${heurePort(b.limite, b.fuseau)}${b.fuseau === "Europe/Madrid" ? " (heure d'Espagne)" : ""}`)}</span></div></div>`);
   return lignes.length ? `<div class="card chf-route-carte"><div class="chf-route-titre">${ic("route")}<span>Ma route · ${esc(v.ref)}</span></div>${lignes.join("")}</div>` : "";
 }
 blocPage("chauffeur", { position: "avant", ordre: 5, rendu: () => (modeChauffeurActif() ? bandeauConnexion() : "") });

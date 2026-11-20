@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "resume_client.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -2969,7 +2969,7 @@ test("relance des documents : J-2 à 9 h (heure du Maroc) au client qui accepte,
   N.S.clients = [{ id: "k1", nom: "Roussillon Emballages", tel: "+33 4 68 00 00 01", email: "achats@roussillon.example", langueNotif: "es", notificationsClientAutorisees: true }, { id: "k2", nom: "Primeurs du Souss", email: "a@b.ma" }];
   N.S.commandes = [
     { id: "o1", ref: "CMD-1", clientId: "k1", statut: "confirme", origine: "Agadir", destination: "Perpignan", marchandise: "Tomates", dateChargement: "2026-11-22", lienDepot: { id: "L".repeat(32), chemin: "/depot/" + "L".repeat(32), expire: Math.floor(T / 1000) + 10 * 86400 } },
-    { id: "o2", ref: "CMD-2", clientId: "k2", statut: "confirme", origine: "Agadir", destination: "Lyon", marchandise: "Tomates", dateChargement: "2026-11-21" },
+    { id: "o2", ref: "CMD-2", clientId: "k2", statut: "confirme", origine: "Agadir", destination: "Lyon", marchandise: "Tomates", dateChargement: "2026-11-21", demandesDocs: [{ date: "2026-11-16T10:00:00Z", manquants: [] }] },
     { id: "o3", ref: "CMD-3", clientId: "k1", statut: "devis", origine: "Agadir", destination: "Lyon", dateChargement: "2026-11-21" },
   ];
   const url = (l) => `https://relais.example${l.chemin}`;
@@ -2983,10 +2983,55 @@ test("relance des documents : J-2 à 9 h (heure du Maroc) au client qui accepte,
   assert.deepStrictEqual([...p.manques].map((x) => x.commandeId), ["o2"]); assert.ok(/notifications non autorisées/.test(p.manques[0].texte));
   for (const x of N.etatDocuments(N.S.commandes[0]).manquants) N.noterDocument(N.S.commandes[0], x.id, { recu: true });
   assert.strictEqual(N.planRelancesDocuments({ depuis: T, jusqua: T + 7 * 864e5, maintenant: T }).length, 0, "tout est reçu : rien");
+  const o2 = N.S.commandes[1]; N.S.clients[1].notificationsClientAutorisees = true; N.S.clients[1].tel = "0661000001";
+  const demandes = o2.demandesDocs; delete o2.demandesDocs;
+  assert.ok(!N.planRelancesDocuments({ depuis: T, jusqua: T + 7 * 864e5, maintenant: T }).some((x) => x.commandeId === "o2"), "liste des documents jamais tenue : pas de relance");
+  o2.demandesDocs = demandes; assert.ok(N.planRelancesDocuments({ depuis: T, jusqua: T + 7 * 864e5, maintenant: T }).some((x) => x.commandeId === "o2"), "une demande déjà faite : relance");
   N.noterDocument(N.S.commandes[0], N.etatDocuments(N.S.commandes[0]).attendus[0].id, { recu: false }); N.S.params.relanceDocsJours = 0;
   assert.strictEqual(N.planRelancesDocuments({ depuis: T, jusqua: T + 7 * 864e5, maintenant: T }).length, 0, "désactivé");
   N.S.params.relanceDocsJours = 3; assert.strictEqual(N.quandRelanceDocuments(N.S.commandes[0]), Date.parse("2026-11-19T09:00:00+01:00"));
   assert.strictEqual(N.planRelancesDocuments({ depuis: T, jusqua: T + 7 * 864e5, maintenant: Date.parse("2026-11-19T12:00:00Z") }).length, 0, "heure passée : plus de relance automatique");
+});
+
+test("résumé hebdomadaire par client : ponctualité (heure promise à 30 min, jour promis), attente aux quais, documents en retard ou manquants, à préparer ; message fr/es ; envoi du lundi", () => {
+  N.S.entreprise = { nom: "Atlas Fret" }; N.S.params.franchiseAttenteH = 2;
+  N.S.clients = [{ id: "k1", nom: "Roussillon Emballages", contact: "Mme Puig", email: "achats@roussillon.example", resumeHebdo: true }, { id: "k2", nom: "Autre", email: "a@b.fr", resumeHebdo: true }];
+  const base = { clientId: "k1", origine: "Agadir", destination: "Perpignan", marchandise: "Tomates" };
+  N.S.commandes = [
+    { ...base, id: "o1", ref: "CMD-1", statut: "livre", dateChargement: "2026-11-09", jalons: [{ statut: "livre", date: "2026-11-12T14:05:00" }], quais: { livraison: { arrivee: "2026-11-12T11:40:00", depart: "2026-11-12T14:05:00" } } },
+    { ...base, id: "o2", ref: "CMD-2", statut: "livre", dateChargement: "2026-11-10", dateLivraison: "2026-11-13", jalons: [{ statut: "livre", date: "2026-11-13T10:00:00" }] },
+    { ...base, id: "o3", ref: "CMD-3", statut: "livre", dateChargement: "2026-11-11", jalons: [{ statut: "livre", date: "2026-11-14T09:00:00" }] },
+    { ...base, id: "o4", ref: "CMD-4", statut: "transit", dateChargement: "2026-11-12" },
+    { ...base, id: "o5", ref: "CMD-5", statut: "confirme", dateChargement: "2026-11-18", documents: { facture: { recu: "2026-11-14T09:00:00" } } },
+    { ...base, id: "o6", ref: "CMD-6", clientId: "k2", statut: "livre", jalons: [{ statut: "livre", date: "2026-11-12T10:00:00" }] },
+  ];
+  N.S.voyages = [{ id: "v1", ref: "V-1", commandeId: "o1", statut: "termine", livraisonPrevue: "2026-11-12T12:00", jalons: [] }];
+  const o4 = N.S.commandes[3], att = N.etatDocuments(o4).attendus; assert.ok(att.length >= 3);
+  att.forEach((x, i) => { if (i === 0) N.noterDocument(o4, x.id, { recu: "2026-11-11T09:00:00" }); else if (i > 1) N.noterDocument(o4, x.id, { recu: "2026-11-05T09:00:00" }); });
+  const r = N.resumeClient("k1", { debut: "2026-11-09", fin: "2026-11-15", maintenant: Date.parse("2026-11-16T07:00:00Z") });
+  assert.deepStrictEqual([...r.livraisons].map((x) => [x.ref, x.aLHeure, x.retardMin]), [["CMD-1", false, 125], ["CMD-2", true, 0], ["CMD-3", null, 0]]);
+  assert.deepStrictEqual([r.aLHeure, r.enRetard, r.sansPromesse, r.tauxPonctualite], [1, 1, 1, 50]);
+  assert.deepStrictEqual([r.attentes.length, r.attenteMin, r.auDelaMin], [1, 145, 25]);
+  assert.deepStrictEqual([...r.documents].map((x) => [x.ref, x.id, x.statut]), [["CMD-4", att[0].id, "en_retard"], ["CMD-4", att[1].id, "manquant"]], "reçu la veille du chargement (demandé pour J-2) ; un manquant ; les autres à temps");
+  assert.deepStrictEqual([...r.aPreparer].map((x) => x.ref), ["CMD-5"]); assert.strictEqual(r.vide, false);
+  assert.ok(!r.documents.some((x) => ["CMD-1", "CMD-2", "CMD-3"].includes(x.ref)), "commandes dont personne ne tient la liste des documents : jamais « manquant » chez le client"); assert.strictEqual(r.chargementsSuivis, 1);
+  delete o4.documents; const sansListe = N.messageResumeClient(N.resumeClient("k1", { debut: "2026-11-09", fin: "2026-11-15" })); assert.ok(!/Documents/.test(sansListe.texte), "liste non tenue : ni « manquant » ni « à temps »");
+  att.forEach((x, i) => { if (i === 0) N.noterDocument(o4, x.id, { recu: "2026-11-11T09:00:00" }); else if (i > 1) N.noterDocument(o4, x.id, { recu: "2026-11-05T09:00:00" }); });
+  let m = N.messageResumeClient(r);
+  for (const x of ["Bonjour Mme Puig,", "Voici votre semaine du 09/11 au 15/11 avec Atlas Fret.", "Livraisons : 3, dont 1 à l'heure (50 %).", "Attente à vos quais : 1 passage(s), 2 h 25 au total (2 h 25 en moyenne) ; 25 min au-delà de l'attente gratuite.",
+    "Documents : 1 arrivé(s) après la date demandée, 1 manquant(s) au chargement.", "- CMD-1 Agadir → Perpignan : livré le 12/11 à 14:05, promis 12/11 12:00 (+2 h 05).", "- CMD-2 Agadir → Perpignan : livré le 13/11 à 10:00, promis 13/11.",
+    "- CMD-1, livraison à Perpignan le 12/11 : 2 h 25 sur place.", "(demandé pour le 10/11)", "À préparer", "- CMD-5 Agadir → Perpignan, chargement le 18/11 : il manque encore", "Merci pour votre confiance,\nAtlas Fret"]) assert.ok(m.texte.includes(x), x + "\n---\n" + m.texte);
+  assert.strictEqual(m.sujet, "Votre semaine du 09/11 au 15/11 — Atlas Fret");
+  N.S.clients[0].langueNotif = "es"; m = N.messageResumeClient(N.resumeClient("k1", { debut: "2026-11-09", fin: "2026-11-15" }));
+  assert.ok(m.texte.startsWith("Buenos días Mme Puig,") && m.texte.includes("Entregas: 3, 1 a tiempo (50 %).") && m.sujet.startsWith("Su semana del 09/11 al 15/11"));
+  assert.strictEqual(N.resumeClient("k1", { debut: "2026-10-01", fin: "2026-10-07" }).vide, true, "semaine sans rien");
+  // envoi du lundi : 8 h heure du Maroc, ou dès l'ouverture après ; jusqu'au mercredi
+  let p = N.planResumesClients({ maintenant: Date.parse("2026-11-16T06:00:00Z") });
+  assert.deepStrictEqual([...p].map((x) => [x.id, x.canal, x.destination, x.quand]), [["resume:k1:2026-11-09", "email", "achats@roussillon.example", Date.parse("2026-11-16T08:00:00+01:00")], ["resume:k2:2026-11-09", "email", "a@b.fr", Date.parse("2026-11-16T08:00:00+01:00")]]);
+  p = N.planResumesClients({ maintenant: Date.parse("2026-11-16T10:07:00Z") }); assert.strictEqual(p[0].quand, Date.parse("2026-11-16T10:00:00Z"), "ouverture après 8 h : envoyé tout de suite");
+  assert.strictEqual(N.planResumesClients({ maintenant: Date.parse("2026-11-19T09:00:00Z") }).length, 0, "jeudi : trop tard pour la semaine passée");
+  N.S.clients[1].resumeHebdo = false; N.S.clients[0].email = ""; N.S.clients[0].tel = "";
+  p = N.planResumesClients({ maintenant: Date.parse("2026-11-16T09:00:00Z") }); assert.strictEqual(p.length, 0); assert.ok(/e-mail ou téléphone/.test(p.manques[0].texte));
 });
 
 test("chargement : aucun nom global déclaré deux fois dans les scripts de index.html", () => {

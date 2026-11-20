@@ -96,6 +96,9 @@ function demandeDocuments(c, { lien = "" } = {}) {
 }
 
 /* ---------- relance automatique des documents manquants (J-2 par défaut, 9 h heure du Maroc) ---------- */
+/** La liste des documents est-elle tenue pour cette commande ? (un document noté, une demande faite ou un lien de dépôt créé)
+    Sinon rien d'automatique : ni relance ni « manquant » dans le résumé, sur une liste que personne ne tient. */
+const documentsSuivis = (c) => Object.keys(c?.documents || {}).length > 0 || (c?.demandesDocs || []).length > 0 || !!c?.lienDepot?.id;
 const HEURE_RELANCE_DOCS = "09:00";
 /** Jour et heure (ms) de la relance d'une commande, ou null. S.params.relanceDocsJours : jours avant le chargement (0 : jamais). */
 function quandRelanceDocuments(c) {
@@ -114,7 +117,7 @@ function planRelancesDocuments({ depuis = Date.now(), jusqua = Date.now() + 7 * 
     if (c.statut !== "confirme" || c.perdu) continue;
     const quand = quandRelanceDocuments(c), id = `docs:${c.id}:relance`;
     if (quand === null || annulees[id] || quand < depuis || quand > jusqua || quand < maintenant - 5 * 60000) continue;
-    if (!etatDocuments(c).manquants.length) continue;
+    if (!documentsSuivis(c) || !etatDocuments(c).manquants.length) continue;
     const d = destinataireNotif("client_externe", "prefere", { clientId: c.clientId }); if (d.manque) { manques.push({ id, commandeId: c.id, quand, texte: `${c.ref} : ${d.manque}` }); continue; }
     const lien = lienActif(c.lienDepot, quand) ? urlLien(c.lienDepot) || "" : "", dem = demandeDocuments(c, { lien });
     res.push({ id, commandeId: c.id, type: "relance_docs", quand, audience: "client_externe", canal: d.canal, destination: d.destination, repli: d.repli, langue: dem.langue, nom: d.nom,

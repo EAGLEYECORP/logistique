@@ -165,6 +165,7 @@ const champsClient = (c = {}) => [
   { name: "deviseAttente", label: "Devise du tarif d'attente", type: "select", options: optsDevise, value: c.deviseAttente || "EUR" },
   { name: "adresse", label: "Adresse", type: "textarea", full: true, value: c.adresse },
   { name: "notificationsClientAutorisees", label: "Le client accepte d'être prévenu aux étapes de ses voyages et relancé pour ses documents manquants (WhatsApp ou e-mail)", type: "checkbox", full: true, value: c.notificationsClientAutorisees },
+  { name: "resumeHebdo", label: "Envoyer au client chaque lundi le résumé de sa semaine : livraisons et ponctualité, attente à ses quais, documents en retard (e-mail, sinon WhatsApp)", type: "checkbox", full: true, value: c.resumeHebdo },
   { name: "canalNotifPrefere", label: "Canal préféré du client", type: "select", options: [["whatsapp", "WhatsApp"], ["email", "E-mail"], ["sms", "SMS"]], value: c.canalNotifPrefere || "whatsapp" },
   { name: "langueNotif", label: "Langue des messages", type: "select", options: [["fr", "Français"], ["en", "English"], ["es", "Español"], ["ar", "العربية"]], value: c.langueNotif || "fr" },
 ];
@@ -188,7 +189,7 @@ VUES.clients = {
           <td class="r num">${cmds.length}</td>
           <td class="r num">${fmt(ca)} MAD</td>
           <td class="r num">${enc.total ? `${fmt(enc.total)} MAD${enc.retard ? `<span class="sub neg">dont ${fmt(enc.retard)} en retard</span>` : ""}` : "—"}<span class="sub">${c.delai ?? S.params.delaiPaiement} j</span></td>
-          <td><div class="actions">${btn("commande", "Commande", { id: c.id, icone: "plus", cls: "btn ghost sm" })}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}</div></td></tr>`;
+          <td><div class="actions">${btn("commande", "Commande", { id: c.id, icone: "plus", cls: "btn ghost sm" })}${btn("resume", "Résumé", { id: c.id, icone: "calendar", cls: "btn ghost sm" })}${iconBtn("modifier", "edit", "Modifier", c.id)}${iconBtn("suppr", "trash", "Supprimer", c.id, true)}</div></td></tr>`;
       }).join("")}</tbody></table></div></div>`;
   },
   async agir(act, id) {

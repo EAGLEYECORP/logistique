@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.16.0 — Résumé de la semaine pour chaque client ; relances seulement sur une liste tenue
+
+- **Résumé hebdomadaire par client**, pour la relation commerciale : livraisons de la semaine et **ponctualité** (à l'heure promise, à 30 minutes près ; un jour promis sans heure : livré ce jour-là), **attente à ses quais** (temps sur place, au-delà de l'attente gratuite), **documents** arrivés après la date demandée ou manquants au chargement, et ce qui reste **à préparer** pour les jours suivants. Le message est rédigé dans la langue du client (français, anglais, espagnol), avec le détail ligne par ligne.
+- **Bouton « Résumé »** sur la page Clients : semaine passée, cette semaine ou 4 semaines, chiffres en tête, message modifiable, « Envoyer maintenant » (par le relais, sinon e-mail ou WhatsApp en un geste).
+- **Chaque lundi, tout seul** pour les clients qui le veulent (fiche du client : « Envoyer au client chaque lundi le résumé de sa semaine ») : le relais l'envoie le lundi à 8 h (heure du Maroc), ou dès que l'application est ouverte après — une fois la semaine finie, pour que les chiffres soient complets ; plus envoyé après le mercredi. Par e-mail, sinon WhatsApp.
+- **Corrigé (relance des documents de la v5.15.0)** : une commande dont personne ne tient la liste des documents (aucun document coché, aucune demande faite, pas de lien de dépôt) n'est plus relancée automatiquement — le client ne reçoit plus une liste de « manquants » qu'il a peut-être déjà envoyés par e-mail. De même, le résumé ne dit « manquant » ou « tout reçu à temps » que pour les commandes dont la liste est tenue. La fenêtre des documents l'explique.
+
 ## 5.15.0 — Relance automatique des documents manquants, deux jours avant le chargement
 
 - **Le client est relancé tout seul** : deux jours avant le chargement, à 9 h (heure du Maroc), un client à qui il manque encore des documents reçoit la liste de ce qui manque, dans sa langue (français, anglais, espagnol), par e-mail ou WhatsApp, avec son lien de dépôt s'il en a un. Seulement pour les commandes confirmées et les clients qui acceptent d'être prévenus (case de la fiche du client, dont le libellé le dit maintenant).

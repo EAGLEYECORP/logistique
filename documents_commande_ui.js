@@ -53,6 +53,7 @@ function texteRelanceDocuments(c, maintenant = Date.now()) {
   const q = quandRelanceDocuments(c), jours = Math.round(num(S.params.relanceDocsJours, 2));
   if (jours <= 0) return "Relance automatique des documents désactivée (Réglages → Rappels).";
   if (q === null) return "";
+  if (!documentsSuivis(c)) return "Relance automatique : dès qu'un document est coché ici ou qu'une demande est faite (une liste que personne ne tient n'est jamais envoyée au client).";
   if (q < maintenant) return `Relance automatique : le ${dateFr(new Date(q).toISOString().slice(0, 10))} est passé ; utilisez « Demander les manquants ».`;
   const d = destinataireNotif("client_externe", "prefere", { clientId: c.clientId }), quand = new Date(q).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   if (d.manque) return `Pas de relance automatique : ${d.manque.replace(/^[^:]+ : /, "")} (fiche du client).`;

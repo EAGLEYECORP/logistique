@@ -1149,3 +1149,5 @@ body.mode-chauffeur .chf-route { font-size: 1.45rem; }
 body.mode-chauffeur .chf-actions { gap: 12px; }
 /* clavier : cellules et lignes cliquables */
 td.cel:focus-visible, tr.cliquable:focus-visible, [role="button"][data-act]:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+/* résumé client : trois périodes sur toute la largeur, même sur téléphone */
+.segmented.periodes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; box-sizing: border-box; overflow: visible; } .segmented.periodes button { white-space: normal; line-height: 1.2; }

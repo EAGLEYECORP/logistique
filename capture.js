@@ -126,7 +126,7 @@ const proposeTicket = (v) => (zoneVoyage(v) === "europe" ? { zone: "europe", dev
 function enregistrerTicket({ chauffeurId = "", camionId = "", type, montant, devise, date, note = "", maintenant = Date.now() } = {}) {
   const jour = String(date || dateISO(maintenant)).slice(0, 10), pieceId = uid(), v = voyageALaDate({ chauffeurId, camionId }, jour, { avant: 1 }), p = proposeTicket(v);
   const t = type === "peage" ? p.peage : type; if (!TYPES_TICKET.some(([k]) => k === type) || !typeCout(t)) throw new Error("Type de ticket inconnu");
-  const m = num(montant), d = { type: t, montant: m, devise: ["MAD", "EUR"].includes(devise) ? devise : p.devise, source: "ticket", date: jour, pieceId, libelle: String(note || "").trim() ? `Ticket du chauffeur · ${String(note).trim().slice(0, 120)}` : "Ticket du chauffeur" };
+  const m = num(montant), d = { type: t, montant: m, devise: ["MAD", "EUR"].includes(devise) ? devise : p.devise, source: "ticket", date: jour, pieceId, libelle: String(note || "").trim().slice(0, 120) }; // la source dit déjà « Ticket du chauffeur »
   if (v && m > 0) return { voyage: v, ligne: ajouterLigneCout(v, { ...d, chauffeurId: chauffeurId || undefined, camionId: camionId || undefined }), pieceId };
   const a = { id: uid(), ...d, chauffeurId, camionId, vehicule: "", raison: m > 0 ? "aucun voyage à cette date" : "montant à lire sur le ticket", ...(v ? { voyageSuggere: v.id } : {}) };
   (S.depensesAttente ||= []).push(a);

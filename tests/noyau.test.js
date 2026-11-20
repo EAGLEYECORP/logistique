@@ -3061,10 +3061,10 @@ test("ticket du chauffeur : rangé seul sur le voyage en cours (péage Europe en
   const v = N.S.voyages[0];
   assert.deepStrictEqual({ ...N.proposeTicket(v) }, { zone: "maroc", devise: "MAD", peage: "peage_ma" });
   let r = N.enregistrerTicket({ chauffeurId: "h1", camionId: "c1", type: "peage", montant: "84,50", date: "2026-11-15" });
-  assert.strictEqual(r.voyage.id, "v1"); assert.deepStrictEqual([r.ligne.type, r.ligne.montant, r.ligne.devise, r.ligne.source, r.ligne.libelle], ["peage_ma", 84.5, "MAD", "ticket", "Ticket du chauffeur"]); assert.strictEqual(r.ligne.pieceId, r.pieceId);
+  assert.strictEqual(r.voyage.id, "v1"); assert.deepStrictEqual([r.ligne.type, r.ligne.montant, r.ligne.devise, r.ligne.source, r.ligne.libelle, N.libSourceCout(r.ligne.source)], ["peage_ma", 84.5, "MAD", "ticket", undefined, "Ticket du chauffeur"]); assert.strictEqual(r.ligne.pieceId, r.pieceId);
   v.jalons.push({ type: "embarque_aller", date: "2026-11-16T10:00:00Z" });
   r = N.enregistrerTicket({ chauffeurId: "h1", camionId: "c1", type: "peage", montant: 12.4, date: "2026-11-18", note: "AP-7 Murcie" });
-  assert.deepStrictEqual([r.ligne.type, r.ligne.devise, r.ligne.libelle], ["peage_eu", "EUR", "Ticket du chauffeur · AP-7 Murcie"], "en Europe : péage Europe en euros");
+  assert.deepStrictEqual([r.ligne.type, r.ligne.devise, r.ligne.libelle], ["peage_eu", "EUR", "AP-7 Murcie"], "en Europe : péage Europe en euros ; la note du chauffeur");
   r = N.enregistrerTicket({ chauffeurId: "h1", camionId: "c1", type: "parking_securise", montant: 25, devise: "EUR", date: "2026-11-19" }); assert.strictEqual(r.ligne.type, "parking_securise");
   v.jalons.push({ type: "debarque_tmed", date: "2026-11-22T10:00:00Z" }); assert.strictEqual(N.zoneVoyage(v), "maroc", "de retour au Maroc");
   // sans montant : attend le bureau avec sa photo ; rattaché ensuite, la photo suit

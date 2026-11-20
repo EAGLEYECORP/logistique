@@ -1151,3 +1151,11 @@ body.mode-chauffeur .chf-actions { gap: 12px; }
 td.cel:focus-visible, tr.cliquable:focus-visible, [role="button"][data-act]:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 /* résumé client : trois périodes sur toute la largeur, même sur téléphone */
 .segmented.periodes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; box-sizing: border-box; overflow: visible; } .segmented.periodes button { white-space: normal; line-height: 1.2; }
+/* dictée : bouton micro dans le coin de la zone de texte, texte entendu en direct dessous */
+.zone-dictee { position: relative; display: block; } .zone-dictee textarea { display: block; padding-inline-end: 66px; }
+.bouton-dictee { position: absolute; inset-inline-end: 16px; bottom: 8px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--primary); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.bouton-dictee svg.i { width: 20px; height: 20px; } .bouton-dictee:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.bouton-dictee.en-cours { background: var(--danger-plein); color: #fff; border-color: transparent; animation: pouls-dictee 1.2s ease-in-out infinite; }
+@keyframes pouls-dictee { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger-plein) 45%, transparent); } 50% { box-shadow: 0 0 0 8px transparent; } }
+@media (prefers-reduced-motion: reduce) { .bouton-dictee.en-cours { animation: none; } }
+.dictee-direct { display: block; min-height: 1.2em; font-size: .82rem; font-weight: 400; font-style: italic; color: var(--muted); }

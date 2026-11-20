@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.17.0 — Dicter au lieu de taper : les réserves à la livraison, et toutes les notes
+
+- **Un bouton micro dans chaque zone de texte** : les réserves de la preuve de livraison en premier (le chauffeur, devant le destinataire, dicte « deux palettes abîmées virgule film déchiré point »), mais aussi les notes des commandes, des voyages, l'adresse ou les mentions de l'entreprise.
+- **Dans la langue de l'application** : arabe du Maroc ou français. Ce qui est entendu s'affiche en direct sous la zone ; le texte reconnu s'insère à l'endroit du curseur, avec les espaces et la majuscule de début de phrase.
+- **La ponctuation se dit** : « virgule », « point », « point d'interrogation », « à la ligne »… (« فاصلة », « نقطة », « سطر جديد » en arabe ; espagnol et anglais aussi). « Point de livraison » ou « نقطة التسليم » restent des mots, pas un point.
+- Un appui de plus arrête, comme la fermeture de la fenêtre ou un long silence. Messages clairs si le micro est refusé, sans réseau ou si rien n'est entendu.
+- La reconnaissance est celle du téléphone (Chrome sur Android, Safari sur iPhone), gratuite, la voix passant par son service vocal (Google ou Apple) comme pour le micro du clavier. Là où le téléphone ne sait pas reconnaître la voix, le bouton n'apparaît pas et rien ne change.
+- Les zones de texte prennent seules le sens d'écriture de ce qu'on y tape (arabe de droite à gauche, français de gauche à droite).
+
 ## 5.16.0 — Résumé de la semaine pour chaque client ; relances seulement sur une liste tenue
 
 - **Résumé hebdomadaire par client**, pour la relation commerciale : livraisons de la semaine et **ponctualité** (à l'heure promise, à 30 minutes près ; un jour promis sans heure : livré ce jour-là), **attente à ses quais** (temps sur place, au-delà de l'attente gratuite), **documents** arrivés après la date demandée ou manquants au chargement, et ce qui reste **à préparer** pour les jours suivants. Le message est rédigé dans la langue du client (français, anglais, espagnol), avec le détail ligne par ligne.

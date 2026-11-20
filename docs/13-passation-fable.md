@@ -45,7 +45,7 @@ L'exploitant vit dans : sa boîte e-mail et WhatsApp (commandes, documents), **M
 | **Suivi client** | Lien de suivi, notifications aux étapes, arrivée estimée calée sur vos attentes réelles | Rien de majeur ; un résumé hebdomadaire par client (ponctualité, attentes, documents en retard) servirait la relation commerciale (livré en v5.16.0 : `resume_client.js`, `resume_client_ui.js` ; envoi du lundi confié au relais avec le plan des notifications). |
 | **Livraison, attente au quai** | Preuve de livraison signée, attente au quai mesurée et facturée | Détection automatique de l'arrivée au quai par le GPS (géorepérage du client) au lieu du bouton. |
 | **Facturer, encaisser** | Facture en un geste, envoyée avec CMR et preuve, relances programmées | Facture en **vrai PDF** (aujourd'hui une page web jointe). |
-| **Saisie au fil de l'eau** | Carte carburant (CSV), Jawaz, photos, mode chauffeur | Le chauffeur doit taper peu : **glisser pour confirmer** une étape, saisie vocale des réserves, photo du ticket rattachée seule. |
+| **Saisie au fil de l'eau** | Carte carburant (CSV), Jawaz, photos, mode chauffeur | Le chauffeur doit taper peu : **glisser pour confirmer** une étape, saisie vocale des réserves (livrée en v5.17.0 : `dictee.js`, `dictee_ui.js`), photo du ticket rattachée seule. |
 
 ### Dette technique et risques à traiter
 

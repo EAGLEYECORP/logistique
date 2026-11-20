@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "resume_client.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "resume_client.js", "dictee.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -3032,6 +3032,27 @@ test("résumé hebdomadaire par client : ponctualité (heure promise à 30 min, 
   assert.strictEqual(N.planResumesClients({ maintenant: Date.parse("2026-11-19T09:00:00Z") }).length, 0, "jeudi : trop tard pour la semaine passée");
   N.S.clients[1].resumeHebdo = false; N.S.clients[0].email = ""; N.S.clients[0].tel = "";
   p = N.planResumesClients({ maintenant: Date.parse("2026-11-16T09:00:00Z") }); assert.strictEqual(p.length, 0); assert.ok(/e-mail ou téléphone/.test(p.manques[0].texte));
+});
+
+test("dictée : ponctuation dite (fr, es, en, ar) sans toucher « point de livraison », insertion au curseur, espaces et majuscules", () => {
+  const c = (t, l) => N.appliquerCommandesDictee(t, l);
+  assert.strictEqual(c("deux palettes abîmées virgule film déchiré point", "fr"), "deux palettes abîmées, film déchiré.");
+  assert.strictEqual(c("le point de livraison était fermé point", "fr"), "le point de livraison était fermé.", "« point de » reste un nom");
+  assert.strictEqual(c("le point d'accès point", "fr"), "le point d'accès.");
+  assert.strictEqual(c("Combien de palettes point d'interrogation", "fr"), "Combien de palettes?");
+  assert.strictEqual(c("carton enfoncé à la ligne palette manquante", "fr"), "carton enfoncé\npalette manquante");
+  assert.strictEqual(c("dos palets rotos coma el punto de entrega cerrado punto", "es"), "dos palets rotos, el punto de entrega cerrado.");
+  assert.strictEqual(c("two pallets damaged comma one missing full stop", "en"), "two pallets damaged, one missing.");
+  assert.strictEqual(c("صندوق مكسور فاصلة نقطة التسليم مغلقة نقطة", "ar"), "صندوق مكسور، نقطة التسليم مغلقة.", "« نقطة التسليم » reste un nom");
+  const i = (v, a, b, d, l = "fr") => ({ ...N.insererDictee(v, a, b, d, l) });
+  assert.deepStrictEqual(i("", 0, 0, "deux palettes abîmées point film déchiré à la ligne carton enfoncé"), { valeur: "Deux palettes abîmées. Film déchiré\nCarton enfoncé", curseur: 50 });
+  assert.deepStrictEqual(i("Deux palettes abîmées.", 22, 22, "film déchiré"), { valeur: "Deux palettes abîmées. Film déchiré", curseur: 35 }, "majuscule après un point");
+  assert.deepStrictEqual(i("Colis 3", 7, 7, "virgule carton ouvert"), { valeur: "Colis 3, carton ouvert", curseur: 22 }, "pas d'espace avant la virgule");
+  assert.deepStrictEqual(i("Avant après", 5, 5, "milieu"), { valeur: "Avant milieu après", curseur: 12 }, "inséré au curseur, espaces des deux côtés");
+  assert.deepStrictEqual(i("Texte à remplacer", 6, 17, "corrigé"), { valeur: "Texte corrigé", curseur: 13 }, "la sélection est remplacée");
+  assert.deepStrictEqual(i("صندوق", 5, 5, "مكسور فاصلة", "ar"), { valeur: "صندوق مكسور،", curseur: 12 });
+  assert.deepStrictEqual(i("Rien", 4, 4, "   "), { valeur: "Rien", curseur: 4 }, "rien entendu : rien ne change");
+  assert.strictEqual(N.LANGUES_DICTEE.ar, "ar-MA");
 });
 
 test("chargement : aucun nom global déclaré deux fois dans les scripts de index.html", () => {

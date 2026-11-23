@@ -27,6 +27,22 @@ Tout ce qui pouvait être construit et testé sans compte externe est livré (vo
 - [ ] **e-CMR** : demander au ministère marocain des Transports ou consulter le [dépositaire ONU](https://treaties.un.org) si le Maroc est partie au protocole additionnel. En attendant, conserver le CMR papier signé ; l'application imprime un CMR préparé et une preuve de livraison, qui ne sont pas des e-CMR.
 - [ ] **Interdictions de circuler** et **quotas d'autorisations** : vérifier chaque année auprès des autorités (valeurs de départ).
 
-## 6. Éléments qui n'existent pas publiquement
+## 6. Fonctions automatiques à brancher (relais 2.2 ou plus)
+Chaque ligne se vérifie dans l'application : Réglages → Général → **Relais** → « Tester » dit ce qui est branché.
+- [ ] **E-mail** (`SMTP_…`) : factures avec preuve et photos, relances, relance des documents, résumé du lundi. *Vérifier* : « E-mail prêt ».
+- [ ] **Boîte des demandes** (`IMAP_…`, mot de passe d'application) : les demandes des clients arrivent déjà lues. *Vérifier* : « Boîte des demandes : relevée… ».
+- [ ] **Itinéraire poids lourd** (`ITINERAIRE_CLE`) : créer un compte gratuit sur openrouteservice.org, copier la clé (usage interne, non commercial). *Vérifier* : « Itinéraire poids lourd : service public openrouteservice ».
+- [ ] **Balise de chaque camion** (fiche du camion → « balise ») : sans elle, ni coupures, ni quais par le GPS, ni étapes de port, ni passages mesurés.
+- [ ] **Canal de chaque chauffeur** (fiche du chauffeur : sujet ntfy ou téléphone WhatsApp, langue) : messages de pause et de fin de journée envoyés par le relais. *Vérifier* : Réglages → Coupures : « Surveillé par le relais, jour et nuit ».
+- [ ] **Alertes de l'équipe** (`NTFY_URL`, Telegram ou WhatsApp) : pause dépassée, alertes du suivi. *Vérifier* : « Tester les canaux d'alerte ».
+- [ ] **Clients** (fiche du client) : accord pour les notifications et la relance des documents ; « résumé de sa semaine » ; tarif et franchise d'attente aux quais.
+- [ ] **Voyages** : heure de livraison promise (ponctualité du résumé client), traversée avec date, heure et référence (heure limite au port, « Ma route » du chauffeur).
+- [ ] **Coûts** : coûts fixes par camion, charges générales, taux : la marge ne vaut que ce qu'on y met.
+
+## 7. Ce qui se construit avec l'usage
+- **Passages au port** : une dizaine par port avant le conseil de créneau, davantage pour une heure limite fine selon le jour et l'heure.
+- **Sites des clients** : appris à la première arrivée notée sur place, ensuite les quais sont relevés seuls.
+
+## 8. Éléments qui n'existent pas publiquement
 - API **Jawaz Pro** et **EETS** : à demander à ADM et à votre fournisseur de télépéage ; les relevés CSV les remplacent d'ici là.
 - **Téléchargement à distance du tachygraphe** : à demander à votre fournisseur de balises ou de tachygraphe ; l'application lit les fichiers qu'il fournit.

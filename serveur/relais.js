@@ -564,7 +564,7 @@ if (require.main === module) {
     if (Object.keys(canaux).length) console.log(`  Alertes transmises à : ${Object.keys(canaux).join(", ")}`);
     console.log(`  Données au repos : ${coffre.actif ? "chiffrées (AES-256-GCM)" : "en clair (CHIFFRER_DONNEES=true pour chiffrer)"}${String(e.JOURNAL_ACCES || "").toLowerCase() === "true" ? " · journal d'accès actif (30 jours)" : ""}`);
     if (multi) console.log(`  Multi-utilisateur : application servie sur ce port, ${multi.comptes().length ? `${multi.comptes().length} compte(s)` : "aucun compte : ouvrez l'adresse du relais pour créer le premier (jeton de lecture demandé)"}`);
-    if (itineraire.url || itineraire.cle) console.log(`  Itinéraire poids lourd : ${itineraire.url ? `serveur openrouteservice ${itineraire.url}` : "openrouteservice (service public, conditions à vérifier)"}, ${itineraire.quotaJour} calculs par jour au plus`);
+    if (itineraire.url || itineraire.cle) console.log(`  Itinéraire poids lourd : ${itineraire.url ? `serveur openrouteservice ${itineraire.url}` : "openrouteservice (service public, usage interne non commercial)"}, ${itineraire.quotaJour} calculs par jour au plus`);
     if (imap) console.log(`  Boîte des demandes : ${imap.utilisateur} (${imap.hote}, dossier ${imap.dossier}), relevée toutes les ${Math.max(2, Number(e.IMAP_INTERVALLE_MIN || 5))} min, en lecture seule`);
     console.log(`  Notifications programmées : ntfy (${ntfyHotes.join(", ")})${smtp ? `, e-mail (${smtp.hote})` : ""}${canaux.whatsapp ? ", WhatsApp" : ""}`);
     console.log(`  Réception : POST /api/positions · GET /osmand · POST /traccar    Lecture : /api/derniere · /api/trace`);

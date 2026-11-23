@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.19.1 — openrouteservice retenu pour l'itinéraire ; mise en service et revue de la valeur à jour
+
+- **Itinéraire poids lourd : le service public openrouteservice est retenu** (usage interne à l'entreprise, non commercial). Plus de mise en garde « conditions à vérifier » : Réglages → Général → Itinéraire poids lourd explique en deux étapes comment le brancher (compte gratuit sur openrouteservice.org, clé à poser dans les réglages du relais : `ITINERAIRE_CLE=…`). Le relais garde sa limite de 1 500 calculs par jour (réglable) et garde chaque itinéraire 60 jours. La clé figure maintenant dans le fichier de réglages préparé par l'application et par le script d'installation.
+- **Mise en service** (`docs/04-mise-en-service.md`) : toutes les fonctions automatiques à brancher, et comment vérifier chacune (e-mail, boîte des demandes, clé d'itinéraire, balises, canal de chaque chauffeur, alertes de l'équipe, accords et résumés des clients, heures promises et traversées, coûts).
+- **Revue de la valeur** (`docs/13-passation-fable.md`, section 3) : ce que l'application apporte aujourd'hui, geste par geste, et ce qui reste à gagner — à brancher, à laisser se construire, à bâtir (écran de mise en service, pièces jointes des demandes, rapprochement bancaire, heure du Maroc réelle), hors de portée.
+
 ## 5.19.0 — Le bateau réservé : à quelle heure entrer au port pour l'attraper
 
 - **Fiche du voyage, onglet Suivi : un bloc « Bateau »** pour la prochaine traversée : ligne, jour et heure du départ, armateur, référence de réservation, et **l'heure limite pour entrer au port**. À Tanger Med, elle vient de **vos propres passages mesurés** ce jour-là à cette heure-là (le cas lent, 9 fois sur 10), jamais moins que la présentation de 3 h demandée par les armateurs ; si une tranche plus tardive est trop lente pour ce bateau, la phrase le dit (« plus tard, le lundi entre 09:00 et 12:00, le passage prend jusqu'à 4 h 20 : trop long pour ce bateau »). Ailleurs, ou faute de mesures, la présentation de 3 h.

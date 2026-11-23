@@ -1,9 +1,9 @@
 "use strict";
 /* ============================================================
    Itinéraire poids lourd par le relais, sans dépendance : appel d'un serveur openrouteservice (profil « driving-hgv »).
-   · votre propre serveur openrouteservice (logiciel libre) : ITINERAIRE_URL=http://… ;
-   · ou le service public (https://api.openrouteservice.org) avec une clé : ITINERAIRE_CLE=… — ses conditions sont à vérifier
-     avant un usage par une entreprise (la formule gratuite semble réservée à un usage non commercial).
+   · le service public (https://api.openrouteservice.org) avec une clé gratuite : ITINERAIRE_CLE=… — choix retenu pour cet usage
+     interne et non commercial (outil de l'entreprise, pas de revente d'itinéraires) ; formule gratuite limitée en calculs par jour ;
+   · ou votre propre serveur openrouteservice (logiciel libre), sans limite : ITINERAIRE_URL=http://… .
    Renvoie kilomètres, durée, kilomètres par pays et kilomètres à péage ; les ferries sont évités (la traversée du détroit est comptée à part).
    Résultats gardés 60 jours (mêmes points, même camion) et quota quotidien pour rester sous les limites du service.
    ============================================================ */

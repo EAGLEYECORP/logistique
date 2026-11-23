@@ -27,8 +27,7 @@ function blocBateau(v) {
   const b = bateauVoyage(v), x = partiesBateau(b); if (!x) return "";
   const source = b.depart !== null ? (b.passage.source === "mesures" ? `D'après vos ${b.passage.n} passages mesurés à Tanger Med à cette heure-là (entrée au port jusqu'à l'embarquement), le plus long dans 9 cas sur 10, jamais moins que la présentation de ${PRESENTATION_BATEAU_H} h.` : `Faute de passages mesurés à cette heure-là, on compte la présentation de ${PRESENTATION_BATEAU_H} h demandée par l'armateur.`) : "Arrivée estimée : départ du dépôt à 6 h, 70 km/h, pauses et repos de nuit compris.";
   return `<div class="section-title">Bateau</div><div class="trav bateau-port ${b.niveau}"><div><strong>${esc(x.titre)}</strong>${x.sousTitre ? `<span class="sub">${esc(x.sousTitre)}</span>` : ""}
-    <span class="bateau-consigne">${esc(x.consigne)}</span><span class="sub">${esc(x.raison)}</span>${x.arrivee ? `<span class="bateau-arrivee">${esc(x.arrivee)}</span>` : ""}<span class="sub">${esc(source)} Estimation : l'attente réelle peut varier.</span></div>
-    <div class="r">${btn("trav", b.depart !== null ? "Modifier" : "Réserver", { id: `${v.id}|${b.sens}`, cls: "btn ghost sm" })}</div></div>`;
+    <span class="bateau-consigne">${esc(x.consigne)}</span><span class="sub">${esc(x.raison)}</span>${x.arrivee ? `<span class="bateau-arrivee">${esc(x.arrivee)}</span>` : ""}<span class="sub">${esc(source)} Estimation : l'attente réelle peut varier.</span></div></div>`; // la traversée se modifie dans son propre bloc, juste au-dessus
 }
 enregistrerBlocVoyage({ onglet: "suivi", ordre: 14, rendu: blocBateau });
 

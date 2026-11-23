@@ -59,6 +59,8 @@ else
     echo "# IMAP_HOTE=imap.gmail.com"
     echo "# IMAP_UTILISATEUR=contact@votre-entreprise.ma"
     echo "# IMAP_MOT_DE_PASSE=mot-de-passe-d-application"
+    echo "# Itinéraire poids lourd (km réels par pays, péages) : clé gratuite openrouteservice (compte sur openrouteservice.org, usage interne) :"
+    echo "# ITINERAIRE_CLE=votre-cle-openrouteservice"
     echo "# Alertes de l'équipe sur téléphone (gratuit) : NTFY_URL=https://ntfy.sh/un-sujet-difficile-a-deviner"
   } > "$ENVF"
   chmod 600 "$ENVF"

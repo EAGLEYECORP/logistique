@@ -1170,3 +1170,6 @@ td.cel:focus-visible, tr.cliquable:focus-visible, [role="button"][data-act]:focu
 .bateau-port { border-inline-start: 4px solid var(--border); } .bateau-port.ok { border-inline-start-color: var(--ok); } .bateau-port.warn { border-inline-start-color: var(--warn); } .bateau-port.danger { border-inline-start-color: var(--danger); }
 .bateau-port > div > span { display: block; } .bateau-consigne { font-weight: 700; font-size: 1.02rem; margin-top: 6px; }
 .bateau-arrivee { font-weight: 600; margin: 4px 0; } .bateau-port.ok .bateau-arrivee { color: var(--ok); } .bateau-port.warn .bateau-arrivee { color: var(--warn); } .bateau-port.danger .bateau-arrivee { color: var(--danger); }
+
+/* mise en service pas à pas (réglages) */
+ol.etapes-mise-en-service { margin: 4px 0 8px; padding-inline-start: 20px; font-size: .9rem; } ol.etapes-mise-en-service li { margin: 2px 0; }

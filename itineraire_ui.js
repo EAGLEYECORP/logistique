@@ -71,11 +71,9 @@ enregistrerCarteReglages({
   rendu: () => { const e = etatItineraireRelais;
     return `<div class="card" id="carte-itineraire"><div class="card-head"><h2>Itinéraire poids lourd</h2>${badge(e?.actif ? (e.source === "prive" ? "Serveur du relais" : "Service public") : partageRelais() ? "Non configuré" : "Relais non branché", e?.actif ? "ok" : "neutral")}</div>
     <p style="margin:0 0 8px">Kilomètres et durée réels d'un camion (gabarit, tonnage), par pays et à péage, calculés par le relais avec <strong>openrouteservice</strong> (données OpenStreetMap). Ils remplissent les péages d'Europe, la consigne de plein et le devis. Sans service, l'application garde l'estimation (à vol d'oiseau × 1,25) et propose les liens Google Maps.${e?.actif ? ` Aujourd'hui : ${e.calculsDuJour} calcul(s) sur ${e.quotaJour} au plus ; un trajet déjà calculé est repris sans nouvel appel pendant 60 jours.` : ""}</p>
-    <pre class="bloc-code"># votre propre serveur openrouteservice (logiciel libre, gratuit) :
-ITINERAIRE_URL=http://localhost:8080/ors
-# ou le service public, avec une clé :
-ITINERAIRE_CLE=votre-cle-openrouteservice</pre>
-    <p class="hint"><strong>Conditions à vérifier</strong> : la formule gratuite du service public d'openrouteservice semble réservée à un usage non commercial (et limitée en nombre de calculs par jour) ; avant de l'utiliser pour votre entreprise, lisez ses conditions sur openrouteservice.org ou prenez leur formule payante. Votre propre serveur openrouteservice n'a pas cette limite mais demande une machine plus puissante (mémoire) et les cartes des pays traversés. Google Maps n'a pas de mode poids lourd.</p></div>`; },
+    <ol class="etapes-mise-en-service"><li>Créez un compte gratuit sur <strong>openrouteservice.org</strong> et copiez votre clé (tableau de bord).</li><li>Ajoutez-la dans le fichier de réglages du relais, puis redémarrez-le :</li></ol>
+    <pre class="bloc-code">ITINERAIRE_CLE=votre-cle</pre>
+    <p class="hint">Usage retenu : <strong>interne à l'entreprise, non commercial</strong> — la formule gratuite du service public d'openrouteservice convient. Elle limite le nombre de calculs par jour : le relais s'arrête à 1 500 par jour (réglable, ITINERAIRE_QUOTA_JOUR) et garde chaque itinéraire 60 jours, un même trajet ne coûte donc qu'un calcul. Plus tard, votre propre serveur openrouteservice (logiciel libre, ITINERAIRE_URL=…) enlèverait toute limite.</p></div>`; },
   apres() { if (partageRelais() && etatItineraireRelais === null) lireEtatItineraire().then((e) => { if (e && ongletActif === "parametres") rafraichir(); }); },
 });
 /** Au démarrage : état du service d'itinéraire (pour montrer le bouton « Calculer » sur les fiches). */

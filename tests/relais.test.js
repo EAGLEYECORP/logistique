@@ -908,7 +908,8 @@ async function fauxImap({ messages, uidValidite = 7, motDePasse = "app-pass" }) 
         else if (cmd === "EXAMINE") c.write(`* ${messages.length} EXISTS\r\n* OK [UIDVALIDITY ${uidValidite}] UIDs valid\r\n${tag} OK [READ-ONLY] EXAMINE fait\r\n`);
         else if (cmd === "UID" && reste[0] === "SEARCH") { const m = l.match(/UID (\d+):\*$/); const l2 = m ? messages.filter((x) => x.uid >= Number(m[1])) : messages; c.write(`* SEARCH ${(l2.length ? l2 : m ? [messages[messages.length - 1]] : []).map((x) => x.uid).join(" ")}\r\n${tag} OK recherche\r\n`); }
         else if (cmd === "UID" && reste[0] === "FETCH") {
-          for (const u of reste[1].split(",").map(Number)) { const m = messages.find((x) => x.uid === u), o = Buffer.from(m.brut, "latin1"); c.write(Buffer.concat([Buffer.from(`* ${u} FETCH (RFC822.SIZE ${o.length} BODY[]<0> {${o.length}}\r\n`, "latin1"), o, Buffer.from(` UID ${u})\r\n`)])); }
+          const partiel = l.match(/BODY\.PEEK\[\]<0\.(\d+)>/); // lecture partielle (<0.N>) ou message entier
+          for (const u of reste[1].split(",").map(Number)) { const m = messages.find((x) => x.uid === u), tout = Buffer.from(m.brut, "latin1"), o = partiel ? tout.subarray(0, Number(partiel[1])) : tout; c.write(Buffer.concat([Buffer.from(`* ${u} FETCH (RFC822.SIZE ${tout.length} BODY[]${partiel ? "<0>" : ""} {${o.length}}\r\n`, "latin1"), o, Buffer.from(` UID ${u})\r\n`)])); }
           c.write(`${tag} OK fetch\r\n`);
         } else if (cmd === "LOGOUT") { c.write(`* BYE\r\n${tag} OK au revoir\r\n`); c.end(); }
         else c.write(`${tag} BAD inconnu\r\n`);
@@ -1064,6 +1065,112 @@ test("itinéraire poids lourd : appel openrouteservice (profil camion, ferries �
     assert.deepStrictEqual((await s.appel("/api/etat", { jeton: "lit" })).json.itineraire.actif, true); }
   finally { await s.arreter(); }
   const s2 = await demarrer(null); try { assert.strictEqual((await s2.appel("/api/itineraire", { methode: "POST", jeton: "lit", corps: { points: [[1, 1], [2, 2]] } })).code, 503); } finally { await s2.arreter(); }
+});
+
+/** E-mail avec pièces jointes : PDF (taille choisie), logo de signature en ligne, PDF annoncé « octet-stream », archive. */
+const pdfFactice = (n) => Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(n, 0x41)]);
+const MAIL_PIECES = (uid, taillePdf = 2000, extra = "") => CRLF(`From: Souss Export <achats@souss-export.ma>
+To: contact@atlas-fret.ma
+Subject: Re: CMD-2026-0087 — documents
+Date: Tue, 24 Nov 2026 08:00:00 +0100
+Message-ID: <pj${uid}@souss-export.ma>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+${extra}
+--b1
+Content-Type: multipart/related; boundary="b2"
+
+--b2
+Content-Type: text/html; charset=utf-8
+
+<p>Bonjour, ci-joint la facture et le colisage.</p><img src="cid:logo">
+--b2
+Content-Type: image/png; name="image001.png"
+Content-ID: <logo>
+Content-Disposition: inline; filename="image001.png"
+Content-Transfer-Encoding: base64
+
+${Buffer.alloc(3000, 7).toString("base64")}
+--b2--
+--b1
+Content-Type: application/pdf; name="Facture FC-2211.pdf"
+Content-Disposition: attachment; filename="Facture FC-2211.pdf"
+Content-Transfer-Encoding: base64
+
+${pdfFactice(taillePdf).toString("base64").replace(/.{76}/g, "$&\n")}
+--b1
+Content-Type: application/octet-stream; name="packing list 0087.pdf"
+Content-Disposition: attachment; filename="packing list 0087.pdf"
+Content-Transfer-Encoding: base64
+
+${pdfFactice(900).toString("base64")}
+--b1
+Content-Type: application/zip; name="photos.zip"
+Content-Disposition: attachment; filename="photos.zip"
+Content-Transfer-Encoding: base64
+
+UEsDBA==
+--b1--
+`);
+
+test("pièces jointes : lues avec leur contenu, type déduit du nom, logo de signature écarté ; message trop gros relu en entier (dans la limite), sinon seulement nommé", async () => {
+  const { lireCourriel } = require("../serveur/mime.js"), { releverBoite } = require("../serveur/imap.js"), { typePiece } = require("../serveur/pieces.js");
+  const c = lireCourriel(MAIL_PIECES(1), { garderPieces: true });
+  assert.deepStrictEqual(c.pieces.map((p) => [p.nom, p.type, p.taille]), [["Facture FC-2211.pdf", "application/pdf", 2009], ["packing list 0087.pdf", "application/octet-stream", 909], ["photos.zip", "application/zip", 4]], "le logo en ligne (3 Ko) n'est pas une pièce jointe");
+  assert.ok(c.pieces[0].octets.subarray(0, 8).equals(Buffer.from("%PDF-1.4")), "contenu décodé du base64"); assert.strictEqual(lireCourriel(MAIL_PIECES(1)).pieces[0].octets, undefined, "sans garderPieces : les noms seulement");
+  assert.deepStrictEqual([typePiece("packing list 0087.pdf", "application/octet-stream"), typePiece("photos.zip", "application/zip"), typePiece("scan.JPG", ""), typePiece("x", "image/jpg")], ["application/pdf", "", "image/jpeg", "image/jpeg"]);
+  // relève : un message de 600 Ko est relu en entier ; un autre au-delà de maxComplet reste coupé
+  const msgs = [{ uid: 51, brut: MAIL_PIECES(51, 450000) }, { uid: 52, brut: MAIL_PIECES(52, 2000) }, { uid: 53, brut: MAIL_PIECES(53, 900000) }], f = await fauxImap({ messages: msgs });
+  try {
+    const r = await releverBoite({ hote: "127.0.0.1", port: f.port, securite: "aucune", utilisateur: "contact@atlas-fret.ma", motDePasse: "app-pass", maintenant: Date.parse("2026-11-24T10:00:00Z"), maxComplet: 1000000, maxCompletTotal: 1000000 });
+    assert.deepStrictEqual(r.messages.map((m) => [m.uid, m.tronque]), [[51, false], [52, false], [53, true]], "51 relu en entier ; 53 dépasse ce qui reste du budget de la relève");
+    assert.strictEqual(r.messages[0].brut.length, Buffer.from(msgs[0].brut, "latin1").length);
+    assert.ok(f.commandes.some((x) => /UID FETCH 51 \(UID RFC822\.SIZE BODY\.PEEK\[\]\)$/.test(x)) && !f.commandes.some((x) => /UID FETCH 52 \(/.test(x)), "relu seulement s'il était coupé, toujours en BODY.PEEK");
+    const sans = await releverBoite({ hote: "127.0.0.1", port: f.port, securite: "aucune", utilisateur: "contact@atlas-fret.ma", motDePasse: "app-pass", maintenant: Date.parse("2026-11-24T10:00:00Z") });
+    assert.deepStrictEqual(sans.messages.map((m) => m.tronque), [true, false, true], "sans maxComplet : comme avant, coupé à 300 Ko");
+  } finally { await f.fermer(); }
+});
+
+test("pièces jointes : gardées sur le relais (chiffrées), servies avec le jeton, effacées une fois rangées, au bout de 30 jours ou quand la demande sort de la boîte", async () => {
+  const msgs = [{ uid: 61, brut: MAIL_PIECES(61, 450000) }, { uid: 62, brut: MAIL_PIECES(62, 1000, "List-Unsubscribe: <mailto:u@x.ma>\n") }], f = await fauxImap({ messages: msgs });
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), "pieces-")), coffre = chargerCoffre(dossier, { CHIFFRER_DONNEES: "true", CLE_DONNEES: "phrase-essai-pieces" }).coffre;
+  const imap = { hote: "127.0.0.1", port: f.port, securite: "aucune", utilisateur: "contact@atlas-fret.ma", motDePasse: "app-pass" };
+  let s = await demarrer(dossier, { imap, coffre });
+  try {
+    await s.releverDemandes(Date.parse("2026-11-24T10:00:00Z"));
+    const l = (await s.appel("/api/demandes", { jeton: "lit" })).json, d = l.demandes.find((x) => x.uid === 61), masse = l.demandes.find((x) => x.uid === 62);
+    assert.deepStrictEqual(d.pieces.map((p) => [p.n, p.nom, p.type, p.garde]), [[1, "Facture FC-2211.pdf", "application/pdf", true], [2, "packing list 0087.pdf", "application/pdf", true], [3, "photos.zip", "application/zip", false]]);
+    assert.match(d.pieces[2].raison, /type non gardé/); assert.strictEqual(d.tronque, false, "message de 600 Ko relu en entier");
+    assert.ok(masse.pieces.every((p) => !p.garde && /lettre d'information/.test(p.raison)), "rien n'est gardé d'une lettre d'information");
+    assert.deepStrictEqual(l.boite.pieces, { nombre: 2, octets: 450009 + 909 });
+    const chemin = `/api/demandes/${d.id}/pieces/1`;
+    assert.strictEqual((await s.appel(chemin)).code, 401, "jeton de lecture requis");
+    const rep = await fetch(s.base + chemin, { headers: { authorization: "Bearer lit" } }), o = Buffer.from(await rep.arrayBuffer());
+    assert.strictEqual(rep.status, 200); assert.strictEqual(rep.headers.get("content-type"), "application/pdf"); assert.strictEqual(o.length, 450009); assert.ok(o.subarray(0, 8).equals(Buffer.from("%PDF-1.4")));
+    assert.match(rep.headers.get("content-disposition"), /filename\*=UTF-8''Facture%20FC-2211\.pdf/);
+    assert.ok(fs.readdirSync(path.join(dossier, "pieces")).every((x) => estChiffre(fs.readFileSync(path.join(dossier, "pieces", x)))), "chiffrées au repos");
+    assert.strictEqual((await s.appel(`/api/demandes/${d.id}/pieces/3`, { jeton: "lit" })).code, 404, "pièce non gardée");
+    assert.strictEqual((await s.appel(`/api/demandes/../pieces/1`, { jeton: "lit" })).code, 404);
+    // rangée par l'application : effacée, marquée effacée pour les autres appareils
+    assert.strictEqual((await s.appel(chemin, { jeton: "lit", methode: "DELETE" })).json.efface, true);
+    assert.strictEqual((await s.appel(chemin, { jeton: "lit" })).code, 404); assert.strictEqual(s.boite().demandes.find((x) => x.uid === 61).pieces[0].efface, true);
+    await s.arreter();
+    s = await demarrer(dossier, { imap, coffre }); // redémarrage : la pièce restante est toujours servie
+    assert.strictEqual((await s.appel(`/api/demandes/${d.id}/pieces/2`, { jeton: "lit" })).code, 200);
+    assert.strictEqual(s.pieces.purger(null, 30), 0, "gardée depuis moins de 30 jours");
+    assert.strictEqual(s.pieces.purger(new Set(["autre"])), 1, "la demande est sortie de la boîte : sa pièce est effacée");
+    assert.deepStrictEqual(s.pieces.resume(), { nombre: 0, octets: 0 }); assert.strictEqual(fs.readdirSync(path.join(dossier, "pieces")).length, 0);
+    assert.strictEqual((await s.appel("/api/etat", { jeton: "lit" })).json.version, "2.3.0");
+  } finally { await s.arreter(); await f.fermer(); }
+});
+
+test("pièces jointes : plafonds — 15 Mo la pièce, 10 par message, espace total du relais", () => {
+  const { creerPieces } = require("../serveur/pieces.js"), p = creerPieces({ coffre: creerCoffre(null), maxMo: 1, pieceMaxMo: 0.5, maxParMessage: 2 });
+  const pdf = (n) => ({ nom: `d${n}.pdf`, type: "application/pdf", octets: Buffer.alloc(n) });
+  const l = p.garder("m1-1", [pdf(600000), pdf(300000), pdf(300000), pdf(10)]);
+  assert.deepStrictEqual(l.map((x) => x.garde), [false, true, true, false]); assert.match(l[0].raison, /plus de 0.5 Mo/); assert.match(l[3].raison, /plus de 2 pièces/);
+  const l2 = p.garder("m1-2", [pdf(500000)]); assert.match(l2[0].raison, /espace du relais plein/);
+  assert.deepStrictEqual(p.garder("../x", [pdf(10)]), [], "identifiant de demande refusé");
 });
 
 (async () => {

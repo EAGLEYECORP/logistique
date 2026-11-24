@@ -3,7 +3,8 @@
    Relève d'une boîte e-mail par IMAP, sans dépendance (modules net et tls de Node).
    · lecture seule : le dossier est ouvert par EXAMINE et les messages lus par BODY.PEEK — rien n'est marqué « lu », rien n'est déplacé ;
    · première relève : les messages des derniers jours ; ensuite seulement les nouveaux (numéro UID au-delà du dernier vu) ;
-   · chaque message est lu jusqu'à 300 Ko (les grosses pièces jointes sont coupées : leur nom reste lisible).
+   · chaque message est lu jusqu'à 300 Ko ; au-delà (pièces jointes), il est relu en entier, un à la fois, jusqu'à maxComplet
+     octets par message et maxCompletTotal par relève — sinon il reste coupé et seuls les noms des pièces jointes restent lisibles.
    Fournisseurs : la boîte de l'entreprise chez l'hébergeur (OVH, Hostinger, Zoho…), ou Gmail avec IMAP activé et un mot de passe d'application.
    ============================================================ */
 const net = require("net");
@@ -55,10 +56,10 @@ function creerSession(socket, delaiMs) {
 
 /**
  * Relève les messages nouveaux d'un dossier.
- * → { uidValidite, dernierUid, messages: [{ uid, brut (Buffer), tronque }], laisses (trop anciens au-delà de max) }.
+ * → { uidValidite, dernierUid, messages: [{ uid, brut (Buffer), taille, tronque }], laisses (trop anciens au-delà de max) }.
  * depuisUid / uidValidite : ce qui a été vu à la relève précédente (UIDVALIDITY changé ⇒ on repart des derniers jours).
  */
-async function releverBoite({ hote, port, securite = "tls", utilisateur, motDePasse, dossier = "INBOX", depuisUid = 0, uidValidite = 0, joursInitiaux = 3, max = 25, maxOctets = 300000, delaiMs = 30000, maintenant = Date.now(), connecter = null }) {
+async function releverBoite({ hote, port, securite = "tls", utilisateur, motDePasse, dossier = "INBOX", depuisUid = 0, uidValidite = 0, joursInitiaux = 3, max = 25, maxOctets = 300000, maxComplet = 0, maxCompletTotal = 60e6, delaiMs = 30000, maintenant = Date.now(), connecter = null }) {
   if (!hote || !utilisateur) throw new Error("Boîte e-mail non configurée (IMAP_HOTE, IMAP_UTILISATEUR, IMAP_MOT_DE_PASSE).");
   const socket = connecter ? connecter() : securite === "aucune" ? net.connect({ host: hote, port: port || 143 }) : tls.connect({ host: hote, port: port || 993, servername: hote });
   const s = creerSession(socket, delaiMs);
@@ -84,7 +85,15 @@ async function releverBoite({ hote, port, securite = "tls", utilisateur, motDePa
       for (const x of rf.reponses) {
         const u = x.texte.match(/^\* \d+ FETCH\b.*?\bUID (\d+)/i); if (!u || !x.litteraux.length) continue;
         const taille = Number(x.texte.match(/RFC822\.SIZE (\d+)/i)?.[1] || 0);
-        messages.push({ uid: Number(u[1]), brut: x.litteraux[x.litteraux.length - 1], tronque: taille > maxOctets });
+        messages.push({ uid: Number(u[1]), brut: x.litteraux[x.litteraux.length - 1], taille, tronque: taille > maxOctets });
+      }
+      // messages coupés (pièces jointes) : relus en entier, un à la fois, dans la limite fixée
+      let budget = maxCompletTotal;
+      for (const m of messages) {
+        if (!m.tronque || !maxComplet || m.taille > maxComplet || m.taille > budget) continue;
+        const rc = await s.commande(`UID FETCH ${m.uid} (UID RFC822.SIZE BODY.PEEK[])`);
+        const x = rc.statut === "OK" ? rc.reponses.find((y) => new RegExp(`^\\* \\d+ FETCH\\b.*?\\bUID ${m.uid}\\b`, "i").test(y.texte) && y.litteraux.length) : null;
+        if (x) { m.brut = x.litteraux[x.litteraux.length - 1]; m.tronque = false; budget -= m.taille; }
       }
     }
     s.commande("LOGOUT").catch(() => { /* fermeture */ });

@@ -10,7 +10,7 @@
    ============================================================ */
 
 const SOURCES_DEMANDE = { email: "E-mail", whatsapp: "WhatsApp", collee: "Message collé" };
-const STATUTS_DEMANDE = [["a_trier", "À trier"], ["commande", "Commande créée"], ["devis", "Devis"], ["ignoree", "Ignorée"]];
+const STATUTS_DEMANDE = [["a_trier", "À trier"], ["commande", "Commande créée"], ["devis", "Devis"], ["rangee", "Documents rangés"], ["ignoree", "Ignorée"]];
 const MAX_DEMANDES = 500;
 /** Empreinte courte d'un texte (FNV-1a), pour les messages sans identifiant (partage, collage). */
 const empreinte = (t) => { let h = 0x811c9dc5; for (const c of String(t)) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); };
@@ -51,6 +51,9 @@ function resumeDemande(r) {
   return l.join(" · ");
 }
 
+/** Pièce jointe telle que le relais la décrit : nom, type ; à partir du relais 2.3, numéro, taille, gardée ou non (et pourquoi). */
+const lirePiece = (p) => ({ nom: String(p?.nom || "").slice(0, 120), type: String(p?.type || "").slice(0, 100),
+  ...(Number.isInteger(p?.n) ? { n: p.n, taille: num(p.taille, 0), garde: !!p.garde, ...(p.raison ? { raison: String(p.raison).slice(0, 160) } : {}), ...(p.efface ? { efface: true } : {}) } : {}) });
 /**
  * Ajoute des messages à la boîte, sans doublon. liste : [{ id?, messageId?, de: { nom, email }, sujet, date, texte, pieces, masse, recu }].
  * Renvoie les demandes ajoutées.
@@ -64,7 +67,7 @@ function ajouterDemandes(liste, source = "email", maintenant = Date.now()) {
     const id = String(x.id || `${source}-${empreinte(texte + sujet)}-${jourDe(date)}`);
     if (S.demandes.some((d) => d.id === id || (x.messageId && d.messageId === x.messageId) || (d.texte === texte && d.sujet === sujet && jourDe(d.date) === jourDe(date)))) continue;
     const d = { id, source, messageId: String(x.messageId || ""), de: { nom: String(x.de?.nom || "").slice(0, 120), email: String(x.de?.email || "").slice(0, 160).toLowerCase() }, sujet: sujet.slice(0, 300), date,
-      texte: texte.slice(0, 12000), pieces: (x.pieces || []).slice(0, 20).map((p) => ({ nom: String(p.nom || "").slice(0, 120), type: String(p.type || "") })), masse: !!x.masse, tronque: !!x.tronque, statut: "a_trier", recu: Number(x.recu) || maintenant };
+      texte: texte.slice(0, 12000), pieces: (x.pieces || []).slice(0, 20).map(lirePiece), masse: !!x.masse, tronque: !!x.tronque, statut: "a_trier", recu: Number(x.recu) || maintenant };
     S.demandes.push(d); ajoutees.push(d);
   }
   S.demandes.sort((a, b) => String(b.date).localeCompare(String(a.date)));

@@ -19,12 +19,13 @@ const { peutSuivre } = require("../comptes.js");
 const { page } = require("./page-client.js");
 const { releverBoite } = require("./imap.js");
 const { lireCourriel } = require("./mime.js");
+const { creerPieces, ID_DEMANDE } = require("./pieces.js");
 const { creerLiens } = require("./liens.js");
 const { creerItineraire } = require("./itineraire.js");
 const { creerVeille } = require("./veille.js");
 const { page: pageLien } = require("./page-lien.js");
 
-const VERSION = "2.2.0";
+const VERSION = "2.3.0";
 const NOEUD_KMH = 1.852;
 
 /** Normalise une position reçue sous des formes variées. Renvoie null si inutilisable. */
@@ -46,7 +47,7 @@ function normaliser(brut, { unite = "kmh", maintenant = Date.now() / 1000 } = {}
   return { id, t: Math.floor(t), lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, v: v === null ? null : Math.round(v * 10) / 10, cap: Number.isFinite(cap) ? Math.round(cap) : null, ...(temp !== null ? { temp } : {}) };
 }
 
-function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel, coffre = creerCoffre(null), journalAcces = false, purgePhotosMois = 0, multi = null, marches_ = recupererMarches, imap = null, releve_ = releverBoite, liensMaxMo = 1024, itineraire = {} } = {}) {
+function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 30, maxParAppareil = 6000, origine = "*", limiteParMinute = 900, racine = path.join(__dirname, "..") , canaux = {}, http_ = (...a) => fetch(...a), photosMaxMo = 2048, smtp = null, ntfyHotes = ["ntfy.sh"], courriel_ = envoyerCourriel, coffre = creerCoffre(null), journalAcces = false, purgePhotosMois = 0, multi = null, marches_ = recupererMarches, imap = null, releve_ = releverBoite, liensMaxMo = 1024, piecesMaxMo = 500, piecesMessageMaxMo = 20, itineraire = {} } = {}) {
   if (!jetonEcriture || !jetonLecture) throw new Error("JETON_ECRITURE et JETON_LECTURE sont obligatoires.");
   const historique = new Map(); // id -> [positions triées]
   const noms = new Map();
@@ -204,26 +205,28 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
   const routes = creerItineraire({ http_, dossier, coffre, ...itineraire });
   /* ---------- boîte des demandes : la boîte e-mail de l'entreprise relevée par IMAP (lecture seule), messages gardés pour l'application ---------- */
   let boite = { uidValidite: 0, dernierUid: 0, demandes: [], derniere: 0, erreur: "", releves: 0 }, releveEnCours = null, derniereForcee = 0;
+  const pieces = creerPieces({ dossier, coffre, maxMo: piecesMaxMo }); // pièces jointes gardées jusqu'à ce que l'application les range (serveur/pieces.js)
   const fichierBoite = () => path.join(dossier, "boite.json");
   if (dossier) { try { boite = { ...boite, ...JSON.parse(coffre.lireTexte(fichierBoite())) }; } catch { /* aucune relève */ } }
   const sauverBoite = () => { if (dossier) { try { coffre.ecrire(fichierBoite(), JSON.stringify(boite)); } catch { /* garde en mémoire */ } } };
-  const etatBoite = () => ({ active: !!imap, dossier: imap?.dossier || "INBOX", adresse: imap ? String(imap.utilisateur || "").replace(/^(.).*(@.*)$/, "$1…$2") : "", derniere: boite.derniere, erreur: boite.erreur, nombre: boite.demandes.length });
+  const etatBoite = () => ({ active: !!imap, dossier: imap?.dossier || "INBOX", adresse: imap ? String(imap.utilisateur || "").replace(/^(.).*(@.*)$/, "$1…$2") : "", derniere: boite.derniere, erreur: boite.erreur, nombre: boite.demandes.length, pieces: pieces.resume() });
   /** Relève la boîte : les nouveaux messages deviennent des demandes (les nôtres, les réponses automatiques et les doublons sont écartés). */
   async function releverDemandes(maintenant = Date.now()) {
     if (!imap) return { nouvelles: 0 };
     if (releveEnCours) return releveEnCours;
     releveEnCours = (async () => {
       try {
-        const r = await releve_({ ...imap, depuisUid: boite.dernierUid, uidValidite: boite.uidValidite, maintenant });
+        const r = await releve_({ ...imap, depuisUid: boite.dernierUid, uidValidite: boite.uidValidite, maintenant, maxComplet: piecesMessageMaxMo * 1048576 });
         const nous = new Set([imap.utilisateur, smtp?.de].filter(Boolean).map((x) => String(x).toLowerCase())), vus = new Set(boite.demandes.map((d) => d.messageId).filter(Boolean));
         let nouvelles = 0;
         for (const m of r.messages) {
-          let c; try { c = lireCourriel(m.brut); } catch { continue; }
+          let c; try { c = lireCourriel(m.brut, { garderPieces: !m.tronque }); } catch { continue; }
           if (nous.has(c.de.email) || c.auto || (c.messageId && vus.has(c.messageId))) continue;
-          boite.demandes.push({ id: `m${r.uidValidite}-${m.uid}`, uid: m.uid, messageId: c.messageId, de: c.de, sujet: c.sujet, date: c.date || new Date(maintenant).toISOString(), texte: c.texte, pieces: c.pieces, masse: c.masse, tronque: !!m.tronque, recu: maintenant });
+          const id = `m${r.uidValidite}-${m.uid}`, lp = pieces.garder(id, c.pieces, { tronque: !!m.tronque, sans: c.masse ? "lettre d'information ou liste de diffusion : non gardée" : "" });
+          boite.demandes.push({ id, uid: m.uid, messageId: c.messageId, de: c.de, sujet: c.sujet, date: c.date || new Date(maintenant).toISOString(), texte: c.texte, pieces: lp, masse: c.masse, tronque: !!m.tronque, recu: maintenant });
           if (c.messageId) vus.add(c.messageId); nouvelles++;
         }
-        boite.demandes = boite.demandes.slice(-300);
+        boite.demandes = boite.demandes.slice(-300); pieces.purger(new Set(boite.demandes.map((d) => d.id)));
         Object.assign(boite, { uidValidite: r.uidValidite, dernierUid: r.dernierUid, derniere: maintenant, erreur: "", releves: boite.releves + 1 });
         sauverBoite(); return { nouvelles };
       } catch (e) { boite.erreur = String(e.message || e).slice(0, 300); boite.derniere = maintenant; sauverBoite(); return { nouvelles: 0, erreur: boite.erreur }; }
@@ -420,6 +423,15 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
           const depuis = Number(url.searchParams.get("depuis") || 0);
           return json(res, 200, { boite: etatBoite(), demandes: boite.demandes.filter((d) => d.recu > depuis) });
         }
+        const mpj = p.match(/^\/api\/demandes\/([A-Za-z0-9_-]{1,80})\/pieces\/(\d{1,2})$/);
+        if (mpj && ["GET", "DELETE"].includes(req.method)) { // pièce jointe d'une demande : lue puis effacée par l'application quand elle l'a rangée
+          if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
+          const d = boite.demandes.find((x) => x.id === mpj[1]), x = d?.pieces?.find((y) => y.n === Number(mpj[2]));
+          if (req.method === "DELETE") { const ok = pieces.effacer(mpj[1], Number(mpj[2])); if (x && x.garde) { x.efface = true; sauverBoite(); } return json(res, 200, { ok: true, efface: ok }); }
+          const o = ID_DEMANDE.test(mpj[1]) ? pieces.lire(mpj[1], Number(mpj[2])) : null;
+          if (!o || !x) return json(res, 404, { erreur: "Pièce jointe introuvable : déjà rangée, effacée, ou restée dans la messagerie." });
+          res.writeHead(200, entetes({ "Content-Type": x.type || "application/octet-stream", "Content-Length": o.length, "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(x.nom)}`, "Cache-Control": "no-store" })); return res.end(o);
+        }
         if (p === "/api/demandes/relever" && req.method === "POST") {
           if (!peutLire) return json(res, 401, { erreur: "Jeton de lecture requis." });
           if (!imap) return json(res, 503, { erreur: "Boîte e-mail non configurée sur le relais (IMAP_HOTE, IMAP_UTILISATEUR, IMAP_MOT_DE_PASSE)." });
@@ -520,7 +532,7 @@ function creer({ jetonEcriture, jetonLecture, dossier = null, retentionJours = 3
       return json(res, 404, { erreur: "Introuvable." });
     } catch (e) { return json(res, 500, { erreur: "Erreur du serveur." }); }
   });
-  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif, purgerPhotos, photos, multi, releverDemandes, boite: () => boite, liens, veille };
+  return { serveur, historique, enregistrer, partages, donneesPartage, tick, planif: () => planif, purgerPhotos, photos, multi, releverDemandes, boite: () => boite, liens, veille, pieces };
 }
 
 module.exports = { creer, normaliser, VERSION, creerCoffre, chargerCoffre };
@@ -550,11 +562,12 @@ if (require.main === module) {
   const purgePhotosMois = Number(e.PURGE_PHOTOS_MOIS || 0), estMulti = String(e.MULTI_UTILISATEUR || "").toLowerCase() === "true";
   const multi = estMulti ? creerMulti({ dossier, coffre, version: VERSION, jetonLecture: jetons.jetonLecture, smtp, cookieSecurise: String(e.COOKIE_NON_SECURISE || "").toLowerCase() !== "true", retentionAuditJours: Number(e.RETENTION_AUDIT_JOURS || 730), urlPublique: e.URL_PUBLIQUE || "" }) : null;
   const itineraire = { url: e.ITINERAIRE_URL || "", cle: e.ITINERAIRE_CLE || "", quotaJour: Number(e.ITINERAIRE_QUOTA_JOUR || 1500) };
-  const { serveur, tick, purgerPhotos, releverDemandes, liens: { purger: liensPurger }, veille } = creer({ itineraire, liensMaxMo: Number(e.LIENS_MAX_MO || 1024), imap, ...jetons, dossier, coffre, purgePhotosMois, multi, journalAcces: String(e.JOURNAL_ACCES || "").toLowerCase() === "true", retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
+  const { serveur, tick, purgerPhotos, releverDemandes, liens: { purger: liensPurger }, veille, pieces } = creer({ itineraire, liensMaxMo: Number(e.LIENS_MAX_MO || 1024), piecesMaxMo: Number(e.PIECES_MAX_MO || 500), imap, ...jetons, dossier, coffre, purgePhotosMois, multi, journalAcces: String(e.JOURNAL_ACCES || "").toLowerCase() === "true", retentionJours: Number(e.RETENTION_JOURS || 30), origine: e.ORIGINE || "*", canaux, photosMaxMo: Number(e.PHOTOS_MAX_MO || 2048), smtp, ntfyHotes });
   setInterval(() => { tick().catch(() => { /* réessayé à la minute suivante */ }); }, 60000); // notifications programmées
   setInterval(() => { veille.verifier().catch(() => { /* réessayé à la minute suivante */ }); }, 60000); // coupures des chauffeurs, passages aux quais
   if (imap) { const minutes = Math.max(2, Number(e.IMAP_INTERVALLE_MIN || 5)), relever = () => releverDemandes().then((r) => { if (r.erreur) console.log(`Boîte des demandes : ${r.erreur}`); else if (r.nouvelles) console.log(`Boîte des demandes : ${r.nouvelles} nouveau(x) message(s)`); }); setTimeout(relever, 10000); setInterval(relever, minutes * 60000); }
   setInterval(() => { try { liensPurger(); } catch { /* ignoré */ } }, 6 * 3600000); // liens expirés depuis 7 jours : effacés avec leurs fichiers
+  setInterval(() => { try { pieces.purger(null, 30); } catch { /* ignoré */ } }, 6 * 3600000); // pièces jointes des demandes non rangées depuis 30 jours
   if (purgePhotosMois > 0) { const purge = () => { const b = purgerPhotos(); if (b && (b.marquees || b.supprimees)) console.log(`Purge des photos : ${b.marquees} marquée(s), ${b.supprimees} supprimée(s)`); }; setTimeout(purge, 60000); setInterval(purge, 86400000); }
   const port = Number(e.PORT || 8787);
   serveur.listen(port, e.HOTE || "0.0.0.0", () => {
@@ -565,7 +578,7 @@ if (require.main === module) {
     console.log(`  Données au repos : ${coffre.actif ? "chiffrées (AES-256-GCM)" : "en clair (CHIFFRER_DONNEES=true pour chiffrer)"}${String(e.JOURNAL_ACCES || "").toLowerCase() === "true" ? " · journal d'accès actif (30 jours)" : ""}`);
     if (multi) console.log(`  Multi-utilisateur : application servie sur ce port, ${multi.comptes().length ? `${multi.comptes().length} compte(s)` : "aucun compte : ouvrez l'adresse du relais pour créer le premier (jeton de lecture demandé)"}`);
     if (itineraire.url || itineraire.cle) console.log(`  Itinéraire poids lourd : ${itineraire.url ? `serveur openrouteservice ${itineraire.url}` : "openrouteservice (service public, usage interne non commercial)"}, ${itineraire.quotaJour} calculs par jour au plus`);
-    if (imap) console.log(`  Boîte des demandes : ${imap.utilisateur} (${imap.hote}, dossier ${imap.dossier}), relevée toutes les ${Math.max(2, Number(e.IMAP_INTERVALLE_MIN || 5))} min, en lecture seule`);
+    if (imap) console.log(`  Boîte des demandes : ${imap.utilisateur} (${imap.hote}, dossier ${imap.dossier}), relevée toutes les ${Math.max(2, Number(e.IMAP_INTERVALLE_MIN || 5))} min, en lecture seule ; pièces jointes gardées jusqu'à ${Number(e.PIECES_MAX_MO || 500)} Mo`);
     console.log(`  Notifications programmées : ntfy (${ntfyHotes.join(", ")})${smtp ? `, e-mail (${smtp.hote})` : ""}${canaux.whatsapp ? ", WhatsApp" : ""}`);
     console.log(`  Réception : POST /api/positions · GET /osmand · POST /traccar    Lecture : /api/derniere · /api/trace`);
   });

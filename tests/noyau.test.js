@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "resume_client.js", "mise_en_service.js", "dictee.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "pieces_demande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "resume_client.js", "mise_en_service.js", "dictee.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -3196,7 +3196,7 @@ test("mise en service : relais (absent, vérification, injoignable, ancien, comp
   // flotte : balise, chauffeur joignable (ntfy, ou WhatsApp seulement si le relais sait l'envoyer), charges fixes
   N.S.camions = [{ id: "c1", immat: "12-A-1", balise: "tel-1", fixeMensuel: 9000 }, { id: "c2", immat: "12-A-2" }, { id: "c3", immat: "12-A-3", coutsFixes: { assurance_mensuel: 1500 } }];
   N.S.chauffeurs = [{ id: "h1", nom: "Youssef", ntfy: "https://ntfy.sh/youssef-x9k2a" }, { id: "h2", nom: "Karim", tel: "0661234567" }, { id: "h3", nom: "Said" }];
-  const complet = { configure: true, statut: "ok", etat: { version: "2.2.0", notifications: ["equipe", "ntfy", "email"], boite: { active: true, adresse: "contact@atlas.ma" }, itineraire: { actif: true, source: "public" } } };
+  const complet = { configure: true, statut: "ok", etat: { version: "2.3.0", notifications: ["equipe", "ntfy", "email"], boite: { active: true, adresse: "contact@atlas.ma" }, itineraire: { actif: true, source: "public" } } };
   r = M({ relais: complet });
   for (const k of ["relais", "email", "boite", "itineraire", "equipe"]) assert.strictEqual(item(r, k).etat, "ok", k);
   assert.strictEqual(item(r, "balises").etat, "partiel"); assert.match(item(r, "balises").detail, /1 sur 3 · sans balise : 12-A-2, 12-A-3/);
@@ -3256,13 +3256,66 @@ test("mise en service : chaque titre de groupe et de point, et chaque bouton, es
   const src = fs.readFileSync(path.join(racine, "langue.js"), "utf8");
   const c = vm.createContext({}); vm.runInContext(src.slice(src.indexOf("const AR = {"), src.indexOf("const LANGUES")) + ";this.AR = AR;", c);
   const libelles = new Set(["Mise en service", "Vérifier à nouveau", "Plus tard", "Tout voir"]);
-  const cas = [{}, { relais: { configure: true, statut: "ok", etat: { version: "2.2.0", notifications: [] } } }];
+  const cas = [{}, { relais: { configure: true, statut: "ok", etat: { version: "2.3.0", notifications: [] } } }];
   N.S.camions = [{ id: "c1", immat: "A" }]; N.S.chauffeurs = [{ id: "h1", nom: "B" }]; N.S.clients = [{ id: "k1", nom: "C" }]; N.S.voyages = [{ id: "v1", statut: "prevu", traversees: [{ sens: "aller", ligne: "tmed-alg" }] }];
   for (const o of cas) for (const g of N.etatMiseEnService(o).groupes) { libelles.add(g.titre); for (const x of g.items) { libelles.add(x.titre); if (x.action) libelles.add(x.action.lib); } }
   N.S.camions = []; N.S.chauffeurs = []; N.S.clients = []; for (const g of N.etatMiseEnService().groupes) for (const x of g.items) { libelles.add(x.titre); if (x.action) libelles.add(x.action.lib); }
   N.S.clients = [{ id: "k1", nom: "C" }, { id: "k2", nom: "D" }]; N.S.commandes = [{ id: "o", clientId: "k1", dateChargement: N.today() }]; for (const g of N.etatMiseEnService().groupes) libelles.add(g.titre);
   assert.ok(libelles.size >= 30, `${libelles.size} libellés`);
   assert.deepStrictEqual([...libelles].filter((t) => !c.AR[t]), []);
+});
+
+test("pièces jointes des demandes : document reconnu au nom (jamais une pro forma ni notre facture), deviné du message pour une seule pièce muette", () => {
+  const D = (nom) => [...N.documentsNommes(nom)];
+  assert.deepStrictEqual(D("Facture FC-2211.pdf"), ["facture"]); assert.deepStrictEqual(D("Proforma invoice 12.pdf"), [], "pro forma : pas la facture commerciale");
+  assert.deepStrictEqual(D("Facture pro-forma 12.pdf"), []); assert.deepStrictEqual(D("packing list 0087.xlsx"), ["colisage"]); assert.deepStrictEqual(D("PL_0087.pdf"), ["colisage"]);
+  assert.deepStrictEqual(D("planning semaine.pdf"), [], "« pl » seulement comme mot"); assert.deepStrictEqual(D("Certificat phytosanitaire.jpg"), ["phyto"]); assert.deepStrictEqual(D("EUR.1 n°A123.pdf"), ["eur1"]);
+  assert.deepStrictEqual(D("Facture + PL 0087.pdf"), ["facture", "colisage"], "un PDF qui réunit les deux"); assert.deepStrictEqual(D("scan0001.pdf"), []); assert.deepStrictEqual(D("فاتورة 12.pdf"), ["facture"]);
+  assert.deepStrictEqual(D("bon de commande 4501.pdf"), []); assert.deepStrictEqual(D("DSCE lot 3.pdf"), ["ched"]); assert.deepStrictEqual(D("MRN 26ES0012.pdf"), ["export_ue"]); assert.deepStrictEqual(D("Factura comercial.pdf"), ["facture"]);
+  N.S.factures = [{ id: "f1", numero: "FAC-2026-0012" }];
+  const d = { sujet: "Re: Facture FAC-2026-0012", texte: "Bonjour, voici votre facture tamponnée.", pieces: [{ n: 1, nom: "Facture FAC-2026-0012.pdf", garde: true }] };
+  assert.deepStrictEqual([...N.reconnaitrePieces(d)[0].docs], [], "notre propre facture renvoyée : pas la facture commerciale du client");
+  const muet = (texte, pieces) => N.reconnaitrePieces({ sujet: "Documents", texte, pieces });
+  let r = muet("Ci-joint le certificat phytosanitaire du lot.", [{ n: 1, nom: "scan0001.pdf", garde: true }]);
+  assert.deepStrictEqual([...r[0].docs], ["phyto"]); assert.strictEqual(r[0].devine, true);
+  assert.deepStrictEqual([...muet("Ci-joint la facture et le colisage.", [{ n: 1, nom: "scan0001.pdf", garde: true }])[0].docs], [], "deux documents cités : rien de deviné");
+  assert.deepStrictEqual([...muet("Ci-joint la facture.", [{ n: 1, nom: "scan1.pdf", garde: true }, { n: 2, nom: "scan2.pdf", garde: true }])[0].docs], [], "deux pièces muettes : rien de deviné");
+  r = muet("Ci-joint la facture.", [{ n: 1, nom: "scan1.pdf", garde: true }, { n: 2, nom: "photos.zip", garde: false }]); assert.deepStrictEqual([...r[0].docs], ["facture"], "la pièce non gardée ne compte pas");
+  // ajout à la boîte : description des pièces du relais 2.3 gardée, ancienne forme (nom seul) acceptée
+  const [a] = N.ajouterDemandes([{ id: "m9-1", de: { email: "x@y.ma" }, sujet: "Docs", texte: "Voir pièces", pieces: [{ n: 1, nom: "f.pdf", type: "application/pdf", taille: 1200, garde: true }, { n: 2, nom: "z.zip", type: "application/zip", taille: 4, garde: false, raison: "type non gardé" }, { nom: "ancien.pdf", type: "application/pdf" }] }]);
+  assert.deepStrictEqual(a.pieces.map((p) => ({ ...p })), [{ nom: "f.pdf", type: "application/pdf", n: 1, taille: 1200, garde: true }, { nom: "z.zip", type: "application/zip", n: 2, taille: 4, garde: false, raison: "type non gardé" }, { nom: "ancien.pdf", type: "application/pdf" }]);
+  assert.strictEqual(N.classerDemande(a, "rangee", { commandeId: "c1" }), true); assert.strictEqual(N.libDe(N.STATUTS_DEMANDE, "rangee"), "Documents rangés");
+});
+
+test("pièces jointes des demandes : commande citée (sa référence, ou celle du client dans le sujet), expéditeur du client, rangement automatique et documents cochés à la date de l'e-mail", () => {
+  N.S.clients = [{ id: "k1", nom: "Souss Export", email: "achats@souss-export.ma" }, { id: "k2", nom: "Petit client", email: "petit.client@gmail.com" }];
+  const c = { id: "c1", ref: "CMD-2026-0087", refClient: "PO-4501", clientId: "k1", origine: "Agadir", destination: "Perpignan", paysOrigine: "Maroc", paysDest: "France", marchandise: "Clémentines", dateChargement: N.today() };
+  N.S.commandes = [c, { id: "c2", ref: "CMD-2026-0088", refClient: "12", clientId: "k2", dateChargement: N.today() }, { id: "c3", ref: "CMD-2025-0042", clientId: "k1", dateChargement: "2025-01-10" }];
+  const dem = (o) => ({ id: "m1", de: { email: "achats@souss-export.ma" }, sujet: "", texte: "", date: "2026-11-24T08:00:00Z", pieces: [{ n: 1, nom: "Facture FC-2211.pdf", garde: true }, { n: 2, nom: "packing list.xlsx", garde: true }], ...o });
+  const cite = (o) => [...N.commandesCitees(dem(o)).map((x) => x.id)];
+  assert.deepStrictEqual(cite({ sujet: "Re: CMD-2026-0087 — documents" }), ["c1"]); assert.deepStrictEqual(cite({ texte: "pour la commande cmd 2026 0087 de jeudi" }), ["c1"], "séparateurs libres");
+  assert.deepStrictEqual(cite({ sujet: "Votre réf. PO 4501" }), ["c1"], "référence du client dans le sujet"); assert.deepStrictEqual(cite({ texte: "notre PO 4501" }), [], "référence du client : seulement dans le sujet");
+  assert.deepStrictEqual(cite({ sujet: "Re: commande 12" }), [], "référence du client trop courte"); assert.deepStrictEqual(cite({ sujet: "CMD-2026-00871" }), [], "pas une autre référence qui commence pareil");
+  assert.deepStrictEqual(cite({ sujet: "CMD-2025-0042" }), [], "commande ancienne (plus de 120 jours)"); assert.deepStrictEqual(cite({ sujet: "CMD-2026-0087 et CMD-2026-0088" }), ["c1", "c2"]);
+  assert.strictEqual(N.commandePourDemande(dem({ sujet: "CMD-2026-0087 et CMD-2026-0088" })), null, "deux commandes citées : pas de choix automatique");
+  // expéditeur
+  assert.strictEqual(N.expediteurDuClient(dem(), c), true); assert.strictEqual(N.expediteurDuClient(dem({ de: { email: "compta@souss-export.ma" } }), c), true, "même domaine d'entreprise");
+  assert.strictEqual(N.expediteurDuClient(dem({ de: { email: "x@autre.ma" } }), c), false);
+  assert.strictEqual(N.expediteurDuClient(dem({ de: { email: "autre@gmail.com" } }), N.S.commandes[1]), false, "messagerie gratuite : seulement la même adresse");
+  // rangement automatique
+  let a = N.rangementAutomatique(dem({ sujet: "Re: CMD-2026-0087 — documents" }), { champs: {} });
+  assert.strictEqual(a.c.id, "c1"); assert.deepStrictEqual([...a.pieces.map((p) => p.n)], [1, 2]); assert.strictEqual(a.classer, true);
+  a = N.rangementAutomatique(dem({ sujet: "Re: CMD-2026-0087" }), { champs: { origine: "Agadir", destination: "Perpignan" } }); assert.strictEqual(a.classer, true, "même trajet : simple envoi de documents");
+  a = N.rangementAutomatique(dem({ sujet: "Re: CMD-2026-0087 — nouveau chargement" }), { champs: { origine: "Agadir", destination: "Lyon" } }); assert.strictEqual(a.classer, false, "un autre trajet : pièces rangées, demande laissée à trier");
+  assert.strictEqual(N.rangementAutomatique(dem({ sujet: "Re: CMD-2026-0087", de: { email: "inconnu@x.ma" } })), null, "expéditeur inconnu : rangement proposé, pas automatique");
+  assert.strictEqual(N.rangementAutomatique(dem({ sujet: "Re: CMD-2026-0087", pieces: [{ n: 1, nom: "f.pdf", garde: true, rangee: "c1" }, { n: 2, nom: "x.zip", garde: false }] })), null, "rien à ranger");
+  assert.strictEqual(N.rangementAutomatique(dem({ sujet: "Bonjour" })), null);
+  // documents cochés : reconnus, attendus, pas encore reçus, à la date de l'e-mail
+  N.noterDocument(c, "colisage", { recu: "2026-11-20T10:00:00.000Z" }); N.noterDocument(c, "eacce", { nonRequis: true });
+  const p = N.reconnaitrePieces(dem({ pieces: [{ n: 1, nom: "Facture FC-2211.pdf", garde: true }, { n: 2, nom: "packing list.xlsx", garde: true }, { n: 3, nom: "EACCE.pdf", garde: true }, { n: 4, nom: "MRN.pdf", garde: true }] }));
+  assert.deepStrictEqual([...N.cocherDocumentsPieces(c, p, "2026-11-24T08:00:00Z")], ["Facture commerciale"], "colisage déjà reçu, EACCE non requis, MRN pas attendu à l'export");
+  assert.strictEqual(c.documents.facture.recu, "2026-11-24T08:00:00.000Z"); assert.strictEqual(c.documents.colisage.recu, "2026-11-20T10:00:00.000Z", "date de réception d'origine gardée");
+  assert.deepStrictEqual([...N.cocherDocumentsPieces(c, p, "2026-11-25T08:00:00Z")], [], "rien de coché deux fois");
 });
 
 (async () => {

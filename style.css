@@ -1197,3 +1197,12 @@ ol.etapes-mise-en-service { margin: 4px 0 8px; padding-inline-start: 20px; font-
 .card[id] { scroll-margin-top: 84px; }
 .mes-surligne { outline: 2px solid var(--primary); outline-offset: 2px; transition: outline-color .4s; }
 @media (max-width: 560px) { .mes-item { flex-wrap: wrap; } .mes-texte { flex-basis: calc(100% - 38px); } .mes-item .btn { margin-inline-start: 38px; align-self: flex-start; } }
+
+/* Pièces jointes des demandes */
+.dem-pieces-bloc { margin: 6px 0 2px; }
+.dem-pieces-liste { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.dem-pieces-liste li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.dem-pieces-liste li > svg.i { width: 16px; height: 16px; flex: 0 0 16px; color: var(--muted); }
+.dem-pieces-liste li.pale { border-style: dashed; }
+.dem-piece-nom { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.dem-pieces-liste li .btn { margin-inline-start: auto; }

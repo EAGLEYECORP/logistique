@@ -9,7 +9,7 @@
    Interface (Réglages → Général, bandeau du tableau de bord) : mise_en_service_ui.js.
    ============================================================ */
 
-const VERSION_RELAIS_MIN = "2.2.0"; // veille jour et nuit (coupures, quais), relances de documents, résumés du lundi
+const VERSION_RELAIS_MIN = "2.3.0"; // veille jour et nuit (coupures, quais), relances de documents, résumés du lundi, pièces jointes des demandes
 const ACTIFS_JOURS = 120;           // un client est « actif » s'il a une commande ou un voyage dans les 120 derniers jours (ou à venir)
 
 /** Compare deux versions « 2.10.1 » / « 2.2.0 » : négatif, 0 ou positif. */
@@ -62,7 +62,7 @@ function etatMiseEnService({ relais = { configure: false }, appareil = {}, maint
     : relais.statut === "verif" ? item("relais", "Relais branché", "attente", "Vérification…", "", versRelais)
     : relais.statut === "refuse" ? item("relais", "Relais branché", "a_faire", "Jeton de lecture refusé : recopiez-le depuis la machine du relais.", "", versRelais)
     : relais.statut !== "ok" ? item("relais", "Relais branché", "a_faire", `Injoignable${relais.erreur ? ` (${relais.erreur})` : ""} : machine éteinte, adresse ou https à revoir.`, "", versRelais)
-    : comparerVersions(e.version, VERSION_RELAIS_MIN) < 0 ? item("relais", "Relais branché", "partiel", `Version ${e.version || "ancienne"} : à mettre à jour (git pull, puis redémarrer) pour la veille jour et nuit, les relances de documents et les résumés du lundi.`, "", versRelais)
+    : comparerVersions(e.version, VERSION_RELAIS_MIN) < 0 ? item("relais", "Relais branché", "partiel", `Version ${e.version || "ancienne"} : à mettre à jour (git pull, puis redémarrer) pour la veille jour et nuit, les relances de documents, les résumés du lundi et les pièces jointes des demandes.`, "", versRelais)
     : item("relais", "Relais branché", "ok", `Joignable · version ${e.version}`, "", versRelais);
   const sansRelais = !e ? (relais.statut === "verif" ? "attente" : "a_faire") : null;
   const dep = (cle, titre, ok, detailOk, detailManque, valeur, action, partiel = null) =>
@@ -73,7 +73,7 @@ function etatMiseEnService({ relais = { configure: false }, appareil = {}, maint
   ajouter("relais", "Le relais (serveur du bureau)", [
     relaisItem,
     dep("email", "E-mail d'envoi", can.includes("email"), "Prêt : factures et relances partent du relais.", "Lignes SMTP_… à ajouter à la configuration du relais.", "Factures avec le PDF joint, relances de paiement et de documents, résumés du lundi aux clients.", { ...versRelais, lib: "Voir" }),
-    dep("boite", "Boîte des demandes", !!bo?.active && !bo?.erreur, `Relevée${bo?.adresse ? ` : ${bo.adresse}` : ""}.`, "Lignes IMAP_… à ajouter à la configuration du relais.", "Les demandes de transport reçues par e-mail arrivent dans Commandes → Demandes, lues et pré-remplies.", { page: "parametres", onglet: "general", ancre: "carte-boite", lib: "Voir" }, bo?.active && bo?.erreur ? `Erreur de relève : ${bo.erreur}` : null),
+    dep("boite", "Boîte des demandes", !!bo?.active && !bo?.erreur, `Relevée${bo?.adresse ? ` : ${bo.adresse}` : ""}.`, "Lignes IMAP_… à ajouter à la configuration du relais.", "Les demandes de transport reçues par e-mail arrivent dans Commandes → Demandes, lues et pré-remplies ; leurs pièces jointes se rangent sur la commande.", { page: "parametres", onglet: "general", ancre: "carte-boite", lib: "Voir" }, bo?.active && bo?.erreur ? `Erreur de relève : ${bo.erreur}` : null),
     dep("itineraire", "Itinéraire poids lourd", !!iti?.actif, iti?.source === "prive" ? "Serveur openrouteservice du relais." : "Service public openrouteservice (usage interne).", "Clé openrouteservice (gratuite) à ajouter au relais : ITINERAIRE_CLE.", "Kilomètres, heures et péages calculés pour un camion (hauteur, poids, interdictions), pas pour une voiture.", { page: "parametres", onglet: "general", ancre: "carte-itineraire", lib: "Voir" }),
     dep("equipe", "Alertes au bureau", can.includes("equipe"), "Canal de l'équipe branché.", "Canal de l'équipe à ajouter au relais : NTFY_URL (ou Telegram, WhatsApp).", "Le bureau est prévenu même application fermée : pause dépassée, retard, demande reçue.", { ...versRelais, lib: "Voir" }),
   ]);

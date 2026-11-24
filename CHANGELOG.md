@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.21.0 — Les pièces jointes des demandes arrivent sur la commande (relais 2.3)
+
+- **Le relais garde maintenant les pièces jointes des e-mails** reçus dans la boîte des demandes : PDF, photos, Excel, Word (15 Mo la pièce, 10 par message). Un e-mail de plus de 300 Ko est relu en entier (20 Mo au plus) au lieu d'être coupé. Les pièces sont chiffrées sur le relais comme le reste des données, et effacées dès qu'elles sont rangées (au plus tard 30 jours après). Les logos de signature ne comptent plus comme des pièces jointes ; rien n'est gardé d'une lettre d'information.
+- **Sur chaque demande** (Commandes → Demandes) : la liste des pièces jointes, le document reconnu à son nom (« Facture commerciale », « Liste de colisage », « Certificat phytosanitaire », EUR.1, EACCE, CHED, MRN), « Ouvrir » pour les lire. Une pièce que le relais n'a pas gardée est nommée avec la raison (trop grosse, type non gardé, lettre d'information).
+- **« Créer la commande » range les pièces jointes sur la nouvelle commande** (photos et documents du voyage, ou de la commande) et coche reçus les documents reconnus, à la date de l'e-mail.
+- **La réponse d'un client qui cite sa commande se range toute seule** (« Re: CMD-2026-0087 — documents », ou la référence du client dans le sujet) : pièces rangées, documents cochés, demande classée « Documents rangés ». Seulement si l'expéditeur est bien ce client (même adresse, ou même domaine d'entreprise — jamais une messagerie gratuite) ; si l'e-mail décrit un autre trajet, les pièces sont rangées mais la demande reste à trier.
+- Sinon, **« Ranger sur une commande… »** : la commande citée est proposée, un geste suffit.
+- Prudence : jamais une facture pro forma ni une de nos propres factures cochée comme facture commerciale ; une seule pièce au nom muet (« scan0001.pdf ») n'est reconnue que si le message ne cite qu'un document. Le contenu des PDF n'est pas lu.
+- Relais : version 2.3.0 (`git pull` puis redémarrer) ; réglage facultatif `PIECES_MAX_MO` (500 Mo par défaut). La mise en service signale un relais plus ancien. Sans relais 2.3, les pièces restent nommées comme avant.
+
 ## 5.20.0 — Mise en service : ce qui est branché, ce qui manque, et où le régler
 
 - **Réglages → Général, en tête : « Mise en service »**. Une liste de ce qui fait marcher les fonctions automatiques, chaque point en vert (prêt), orange (en partie) ou rouge (à faire), avec **ce qu'il débloque** et **un bouton qui mène à l'endroit où le régler** — la fiche du premier camion, chauffeur, client ou voyage incomplet s'ouvre directement.

@@ -6,7 +6,8 @@
    · base64, quoted-printable, jeux de caractères utf-8, iso-8859-1, windows-1252… ;
    · l'historique cité d'une réponse (« Le … a écrit : », « De : … Envoyé : … », lignes « > ») est coupé :
      la lecture de la demande ne doit pas reprendre les villes ou les prix d'un ancien message.
-   Les pièces jointes ne sont pas gardées : leur nom seulement.
+   · pièces jointes : nom, type, taille ; leur contenu avec garderPieces (rangé par serveur/pieces.js) ; les petites images
+     « en ligne » (logo de la signature) ne sont pas des pièces jointes.
    ============================================================ */
 
 const enLatin1 = (b) => (Buffer.isBuffer(b) ? b.toString("latin1") : String(b));
@@ -67,18 +68,23 @@ function htmlEnTexte(h) {
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => (e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : ENTITES[e] ?? m))
     .replace(/[ \t ]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
-/** Parcourt les parties : { textes: [{ type, texte }], pieces: [{ nom, type, taille }] }. */
-function parties(brut, profondeur = 0, acc = { textes: [], pieces: [] }) {
+const LOGO_MAX = 40000; // image en ligne plus petite : logo ou bannière de signature, pas un document
+/** Parcourt les parties : { textes: [{ type, texte }], pieces: [{ nom, type, taille, octets? }] } (octets : Buffer, avec garder). */
+function parties(brut, profondeur = 0, acc = { textes: [], pieces: [] }, garder = false) {
   const { entetes: e, corps } = separer(brut), ct = lireParametres(entete(e, "content-type") || "text/plain"), cd = lireParametres(entete(e, "content-disposition"));
   const nom = decoderEntete(cd.params.filename || ct.params.name || "");
   if (ct.valeur.startsWith("multipart/") && ct.params.boundary && profondeur < 8) {
     const f = "--" + ct.params.boundary, morceaux = corps.split(new RegExp(`\\r?\\n?${f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:--)?[ \\t]*\\r?\\n?`));
-    for (const m of morceaux.slice(1)) if (m.trim()) parties(m, profondeur + 1, acc);
+    for (const m of morceaux.slice(1)) if (m.trim()) parties(m, profondeur + 1, acc, garder);
     return acc;
   }
   if (ct.valeur === "message/rfc822" && profondeur < 8) { acc.pieces.push({ nom: nom || "message joint.eml", type: ct.valeur, taille: corps.length }); return acc; }
   const octets = decoderCorps(corps, entete(e, "content-transfer-encoding"));
-  if (cd.valeur === "attachment" || (nom && !ct.valeur.startsWith("text/"))) { acc.pieces.push({ nom: nom || "pièce jointe", type: ct.valeur, taille: octets.length }); return acc; }
+  if (cd.valeur === "attachment" || (nom && !ct.valeur.startsWith("text/"))) {
+    const enLigne = cd.valeur !== "attachment" && (cd.valeur === "inline" || !!entete(e, "content-id"));
+    if (enLigne && ct.valeur.startsWith("image/") && octets.length < LOGO_MAX) return acc;
+    acc.pieces.push({ nom: nom || "pièce jointe", type: ct.valeur, taille: octets.length, ...(garder ? { octets: Buffer.from(octets, "latin1") } : {}) }); return acc;
+  }
   if (ct.valeur === "text/plain" || ct.valeur === "text/html") acc.textes.push({ type: ct.valeur, texte: decoderOctets(octets, ct.params.charset) });
   return acc;
 }
@@ -103,11 +109,12 @@ function lireAdresse(v) {
 }
 
 /**
- * E-mail brut → { messageId, de: { nom, email }, a, sujet, date (ISO ou ""), texte, pieces: [{ nom, type, taille }], masse, auto }.
+ * E-mail brut → { messageId, de: { nom, email }, a, sujet, date (ISO ou ""), texte, pieces: [{ nom, type, taille, octets? }], masse, auto }.
+ * garderPieces : le contenu de chaque pièce jointe (Buffer) — seulement pour un message lu en entier.
  * masse : lettre d'information ou liste de diffusion ; auto : réponse automatique (absence, accusé).
  */
-function lireCourriel(brut, { maxTexte = 12000 } = {}) {
-  const { entetes: e } = separer(brut), p = parties(brut);
+function lireCourriel(brut, { maxTexte = 12000, garderPieces = false } = {}) {
+  const { entetes: e } = separer(brut), p = parties(brut, 0, undefined, garderPieces);
   const brutTexte = p.textes.find((x) => x.type === "text/plain")?.texte || htmlEnTexte(p.textes.find((x) => x.type === "text/html")?.texte || "");
   const texte = couperHistorique(brutTexte).slice(0, maxTexte), d = Date.parse(entete(e, "date"));
   const auto = /^auto-(replied|generated)/i.test(entete(e, "auto-submitted")) || !!entete(e, "x-autoreply") || !!entete(e, "x-autorespond") || /^(réponse automatique|automatic reply|auto(matic)? ?reply|out of office|absence)/i.test(decoderEntete(entete(e, "subject")));

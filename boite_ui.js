@@ -5,6 +5,7 @@
      avec les messages partagés depuis WhatsApp (Android) et ceux collés sur cette page ;
    · chaque message est déjà lu : trajet, date, palettes, température, prix, client reconnu, doublon possible, ce qui manque ;
    · un geste : « Créer la commande », « Chiffrer et répondre » (commande à chiffrer puis devis), « Ignorer » ;
+   · pièces jointes (relais 2.3) : lues, rangées sur la commande, documents reconnus cochés (pieces_demande_ui.js) ;
    · Réglages → Général → Boîte des demandes : état de la relève, lignes à ajouter au relais, partage depuis WhatsApp.
    Logique pure dans boite.js ; relève par le relais dans serveur/imap.js.
    ============================================================ */
@@ -24,7 +25,8 @@ async function majDemandes({ silencieux = true } = {}) {
   etatBoiteRelais = r.boite || null;
   const recues = Array.isArray(r.demandes) ? r.demandes : [], n = ajouterDemandes(recues, "email");
   if (recues.length) { S.params.boiteDepuis = Math.max(num(S.params.boiteDepuis, 0), ...recues.map((d) => num(d.recu))); sauver(); }
-  const utiles = n.filter((d) => !d.masse).length;
+  if (n.length && typeof rangerDemandesAuto === "function") await rangerDemandesAuto(); // e-mails d'un client qui citent sa commande : pièces rangées seules
+  const utiles = n.filter((d) => !d.masse && d.statut === "a_trier").length;
   if (utiles) toast(`${utiles} nouvelle${utiles > 1 ? "s" : ""} demande${utiles > 1 ? "s" : ""} dans la boîte`, "ok");
   if ((n.length || ongletActif === "demandes") && ["demandes", "tableau", "parametres"].includes(ongletActif) && !document.querySelector("dialog[open]")) rafraichir();
   return n;
@@ -83,14 +85,14 @@ function carteDemande(d) {
     <div class="dem-lu ${resume ? "" : "vide"}">${ic("route")}<span>${resume ? esc(resume) : "Aucun trajet reconnu dans ce message"}</span></div>
     ${puces ? `<div class="dem-puces">${puces}</div>` : ""}
     ${extrait ? `<details class="dem-texte"><summary>${esc(court)}</summary><div class="dem-complet">${esc(d.texte)}</div></details>` : ""}
-    ${d.pieces?.length ? `<p class="sub dem-pieces">${ic("file")}${d.pieces.map((p) => esc(p.nom)).join(" · ")} <span>(pièces jointes restées dans la messagerie)</span></p>` : ""}
+    ${d.pieces?.length ? (typeof blocPiecesDemande === "function" ? blocPiecesDemande(d) : `<p class="sub dem-pieces">${ic("file")}${d.pieces.map((p) => esc(p.nom)).join(" · ")} <span>(pièces jointes restées dans la messagerie)</span></p>`) : ""}
     <div class="row">${boutons}</div></article>`;
 }
 const FILTRES_DEMANDES = [["a_trier", "À trier"], ["traitees", "Traitées"], ["ignoree", "Ignorées"], ["masse", "Autres"], ["tout", "Tout"]];
 function demandesDuFiltre(f) {
   const l = S.demandes || [];
   if (f === "a_trier") return l.filter((d) => d.statut === "a_trier" && !d.masse);
-  if (f === "traitees") return l.filter((d) => ["commande", "devis"].includes(d.statut));
+  if (f === "traitees") return l.filter((d) => ["commande", "devis", "rangee"].includes(d.statut));
   if (f === "ignoree") return l.filter((d) => d.statut === "ignoree");
   if (f === "masse") return l.filter((d) => d.masse && d.statut === "a_trier");
   return l;
@@ -121,7 +123,9 @@ VUES.demandes = {
     const d = (S.demandes || []).find((x) => x.id === id); if (!d) return;
     if (act === "dem-commande" || act === "dem-chiffrer") {
       const c = await commandeDepuisMessage(texteDemande(d), { aujourdhui: jourDe(d.date) || today(), recuLe: jourDe(d.date) || today() }); if (!c) return;
-      classerDemande(d, c.statut === "devis" ? "devis" : "commande", { commandeId: c.id }); sauver(); rafraichir();
+      classerDemande(d, c.statut === "devis" ? "devis" : "commande", { commandeId: c.id }); sauver();
+      if (typeof rangerPiecesDemande === "function" && piecesARanger(d).length) { const r = await rangerPiecesDemande(d, c); if (r.ranges.length) toast(bilanRangement(c, r), "ok"); if (r.erreurs.length) toast(r.erreurs[0], "warn"); }
+      rafraichir();
       if (act === "dem-chiffrer" && c.statut === "devis" && typeof chiffrerCommande === "function") await chiffrerCommande(c);
       return;
     }

@@ -3,6 +3,8 @@ node_modules
 
 # configuration secrète du relais
 serveur/relais.env
+# données du relais (dossier par défaut quand DONNEES n'est pas réglé) : positions, liens, photos, boîte — jamais dans le dépôt
+serveur/donnees/
 
 # captures de référence (tests/captures.js) : propres à chaque machine
 tests/captures/

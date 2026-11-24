@@ -45,6 +45,7 @@ async function lancerTestRelais() {
   const base = multi ? location.origin : baseUrl(c.url); if (!base) return toast("Saisissez l'adresse du relais.", "warn");
   toast("Test du relais…", "ok"); etatRelais = { t: Date.now(), lignes: await testerRelais(base, multi ? "" : c.jeton) };
   if (typeof capacitesRelais !== "undefined") capacitesRelais = { t: 0, canaux: [] }; // les canaux seront relus
+  if (typeof mesRelais !== "undefined") mesRelais.t = 0; // la mise en service relira l'état
   rafraichir();
 }
 async function preparerInstallation() {

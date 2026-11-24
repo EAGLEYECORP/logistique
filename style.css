@@ -1173,3 +1173,27 @@ td.cel:focus-visible, tr.cliquable:focus-visible, [role="button"][data-act]:focu
 
 /* mise en service pas à pas (réglages) */
 ol.etapes-mise-en-service { margin: 4px 0 8px; padding-inline-start: 20px; font-size: .9rem; } ol.etapes-mise-en-service li { margin: 2px 0; }
+
+/* Mise en service (Réglages → Général, bandeau du tableau de bord) */
+.jauge-mes { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--text) 8%, transparent); overflow: hidden; margin: 4px 0 6px; }
+.jauge-mes i { display: block; height: 100%; border-radius: 3px; background: var(--ok); transition: width .3s; }
+.mes-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mes-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--border); }
+.mes-item:first-child { border-top: 0; }
+.mes-icone { flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--warn-soft); color: var(--warn); }
+.mes-icone svg.i { width: 16px; height: 16px; }
+.mes-icone .spinner { width: 14px; height: 14px; margin: 0; }
+.mes-item.ok .mes-icone { background: var(--ok-soft); color: var(--ok); }
+.mes-item.a_faire .mes-icone { background: var(--danger-soft); color: var(--danger); }
+.mes-item.info .mes-icone, .mes-item.attente .mes-icone { background: var(--info-soft); color: var(--info); }
+.mes-texte { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mes-texte .sub { overflow-wrap: anywhere; }
+.mes-valeur { font-size: .86em; color: var(--muted); }
+.mes-item .btn { flex: 0 0 auto; align-self: center; }
+.bandeau-mes .mes-tete { display: flex; gap: 10px; align-items: flex-start; }
+.bandeau-mes .mes-tete > svg.i { flex: 0 0 20px; width: 20px; height: 20px; margin-top: 2px; color: var(--primary); }
+.bandeau-mes .mes-tete > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bandeau-mes .row { margin-top: 6px; }
+.card[id] { scroll-margin-top: 84px; }
+.mes-surligne { outline: 2px solid var(--primary); outline-offset: 2px; transition: outline-color .4s; }
+@media (max-width: 560px) { .mes-item { flex-wrap: wrap; } .mes-texte { flex-basis: calc(100% - 38px); } .mes-item .btn { margin-inline-start: 38px; align-self: flex-start; } }

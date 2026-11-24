@@ -2,7 +2,7 @@
 /* ============================================================
    Réglages — page à onglets : Général · Données · Rappels · Appareil.
    Les modules (rappels, mode chauffeur, assistant de démarrage) y ajoutent leurs cartes
-   avec enregistrerCarteReglages({ onglet, ordre, rendu, apres, agir, soumettre }).
+   avec enregistrerCarteReglages({ onglet, ordre, rendu, apres, agir, soumettre }) ; ordre négatif : avant les cartes de base.
    ============================================================ */
 
 const CARTES_REGLAGES = [];
@@ -138,7 +138,7 @@ VUES.parametres = {
   titre: "Réglages",
   sous: "Calculs, données, rappels et appareil",
   rendu() {
-    const generales = [carteCalculs(), carteEntreprise(), carteReglagesIA(), ...cartesDe("general").map((c) => c.rendu())];
+    const generales = [...cartesDe("general").filter((c) => c.ordre < 0).map((c) => c.rendu()), carteCalculs(), carteEntreprise(), carteReglagesIA(), ...cartesDe("general").filter((c) => c.ordre >= 0).map((c) => c.rendu())];
     const donnees = [carteSauvegarde(), carteCopiesAuto(), carteStockage(), ...cartesDe("donnees").map((c) => c.rendu()), carteZoneSensible()];
     const parOnglet = { general: generales, donnees, rappels: cartesDe("rappels").map((c) => c.rendu()), appareil: [carteApparence(), ...cartesDe("appareil").map((c) => c.rendu()), carteInstallation()] };
     return `<div class="segmented" role="tablist">${ONGLETS_REGLAGES.map(([k, l]) => `<button role="tab" data-act="onglet-reglages" data-id="${k}" aria-selected="${k === ongletReglages}">${l}</button>`).join("")}</div>

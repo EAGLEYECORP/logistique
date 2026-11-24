@@ -1,5 +1,18 @@
 # Changelog
 
+## 5.20.0 — Mise en service : ce qui est branché, ce qui manque, et où le régler
+
+- **Réglages → Général, en tête : « Mise en service »**. Une liste de ce qui fait marcher les fonctions automatiques, chaque point en vert (prêt), orange (en partie) ou rouge (à faire), avec **ce qu'il débloque** et **un bouton qui mène à l'endroit où le régler** — la fiche du premier camion, chauffeur, client ou voyage incomplet s'ouvre directement.
+  - **Le relais** : branché et joignable, à jour (version 2.2 ou plus), e-mail d'envoi, boîte des demandes, itinéraire poids lourd, alertes au bureau. Lu sur le relais lui-même ; « Injoignable » ou « Jeton refusé » quand c'est le cas.
+  - **Flotte et chauffeurs** : balise sur chaque camion, chauffeurs joignables sans geste du bureau (ntfy, ou WhatsApp si le relais l'envoie), charges fixes de chaque camion — avec les immatriculations et les noms qui manquent.
+  - **Clients** (ceux qui ont travaillé avec vous ces quatre derniers mois) : contact, accord pour être prévenus (et résumé du lundi), tarif d'attente aux quais.
+  - **Voyages prévus et en cours** : heure de livraison promise, bateau réservé avec date et heure (le bouton ouvre la traversée à saisir).
+  - **Entreprise et données** : identité sur les factures (raison sociale, ICE, RIB, adresse), copie hors de l'appareil (exportation récente ou synchronisation), protection de l'appareil contre l'effacement (activable d'un geste).
+  - **Se remplit avec l'usage** : passages mesurés à chaque port (sur 10) et quais des clients repérés — montrés, jamais comptés comme « à faire ».
+- **Tableau de bord : un bandeau « Mise en service : x sur y prêts »** avec la prochaine étape et son bouton, tant que tout n'est pas prêt. « Plus tard » le cache 7 jours ; la liste complète reste dans les Réglages.
+- Profil Direction seulement. Libellés en arabe ; dans l'interface arabe, les détails restés en français s'affichent dans le bon sens.
+- Rien n'est inventé : sans réponse du relais, ses points restent « Vérification… » ou « à faire », jamais « prêt ».
+
 ## 5.19.1 — openrouteservice retenu pour l'itinéraire ; mise en service et revue de la valeur à jour
 
 - **Itinéraire poids lourd : le service public openrouteservice est retenu** (usage interne à l'entreprise, non commercial). Plus de mise en garde « conditions à vérifier » : Réglages → Général → Itinéraire poids lourd explique en deux étapes comment le brancher (compte gratuit sur openrouteservice.org, clé à poser dans les réglages du relais : `ITINERAIRE_CLE=…`). Le relais garde sa limite de 1 500 calculs par jour (réglable) et garde chaque itinéraire 60 jours. La clé figure maintenant dans le fichier de réglages préparé par l'application et par le script d'installation.

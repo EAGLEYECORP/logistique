@@ -166,6 +166,7 @@ Automatique et sans action de votre part.
 | `veille_relais.js`, `veille_relais_ui.js`, `serveur/veille.js` | Veille du relais jour et nuit : messages de pause au chauffeur, alerte au bureau si la pause est dépassée, arrivée et départ des quais, même application fermée |
 | `resume_client.js`, `resume_client_ui.js` | Résumé de la semaine par client (ponctualité, attente aux quais, documents, à préparer) : bouton « Résumé » de la page Clients, envoi chaque lundi par le relais |
 | `dictee.js`, `dictee_ui.js` | Dictée dans les zones de texte (réserves de livraison, notes) : reconnaissance vocale du téléphone, ponctuation dite en arabe, français, espagnol, anglais |
+| `mise_en_service.js`, `mise_en_service_ui.js` | Mise en service : ce qui est branché et ce qui manque (relais et sa version, e-mail, boîte, itinéraire, alertes du bureau, balises, chauffeurs joignables, charges fixes, clients, voyages, entreprise, copie, protection de l'appareil), ce que chaque point débloque, bouton vers la fiche à compléter ; carte en tête de Réglages → Général, bandeau du tableau de bord |
 | `tickets_ui.js` (logique dans `capture.js`) | Ticket photographié par le chauffeur, rangé seul sur son voyage avec la photo (ou en attente) ; pleins du voyage avec leurs tickets dans la fiche |
 | `liens.js`, `liens_ui.js`, `serveur/liens.js`, `serveur/page-lien.js` | Liens sans compte servis par le relais : dépôt des documents par le client (photo ou PDF, rangés dans les photos du voyage, documents marqués reçus) et étapes de douane notées par le transitaire, appliquées au voyage (testé) |
 | `boite.js`, `boite_ui.js`, `serveur/imap.js`, `serveur/mime.js` | Boîte des demandes : e-mails relevés par le relais (IMAP en lecture seule, lecture MIME sans dépendance) et messages partagés depuis WhatsApp, lus, triés en commande, devis ou ignorés (testé) |
@@ -209,7 +210,7 @@ Automatique et sans action de votre part.
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
 | `serveur/empreintes.js` | Empreinte de chaque fichier préchargé, posée à la publication : une mise à jour ne télécharge que les fichiers qui ont changé |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 272 tests (232 application, 40 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 274 tests (234 application, 40 relais) |
 | `tests/captures.js`, `tests/donnees-captures.js` | Captures de référence de chaque page (téléphone, bureau, clair, sombre) comparées à chaque livraison — outil de développement, demande Playwright |
 
 ```bash

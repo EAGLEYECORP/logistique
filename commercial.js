@@ -322,7 +322,7 @@ VUES.factures = {
 /* ---------- Réglages : entreprise ---------- */
 function carteEntreprise() {
   const E = S.entreprise;
-  return `<div class="card">
+  return `<div class="card" id="carte-entreprise">
     <div class="card-head"><h2>Entreprise</h2>${E.nom ? badge("Renseignée", "ok") : badge("À compléter", "warn")}</div>
     <form id="f-entreprise">
       ${champs([

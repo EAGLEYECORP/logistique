@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "resume_client.js", "dictee.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "resume_client.js", "mise_en_service.js", "dictee.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -3169,6 +3169,100 @@ test("contraste : textes, couleurs d'état et pastilles à 4,5:1 au moins sur ch
   assert.deepStrictEqual(faibles, []);
   const blancSurTexte = css.split("}").filter((r) => /background:\s*var\(--(primary|danger|ok)\)/.test(r) && /(^|[;{\s])color:\s*(var\(--on-primary\)|#fff\b)/.test(r));
   assert.deepStrictEqual(blancSurTexte.map((r) => r.trim().slice(0, 90)), []);
+});
+
+test("mise en service : relais (absent, vérification, injoignable, ancien, complet), flotte, clients, voyages, entreprise ; l'usage n'est jamais compté", () => {
+  const M = (o) => N.etatMiseEnService({ maintenant: Date.parse("2026-11-24T10:00:00Z"), ...o });
+  const item = (r, cle) => r.groupes.flatMap((g) => g.items).find((x) => x.cle === cle);
+  // rien du tout : le relais et les camions sont à faire, rien n'est faussement prêt
+  let r = M();
+  assert.strictEqual(item(r, "relais").etat, "a_faire"); assert.strictEqual(item(r, "relais").action.lib, "Brancher");
+  for (const k of ["email", "boite", "itineraire", "equipe"]) { assert.strictEqual(item(r, k).etat, "a_faire"); assert.strictEqual(item(r, k).detail, "Demande d'abord le relais."); assert.strictEqual(item(r, k).action, null, "un seul bouton : celui du relais"); }
+  assert.strictEqual(item(r, "flotte").etat, "a_faire"); assert.strictEqual(item(r, "clients").etat, "a_faire");
+  assert.ok(!item(r, "heure") && !item(r, "bateau"), "sans voyage prévu : pas de ligne voyage");
+  assert.strictEqual(item(r, "protection").etat, "attente"); assert.strictEqual(r.prochaine.cle, "relais");
+  // relais en cours de vérification : rien n'est compté comme manquant à tort
+  r = M({ relais: { configure: true, statut: "verif" } });
+  assert.strictEqual(item(r, "relais").etat, "attente"); assert.strictEqual(item(r, "email").etat, "attente"); assert.notStrictEqual(r.prochaine?.cle, "relais");
+  assert.strictEqual(M({ relais: { configure: true, statut: "injoignable", erreur: "" } }).groupes[0].items[0].etat, "a_faire");
+  assert.match(item(M({ relais: { configure: true, statut: "refuse" } }), "relais").detail, /Jeton de lecture refusé/);
+  // relais joignable mais ancien : à mettre à jour ; e-mail sans SMTP ; boîte en erreur
+  r = M({ relais: { configure: true, statut: "ok", etat: { version: "2.1.4", notifications: ["ntfy"], boite: { active: true, erreur: "authentification refusée" }, itineraire: { actif: false } } } });
+  assert.strictEqual(item(r, "relais").etat, "partiel"); assert.match(item(r, "relais").detail, /Version 2\.1\.4.*mettre à jour/);
+  assert.strictEqual(item(r, "email").etat, "a_faire"); assert.match(item(r, "email").detail, /SMTP_/);
+  assert.strictEqual(item(r, "boite").etat, "partiel"); assert.match(item(r, "boite").detail, /authentification refusée/);
+  assert.strictEqual(item(r, "itineraire").etat, "a_faire"); assert.strictEqual(item(r, "equipe").etat, "a_faire");
+  assert.strictEqual(N.comparerVersions("2.10.0", "2.2.0") > 0, true, "versions comparées nombre par nombre");
+  // flotte : balise, chauffeur joignable (ntfy, ou WhatsApp seulement si le relais sait l'envoyer), charges fixes
+  N.S.camions = [{ id: "c1", immat: "12-A-1", balise: "tel-1", fixeMensuel: 9000 }, { id: "c2", immat: "12-A-2" }, { id: "c3", immat: "12-A-3", coutsFixes: { assurance_mensuel: 1500 } }];
+  N.S.chauffeurs = [{ id: "h1", nom: "Youssef", ntfy: "https://ntfy.sh/youssef-x9k2a" }, { id: "h2", nom: "Karim", tel: "0661234567" }, { id: "h3", nom: "Said" }];
+  const complet = { configure: true, statut: "ok", etat: { version: "2.2.0", notifications: ["equipe", "ntfy", "email"], boite: { active: true, adresse: "contact@atlas.ma" }, itineraire: { actif: true, source: "public" } } };
+  r = M({ relais: complet });
+  for (const k of ["relais", "email", "boite", "itineraire", "equipe"]) assert.strictEqual(item(r, k).etat, "ok", k);
+  assert.strictEqual(item(r, "balises").etat, "partiel"); assert.match(item(r, "balises").detail, /1 sur 3 · sans balise : 12-A-2, 12-A-3/);
+  assert.deepStrictEqual({ ...item(r, "balises").action }, { page: "camions", act: "modifier", id: "c2", lib: "Compléter" }, "la fiche du premier camion sans balise s'ouvre");
+  assert.strictEqual(item(r, "chauffeurs").etat, "partiel"); assert.strictEqual(item(r, "chauffeurs").detail, "1 sur 3 · téléphone seul, WhatsApp à envoyer à la main : Karim · ni ntfy ni téléphone : Said");
+  r = M({ relais: { ...complet, etat: { ...complet.etat, notifications: [...complet.etat.notifications, "whatsapp"] } } });
+  assert.strictEqual(item(r, "chauffeurs").detail, "2 sur 3 · ni ntfy ni téléphone : Said", "WhatsApp sur le relais : le téléphone suffit");
+  assert.strictEqual(item(r, "fixes").etat, "partiel"); assert.deepStrictEqual({ ...item(r, "fixes").action }, { page: "rentabilite", act: "fixes-camion", id: "c2", lib: "Compléter" });
+  // clients : seuls les actifs comptent ; accord, contact, tarif d'attente (général ou par client)
+  N.S.clients = [{ id: "k1", nom: "Atlas Agrumes", email: "a@x.ma", notificationsClientAutorisees: true, resumeHebdo: true, tarifAttente: 40 }, { id: "k2", nom: "Souss Primeurs", tel: "0522000000" }, { id: "k3", nom: "Ancien client" }];
+  N.S.commandes = [{ id: "o1", clientId: "k1", dateChargement: "2026-11-20" }, { id: "o2", clientId: "k2", dateChargement: "2026-12-02" }, { id: "o3", clientId: "k3", dateChargement: "2025-01-10" }];
+  r = M({ relais: complet });
+  assert.strictEqual(r.groupes.find((g) => g.id === "clients").titre, "Clients actifs");
+  assert.strictEqual(item(r, "contacts").etat, "ok", "le client ancien sans contact ne compte pas");
+  assert.strictEqual(item(r, "accord").etat, "partiel"); assert.match(item(r, "accord").detail, /1 sur 2 d'accord · résumé du lundi : 1 · à demander : Souss Primeurs/);
+  assert.strictEqual(item(r, "attente").etat, "partiel"); assert.strictEqual(item(r, "attente").action.id, "k2");
+  N.S.params.tarifAttente = 35; N.S.params.deviseAttente = "EUR";
+  assert.strictEqual(item(M({ relais: complet }), "attente").etat, "ok"); assert.match(item(M({ relais: complet }), "attente").detail, /Tarif général : 35 € par heure/);
+  // voyages : heure promise et bateau réservé (la prochaine traversée pas encore embarquée ; date ET heure)
+  N.S.voyages = [
+    { id: "v1", ref: "V1", statut: "prevu", livraisonPrevue: "2026-11-27T08:00:00Z", traversees: [{ sens: "aller", ligne: "tmed-alg", date: "2026-11-25", heure: "18:00", statut: "reservee" }, { sens: "retour", ligne: "alg-tmed" }] },
+    { id: "v2", ref: "V2", statut: "en_cours", traversees: [{ sens: "aller", ligne: "tmed-alg", date: "2026-11-24", statut: "a_reserver" }] },
+    { id: "v3", ref: "V3", statut: "en_cours", jalons: [{ type: "embarque_aller" }], traversees: [{ sens: "aller", ligne: "tmed-alg", date: "2026-11-20", heure: "10:00" }, { sens: "retour", ligne: "alg-tmed", date: "2026-11-28", heure: "07:30" }] },
+    { id: "v4", ref: "V4", statut: "termine" },
+  ];
+  r = M({ relais: complet });
+  assert.strictEqual(item(r, "heure").etat, "partiel"); assert.match(item(r, "heure").detail, /1 sur 3 · sans heure : V2, V3/);
+  assert.strictEqual(item(r, "bateau").etat, "partiel"); assert.match(item(r, "bateau").detail, /2 sur 3 · à saisir : V2 \(aller\)/);
+  assert.deepStrictEqual({ ...item(r, "bateau").action }, { page: "voyages", act: "trav", id: "v2|aller", lib: "Saisir" });
+  // entreprise et données : champs manquants, copie (exportée, ancienne, jamais)
+  N.S.entreprise = { nom: "Atlas Fret", ice: "001234567000089" };
+  N.S.meta.derniereSauvegarde = "2026-11-10T09:00:00Z";
+  r = M({ relais: complet, appareil: { persistant: false } });
+  assert.strictEqual(item(r, "identite").etat, "partiel"); assert.strictEqual(item(r, "identite").detail, "À compléter : RIB, adresse");
+  assert.strictEqual(item(r, "copie").etat, "partiel"); assert.match(item(r, "copie").detail, /il y a 14 jours/);
+  assert.strictEqual(item(r, "protection").etat, "a_faire"); assert.strictEqual(item(r, "protection").action.act, "persister");
+  assert.strictEqual(item(r, "copie").action.lib, "Exporter");
+  N.S.meta.derniereSauvegarde = "2026-11-23T09:00:00Z"; assert.strictEqual(item(M(), "copie").etat, "ok"); assert.strictEqual(item(M(), "copie").action.lib, "Voir");
+  // l'usage : affiché, jamais compté ; progression = points prêts sur points comptés
+  N.S.attentesPort = Array.from({ length: 12 }, (x, i) => ({ portId: "tmed_export", dureeMs: 3600000 + i })).concat([{ portId: "alg_entry", dureeMs: 0 }, { portId: "tmed_import", dureeMs: 5400000, scanRouge: true }]);
+  r = M({ relais: complet, appareil: { persistant: true } });
+  assert.strictEqual(item(r, "ports").etat, "info"); assert.match(item(r, "ports").detail, /Tanger Med \(export\) : 10\/10 · Algeciras \(entrée en Europe\) : 0\/10 · Tanger Med \(import\) : 0\/10$/);
+  assert.strictEqual(item(r, "ports").compte, false); assert.strictEqual(item(r, "sites").compte, false);
+  const comptes = r.groupes.flatMap((g) => g.items).filter((x) => x.compte);
+  assert.strictEqual(r.total, comptes.length); assert.strictEqual(r.prets, comptes.filter((x) => x.etat === "ok").length);
+  assert.ok(r.prets < r.total && r.prochaine && r.prochaine.etat !== "ok");
+  // tout est prêt : plus de prochaine étape (le bandeau disparaît)
+  for (const c of N.S.camions) { c.balise = c.balise || `b-${c.id}`; c.fixeMensuel = 5000; }
+  N.S.chauffeurs = [N.S.chauffeurs[0]]; for (const c of N.S.clients) { c.notificationsClientAutorisees = true; c.email = "x@y.ma"; }
+  for (const v of N.S.voyages) { v.livraisonPrevue = "2026-11-30T08:00:00Z"; for (const t of v.traversees || []) { t.date ||= "2026-11-26"; t.heure ||= "09:00"; } }
+  Object.assign(N.S.entreprise, { rib: "011 780 0000123456789012 34", adresse: "Zone franche, Tanger" });
+  r = M({ relais: complet, appareil: { persistant: true } });
+  assert.strictEqual(r.prets, r.total, r.groupes.flatMap((g) => g.items).filter((x) => x.compte && x.etat !== "ok").map((x) => `${x.cle} ${x.detail}`).join(" | ")); assert.strictEqual(r.prochaine, null);
+});
+
+test("mise en service : chaque titre de groupe et de point, et chaque bouton, est traduit en arabe", () => {
+  const src = fs.readFileSync(path.join(racine, "langue.js"), "utf8");
+  const c = vm.createContext({}); vm.runInContext(src.slice(src.indexOf("const AR = {"), src.indexOf("const LANGUES")) + ";this.AR = AR;", c);
+  const libelles = new Set(["Mise en service", "Vérifier à nouveau", "Plus tard", "Tout voir"]);
+  const cas = [{}, { relais: { configure: true, statut: "ok", etat: { version: "2.2.0", notifications: [] } } }];
+  N.S.camions = [{ id: "c1", immat: "A" }]; N.S.chauffeurs = [{ id: "h1", nom: "B" }]; N.S.clients = [{ id: "k1", nom: "C" }]; N.S.voyages = [{ id: "v1", statut: "prevu", traversees: [{ sens: "aller", ligne: "tmed-alg" }] }];
+  for (const o of cas) for (const g of N.etatMiseEnService(o).groupes) { libelles.add(g.titre); for (const x of g.items) { libelles.add(x.titre); if (x.action) libelles.add(x.action.lib); } }
+  N.S.camions = []; N.S.chauffeurs = []; N.S.clients = []; for (const g of N.etatMiseEnService().groupes) for (const x of g.items) { libelles.add(x.titre); if (x.action) libelles.add(x.action.lib); }
+  N.S.clients = [{ id: "k1", nom: "C" }, { id: "k2", nom: "D" }]; N.S.commandes = [{ id: "o", clientId: "k1", dateChargement: N.today() }]; for (const g of N.etatMiseEnService().groupes) libelles.add(g.titre);
+  assert.ok(libelles.size >= 30, `${libelles.size} libellés`);
+  assert.deepStrictEqual([...libelles].filter((t) => !c.AR[t]), []);
 });
 
 (async () => {

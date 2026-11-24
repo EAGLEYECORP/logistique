@@ -28,7 +28,7 @@ Tout ce qui pouvait être construit et testé sans compte externe est livré (vo
 - [ ] **Interdictions de circuler** et **quotas d'autorisations** : vérifier chaque année auprès des autorités (valeurs de départ).
 
 ## 6. Fonctions automatiques à brancher (relais 2.2 ou plus)
-Chaque ligne se vérifie dans l'application : Réglages → Général → **Relais** → « Tester » dit ce qui est branché.
+Chaque ligne se vérifie dans l'application : **Réglages → Général → Mise en service** (en tête de page, depuis la v5.20) montre ce qui est branché et ce qui manque, camion par camion, chauffeur par chauffeur, client par client, avec le bouton qui ouvre la fiche à compléter ; Réglages → Général → **Relais** → « Tester » détaille le relais.
 - [ ] **E-mail** (`SMTP_…`) : factures avec preuve et photos, relances, relance des documents, résumé du lundi. *Vérifier* : « E-mail prêt ».
 - [ ] **Boîte des demandes** (`IMAP_…`, mot de passe d'application) : les demandes des clients arrivent déjà lues. *Vérifier* : « Boîte des demandes : relevée… ».
 - [ ] **Itinéraire poids lourd** (`ITINERAIRE_CLE`) : créer un compte gratuit sur openrouteservice.org, copier la clé (usage interne, non commercial). *Vérifier* : « Itinéraire poids lourd : service public openrouteservice ».

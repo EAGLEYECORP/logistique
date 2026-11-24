@@ -27,13 +27,13 @@ Document de passation pour le modèle qui reprend le projet (Claude Fable 5.2). 
 
 **Ajouter une fonction** : logique pure dans un nouveau fichier `x.js` (testée), interface dans `x_ui.js` qui **enveloppe** l'existant (`const avant = VUES.voyages.agir; VUES.voyages.agir = async function (act, id, b) { … return avant.call(this, act, id, b); }`). Ajouter chaque fichier : à `index.html` (ordre : les purs après `noyau.js`, les interfaces après ce qu'elles enveloppent), à la liste de précache de `sw.js`, à la liste de chargement de `tests/noyau.test.js` (purs) et à la liste du test « arabe » (interfaces). Les clics dans une fenêtre (`dialog`) ne passent pas par le gestionnaire des pages : écouter `document` pour ces boutons (voir `fret_retour_ui.js`).
 
-**Vérifier** : `npm test` (206 tests application, 31 relais, environ 15 s). Puis un passage réel dans Chromium avec Playwright (préinstallé ; servir l'application par `python3 -m http.server 8765`), **téléphone 390 px et bureau 1280 px**, zéro erreur de console, pas de défilement horizontal, une capture regardée. Les scripts d'essai vont dans le dossier temporaire de la session, pas dans le dépôt.
+**Vérifier** : `npm test` (234 tests application, 40 relais, environ 20 s). Puis un passage réel dans Chromium avec Playwright (préinstallé ; servir l'application par `python3 -m http.server 8765`), **téléphone 390 px et bureau 1280 px**, zéro erreur de console, pas de défilement horizontal, une capture regardée. Les scripts d'essai vont dans le dossier temporaire de la session, pas dans le dépôt.
 
 ## 3. Revue : valeur réalisée et valeur non réalisée (revue du 23/11/2026, v5.19)
 
 L'exploitant vit dans sa boîte e-mail et WhatsApp, l'itinéraire en Europe, le GPS, le téléphone avec le transitaire et le chauffeur, les prix et les marges, la facturation. Les écarts de la première revue sont tous traités (boîte des demandes, itinéraire poids lourd, coupure planifiée et alertes au chauffeur, meilleur créneau au port et bateau réservé, lien transitaire, lien de dépôt et relance J-2, quais par le GPS, facture et preuve en PDF, glisser pour confirmer, dictée, ticket photographié, résumé client). Ce qui reste se range en quatre familles :
 
-- **A. Bâti, pas encore branché** (réglages de l'entreprise, aucun code) — le plus gros levier ;
+- **A. Bâti, pas encore branché** (réglages de l'entreprise, aucun code) — le plus gros levier ; depuis la v5.20, l'écran **Mise en service** (Réglages → Général) en fait la liste, point par point ;
 - **B. Se construit avec l'usage** (mesures et apprentissages qui s'accumulent) ;
 - **C. À bâtir** (code, classé plus bas) ;
 - **D. Hors de portée à zéro dollar ou sans interface publique**.
@@ -55,7 +55,7 @@ L'exploitant vit dans sa boîte e-mail et WhatsApp, l'itinéraire en Europe, le 
 
 ### À bâtir, par ordre de valeur
 
-1. **Écran « Mise en service »** dans l'application : chaque fonction automatique, branchée ou non, et ce qui manque pour elle (relais et sa version, e-mail, boîte, clé d'itinéraire, balises par camion, canal de chaque chauffeur, accords et résumés des clients, passages mesurés, tarifs d'attente). Transforme la famille A en liste de choses à faire ; peu de code.
+1. ~~**Écran « Mise en service »**~~ — **livré en v5.20** : Réglages → Général, en tête (et un bandeau sur le tableau de bord tant que tout n'est pas prêt). Chaque point branché ou manquant, ce qu'il débloque, et le bouton qui ouvre la fiche à compléter (`mise_en_service.js`, `mise_en_service_ui.js`). La famille A est devenue une liste de choses à faire dans l'application.
 2. **Pièces jointes des demandes** : le relais garde les pièces jointes (PDF, images) comme pour le lien de dépôt ; l'application les range sur la commande et coche le document reconnu par son nom (facture, colisage, phyto).
 3. **Rapprochement bancaire** : import du relevé (CSV ou Excel de la banque), montants et références rapprochés des factures ouvertes, payées à la bonne date ; le reste à pointer.
 4. **Heure du Maroc réelle** (`Africa/Casablanca`) pour les ports, les rappels et les heures limites, au lieu d'UTC+1 fixe.

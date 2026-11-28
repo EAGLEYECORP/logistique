@@ -57,6 +57,7 @@ const AR = {
   "Mise en service": "الإعداد والتشغيل", "Le relais (serveur du bureau)": "المُرحِّل (خادم المكتب)", "Flotte et chauffeurs": "الأسطول والسائقون", "Clients actifs": "الزبناء النشطون",
   "Voyages prévus et en cours": "الرحلات المبرمجة والجارية", "Entreprise et données": "المقاولة والبيانات", "Se remplit avec l'usage": "يكتمل مع الاستعمال",
   "Relais branché": "المُرحِّل متصل", "E-mail d'envoi": "بريد الإرسال", "Alertes au bureau": "تنبيهات المكتب",
+  "Relevé bancaire": "كشف الحساب البنكي", "Relevé illisible": "كشف غير مقروء", "Lire le relevé": "قراءة الكشف", "Marquer payées": "تسجيلها مؤداة", "Rapprochés": "مطابَقة", "À vérifier": "للتحقق", "Plusieurs factures possibles": "عدة فواتير محتملة", "Crédits sans facture": "مداخيل بلا فاتورة", "Fichier du relevé": "ملف الكشف", "Devise du compte": "عملة الحساب",
   "Documents rangés": "الوثائق مرتبة", "Ranger sur une commande…": "ترتيب في طلبية…", "Ranger les pièces jointes": "ترتيب المرفقات", "Ranger": "ترتيب",
   "Balise GPS sur chaque camion": "جهاز تتبع GPS على كل شاحنة", "Chauffeurs joignables": "السائقون قابلون للتواصل", "Charges fixes de chaque camion": "التكاليف الثابتة لكل شاحنة", "Camions et chauffeurs": "الشاحنات والسائقون",
   "Contact de chaque client": "وسيلة اتصال كل زبون", "Accord pour être prévenus": "موافقة الزبون على الإشعارات", "Tarif d'attente aux quais": "تعريفة الانتظار في الأرصفة",

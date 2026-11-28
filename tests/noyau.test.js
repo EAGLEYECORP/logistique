@@ -10,7 +10,7 @@ const ctx = vm.createContext({
   console, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, Uint32Array, ArrayBuffer, DataView, Blob, Response,
   setTimeout, clearTimeout, indexedDB: undefined,
 });
-for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "pieces_demande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "resume_client.js", "mise_en_service.js", "dictee.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
+for (const f of ["data.js", "noyau.js", "aller_retour.js", "lecture_commande.js", "boite.js", "documents_commande.js", "pieces_demande.js", "quais.js", "quais_gps.js", "fret_retour.js", "devis.js", "plein.js", "relances.js", "pdf.js", "facture_pdf.js", "preuve_pdf.js", "adm.js", "gps.js", "conformite.js", "pilotage.js", "couts.js", "rentabilite.js", "capture.js", "tresorerie.js", "rapprochement.js", "investissement.js", "anomalies.js", "optimisation.js", "journal.js", "prevision.js", "jalons_notifications.js", "comptes.js", "planning.js", "portuaire.js", "passages.js", "ports_gps.js", "fiche.js", "liens.js", "itineraire.js", "coupures.js", "veille_relais.js", "resume_client.js", "mise_en_service.js", "dictee.js", "creneaux.js", "prixjour.js", "ia.js", "stockage.js", "sauvegarde.js"]) vm.runInContext(fs.readFileSync(path.join(racine, f), "utf8"), ctx, { filename: f });
 vm.runInContext("function libIntervention(t) { return t; }", ctx); // défini par app.js (interface)
 // N.xxx lit n'importe quelle déclaration de premier niveau ; N.S = … remplace l'état.
 const N = new Proxy({}, {
@@ -1999,7 +1999,7 @@ test("arabe : chaque libellé fixe des écrans de direction, d'opérations, de r
   const c = vm.createContext({}); vm.runInContext(code + ";this.AR = AR; this.traduireTexte = traduireTexte;", c);
   const pats = [/section-title"[^>]*>([^<$]+?)(?: · \$\{|<\/)/g, /<h2>([^<$]+?)(?:<\/h2>| · \$\{)/g, /\btitre: "([^"]+)"/g, /\bsous: "([^"]+)"/g, /class="l">(?:\$\{ic\("[a-z]+"\)\} )?([^<$]+)<\/div>/g, /\bbtn\("[a-z-]+", "([^"$]+)"/g, /<div class="groupe">([^<$]+?)(?: · |<)/g, /<th(?: class="r")?>([^<$]+)<\/th>/g];
   const manquants = new Set(), vus = new Set();
-  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js", "liens_ui.js", "itineraire_ui.js", "coupures_ui.js", "creneaux_ui.js", "chauffeur_ui.js"]) {
+  for (const f of ["direction.js", "operations.js", "notifier.js", "cockpit.js", "marge.js", "depenses.js", "calendrier.js", "passages_ui.js", "aller_retour_ui.js", "lecture_commande_ui.js", "documents_commande_ui.js", "quais_ui.js", "fret_retour_ui.js", "devis_ui.js", "plein_ui.js", "envoi_facture_ui.js", "relais_ui.js", "ports_gps_ui.js", "fiche_ui.js", "factures_voyages.js", "boite_ui.js", "liens_ui.js", "itineraire_ui.js", "coupures_ui.js", "creneaux_ui.js", "chauffeur_ui.js", "rapprochement_ui.js"]) {
     const s = fs.readFileSync(path.join(racine, f), "utf8");
     for (const p of pats) for (const m of s.matchAll(p)) { const t = m[1].trim(); if (!t || /[{}]/.test(t) || !/[a-zé]/i.test(t)) continue; vus.add(t); if (!c.AR[t]) manquants.add(`${f} : ${t}`); }
   }
@@ -3316,6 +3316,74 @@ test("pièces jointes des demandes : commande citée (sa référence, ou celle d
   assert.deepStrictEqual([...N.cocherDocumentsPieces(c, p, "2026-11-24T08:00:00Z")], ["Facture commerciale"], "colisage déjà reçu, EACCE non requis, MRN pas attendu à l'export");
   assert.strictEqual(c.documents.facture.recu, "2026-11-24T08:00:00.000Z"); assert.strictEqual(c.documents.colisage.recu, "2026-11-20T10:00:00.000Z", "date de réception d'origine gardée");
   assert.deepStrictEqual([...N.cocherDocumentsPieces(c, p, "2026-11-25T08:00:00Z")], [], "rien de coché deux fois");
+});
+
+test("relevé bancaire : nombres et dates des banques (marocaines, espagnoles, françaises), CSV avec lignes d'information, Excel, page web", () => {
+  const n = (x) => N.nombreBancaire(x), A = (x) => JSON.parse(JSON.stringify(x));
+  assert.deepStrictEqual(["12 500,00", "12.500,00", "1,250.00", "-1 234,56", "(45,00)", "300,00 CR", "45,00 D", "1 200,50 MAD", "12,5", "250 DHS", "1.234.567,8", "1234.56-", "1 250,00 €"].map(n), [12500, 12500, 1250, -1234.56, -45, 300, -45, 1200.5, 12.5, 250, 1234567.8, -1234.56, 1250]);
+  assert.ok(Number.isNaN(n("")) && Number.isNaN(n("abc")) && Number.isNaN(n("-")));
+  const d = (x) => N.dateBancaire(x);
+  assert.deepStrictEqual(["24/11/2026", "24-11-26", "2026-11-24", "24.11.2026", "46350", "24 nov. 2026", "24/11/2026 10:32"].map(d), Array(7).fill("2026-11-24"));
+  assert.deepStrictEqual(["31/02/2026", "Solde initial", "", "13/13/2026"].map(d), ["", "", "", ""], "dates impossibles refusées");
+  // CSV d'une banque marocaine : lignes d'information, en-tête, opérations les plus récentes en haut, libellé entre guillemets avec « ; »
+  const csv = `Attijariwafa bank;;;;;\nCompte : 007 780 0001234567890123 45;;;;;\nPériode du 01/11/2026 au 26/11/2026;;;;;\n\nDate opération;Date valeur;Libellé;Débit;Crédit;Solde\n26/11/2026;26/11/2026;"VIR RECU SOUSS EXPORT; FAC 2026-0012";;11 400,00;184 300,00\n25/11/2026;25/11/2026;FRAIS TENUE DE COMPTE;45,00;;172 900,00\n;;Solde initial au 01/11;;;172 945,00\n24/11/2026;24/11/2026;VIR RECU SOUSS EXPORT;;11 400,00;172 945,00\n24/11/2026;24/11/2026;VIR RECU SOUSS EXPORT;;11 400,00;161 545,00`;
+  const r = N.tableauReleve(N.rangeesCSV(csv));
+  assert.strictEqual(r.ok, true); assert.deepStrictEqual([...r.entete], ["Date opération", "Date valeur", "Libellé", "Débit", "Crédit", "Solde"]);
+  assert.deepStrictEqual(A(r.lignes.map((l) => [l.date, l.libelle, l.montant])), [["2026-11-26", "VIR RECU SOUSS EXPORT; FAC 2026-0012", 11400], ["2026-11-25", "FRAIS TENUE DE COMPTE", -45], ["2026-11-24", "VIR RECU SOUSS EXPORT", 11400], ["2026-11-24", "VIR RECU SOUSS EXPORT", 11400]]);
+  assert.deepStrictEqual({ ...r.soldeFinal }, { montant: 184300, date: "2026-11-26" }, "solde de la ligne la plus récente, même en tête de fichier");
+  assert.notStrictEqual(r.lignes[2].id, r.lignes[3].id, "deux opérations identiques le même jour restent deux lignes");
+  assert.deepStrictEqual(A(N.tableauReleve(N.rangeesCSV(csv)).lignes.map((l) => l.id)), A(r.lignes.map((l) => l.id)), "même relevé réimporté : mêmes identifiants");
+  // banque espagnole : montant signé ; relevé avec une colonne « Sens » ; colonne « Type d'opération » qui n'est pas un sens
+  const es = N.tableauReleve(N.rangeesCSV("Fecha;Concepto;Importe;Saldo\n20/11/2026;TRANSFERENCIA LOGISTICA IBERIA;1.900,00;5.200,00\n21/11/2026;COMISION;-12,50;5.187,50"));
+  assert.deepStrictEqual(A(es.lignes.map((l) => [l.libelle, l.montant])), [["TRANSFERENCIA LOGISTICA IBERIA", 1900], ["COMISION", -12.5]]);
+  const sens = N.tableauReleve(N.rangeesCSV("Date\tLibellé\tMontant\tSens\n20/11/2026\tVIR PRIMEURS\t8 000,00\tC\n21/11/2026\tPRELEVEMENT\t300,00\tD"));
+  assert.deepStrictEqual(A(sens.lignes.map((l) => l.montant)), [8000, -300]);
+  const type = N.tableauReleve(N.rangeesCSV("Date;Type d'opération;Libellé;Montant\n20/11/2026;CHEQUE;REMISE CHQ 4512;2 500,00\n21/11/2026;CARTE;STATION AFRIQUIA;-800,00"));
+  assert.deepStrictEqual(A(type.lignes.map((l) => l.montant)), [2500, -800], "« CHEQUE » dans le type d'opération n'est pas un sens « crédit »");
+  // Excel : chaînes partagées, date en numéro de jour, chaîne en ligne
+  const feuille = `<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row><row r="3"><c r="A3" t="s"><v>1</v></c><c r="B3" t="s"><v>2</v></c><c r="C3" t="s"><v>3</v></c></row><row r="4"><c r="A4"><v>46350</v></c><c r="B4" t="inlineStr"><is><t>VIR RECU PRIMEURS &amp; CO</t></is></c><c r="C4"><v>8000</v></c></row></sheetData></worksheet>`;
+  const chaines = `<sst><si><t>Relevé de compte</t></si><si><t>Date</t></si><si><r><t>Libel</t></r><r><t>lé</t></r></si><si><t>Crédit</t></si></sst>`;
+  const x = N.tableauReleve(N.rangeesXlsx(feuille, chaines)); assert.deepStrictEqual(A(x.lignes.map((l) => [l.date, l.libelle, l.montant])), [["2026-11-24", "VIR RECU PRIMEURS & CO", 8000]]);
+  // « .xls » qui est une page web
+  const h = N.tableauReleve(N.rangeesHtml("<html><table><tr><th>Date</th><th>Libellé</th><th>Débit</th><th>Crédit</th></tr><tr><td>24/11/2026</td><td>VIR&nbsp;RECU<br>SOUSS</td><td></td><td>5 000,00</td></tr></table></html>"));
+  assert.deepStrictEqual(A(h.lignes.map((l) => [l.libelle, l.montant])), [["VIR RECU SOUSS", 5000]]);
+  assert.strictEqual(N.tableauReleve([["Compte", "123"], ["Nom", "Atlas"]]).ok, false);
+});
+
+test("rapprochement bancaire : numéro cité, client reconnu (même tronqué), paiement groupé, frais bancaires, change, plusieurs possibles ; une facture ne sert qu'une fois ; relevé réimporté écarté", () => {
+  N.S.params.tauxEUR = 10.8;
+  N.S.clients = [{ id: "k1", nom: "Souss Export SARL" }, { id: "k2", nom: "Primeurs du Sud" }, { id: "k3", nom: "Logistica Iberia SL" }, { id: "k4", nom: "Souss Primeurs" }];
+  const F = (id, numero, clientId, ht, o = {}) => ({ id, numero, clientId, date: "2026-11-02", echeance: "2026-12-02", devise: "MAD", tva: 0, statut: "emise", lignes: [{ designation: "Transport", montant: ht }], ...o });
+  N.S.factures = [F("f1", "FAC-2026-0012", "k1", 10000, { tva: 14 }), F("f2", "FAC-2026-0013", "k1", 5000), F("f3", "FAC-2026-0014", "k1", 2500), F("f4", "FAC-2026-0015", "k2", 8000), F("f5", "FAC-2026-0016", "k3", 1900, { devise: "EUR" }),
+    F("f6", "FAC-2026-0017", "k2", 3000), F("f7", "FAC-2026-0018", "k2", 3000), F("f8", "FAC-2026-0010", "k1", 11400, { statut: "payee", datePaiement: "2026-11-01" }), F("f9", "FAC-2026-0019", "k4", 4100, { date: "2026-12-20" })];
+  const L = (id, date, libelle, montant) => ({ id, date, libelle, montant });
+  const lignes = [L("a", "2026-11-24", "VIR RECU SOUSS EXPORT FAC 2026-0012", 11400), L("b", "2026-11-24", "VIR SOUSS EXPORT SARL", 7500), L("c", "2026-11-25", "VIR PRIMEURS DU SUD REF FACT N° 15/2026", 7985),
+    L("d", "2026-11-25", "VIR RECU PRIMEURS DU SU", 3000), L("e", "2026-11-25", "VIR LOGISTICA IBERIA", 20400), L("f", "2026-11-25", "VIREMENT DIVERS", 999), L("g", "2026-11-26", "FRAIS TENUE COMPTE", -45),
+    L("h", "2026-11-26", "VIR X", 11400), L("i", "2026-11-26", "VERSEMENT SOUSS PRIMEURS", 4100), L("j", "2026-11-26", "REMISE CHQ 4512 PRIMEURS DU SUD", 8000)];
+  const r = N.rapprocherReleve(lignes, { devise: "MAD" }), p = (id) => r.propositions.find((x) => x.ligne.id === id);
+  assert.deepStrictEqual([r.credits, r.debits], [9, 1]);
+  assert.deepStrictEqual([p("a").statut, [...p("a").factureIds]], ["sur", ["f1"]]); assert.match(p("a").raison, /FAC-2026-0012 citée dans le libellé, montant exact/);
+  assert.deepStrictEqual([p("b").statut, [...p("b").factureIds]], ["sur", ["f2", "f3"]], "paiement groupé de deux factures du client"); assert.match(p("b").raison, /2 factures pour ce montant exact/);
+  assert.deepStrictEqual([p("c").statut, [...p("c").factureIds], p("c").ecart], ["probable", ["f4"], 15]); assert.match(p("c").raison, /15,00 MAD de moins : frais bancaires/);
+  assert.strictEqual(p("d").statut, "plusieurs"); assert.deepStrictEqual(p("d").choix.map((g) => [...g]), [["f6"], ["f7"]], "client au nom tronqué, deux factures de 3 000");
+  assert.deepStrictEqual([p("e").statut, [...p("e").factureIds]], ["probable", ["f5"]]); assert.match(p("e").raison, /euros payée en dirhams/);
+  assert.strictEqual(p("f").statut, "aucune");
+  assert.strictEqual(p("h").statut, "aucune", "même montant que FAC-2026-0012, déjà prise par la ligne sûre ; la facture payée ne compte pas"); assert.match(p("h").raison, /déjà rapprochée d'une autre ligne/);
+  assert.strictEqual(p("i").statut, "aucune", "facture datée après le paiement (plus d'une semaine) : pas proposée");
+  assert.strictEqual(p("j").mode, "cheque"); assert.strictEqual(p("j").statut, "aucune", "FAC-2026-0015 déjà proposée à la ligne « c » (plus sûre)");
+  assert.strictEqual(N.clientDuLibelle("VIR RECU SOUSS"), null, "« Souss » seul : deux clients possibles, aucun choisi"); assert.strictEqual(N.clientDuLibelle("VIR SOUSS EXPORT SARL").id, "k1");
+  // compte en euros
+  const eur = N.rapprocherReleve([L("k", "2026-11-25", "TRANSFER LOGISTICA IBERIA SL", 1900)], { devise: "EUR" }).propositions[0]; assert.deepStrictEqual([eur.statut, [...eur.factureIds]], ["sur", ["f5"]]);
+  // validation : payées à la date de l'opération, écart gardé, ligne retenue pour la suite
+  const n = N.appliquerRapprochement([p("a"), p("b"), p("c")].map((x) => ({ ligne: x.ligne, factureIds: x.factureIds, mode: x.mode, ecart: x.ecart })));
+  assert.strictEqual(n, 4); const f = (id) => N.S.factures.find((x) => x.id === id);
+  assert.deepStrictEqual(["f1", "f2", "f3", "f4"].map((id) => [f(id).statut, f(id).datePaiement, f(id).mode]), [["payee", "2026-11-24", "virement"], ["payee", "2026-11-24", "virement"], ["payee", "2026-11-24", "virement"], ["payee", "2026-11-25", "virement"]]);
+  assert.strictEqual(f("f4").paiement.ecart, 15); assert.strictEqual(f("f2").paiement.groupe, 2); assert.strictEqual(f("f1").paiement.source, "releve");
+  assert.strictEqual(N.S.rapprochements.length, 3);
+  const r2 = N.rapprocherReleve(lignes, { devise: "MAD" }), p2 = (id) => r2.propositions.find((x) => x.ligne.id === id);
+  assert.deepStrictEqual(["a", "b", "c"].map((id) => p2(id).statut), ["deja", "deja", "deja"], "relevé réimporté : lignes déjà rapprochées écartées");
+  assert.deepStrictEqual([p2("j").statut, [...p2("j").factureIds]], ["aucune", []], "FAC-2026-0015 est payée : plus proposée");
+  assert.strictEqual(N.appliquerRapprochement([{ ligne: p("a").ligne, factureIds: ["f1"] }]), 0, "facture déjà payée : rien de plus");
 });
 
 (async () => {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 5.22.0 — Rapprochement bancaire : les factures payées d'après le relevé
+
+- **Factures → « Relevé bancaire »** : le fichier des opérations exporté depuis la banque en ligne — CSV, Excel (.xlsx), ou le « .xls » en page web de certaines banques — et la devise du compte (dirham ou euro). L'en-tête est trouvé sous les lignes d'information du compte ; débit et crédit, montant signé ou avec un sens, solde, « 12 500,00 », « 12.500,00 », dates jj/mm/aaaa ou d'Excel, accents en UTF-8 ou en Windows. Un ancien .xls binaire ou un PDF : message clair pour exporter en CSV ou Excel.
+- **Chaque virement reçu est rapproché des factures à encaisser** :
+  - **rapprochés** (cochés) : numéro de facture dans le libellé et montant exact, ou client reconnu dans le libellé (même tronqué : « VIR RECU PRIMEURS DU SU ») et une seule facture de ce montant — y compris **un virement qui règle plusieurs factures** (jusqu'à 4) ;
+  - **à vérifier** (non cochés, avec la raison) : quelques dizaines de dirhams en moins (**frais bancaires ?**), facture en euros payée en dirhams, montant différent (paiement partiel ?), seule facture de ce montant sans client reconnu ;
+  - **plusieurs factures possibles** : à choisir dans la liste ;
+  - **crédits sans facture** : pour information (acompte, autre recette).
+- **« Marquer payées »** : chaque facture est payée **à la date de l'opération**, mode d'après le libellé (virement, chèque, LCN, espèces), écart de frais gardé. Les relances prévues s'arrêtent d'elles-mêmes.
+- **Solde de trésorerie** : le solde du relevé (ligne la plus récente) peut être repris en un geste pour un compte en dirhams.
+- **Sans doublon** : un relevé réimporté (ou un relevé qui chevauche le précédent) ne repropose pas les lignes déjà rapprochées. Une facture ne sert qu'une fois : le numéro cité par le client l'emporte sur le simple montant.
+- Rien n'est marqué payé sans validation, et le fichier reste sur l'appareil.
+
 ## 5.21.0 — Les pièces jointes des demandes arrivent sur la commande (relais 2.3)
 
 - **Le relais garde maintenant les pièces jointes des e-mails** reçus dans la boîte des demandes : PDF, photos, Excel, Word (15 Mo la pièce, 10 par message). Un e-mail de plus de 300 Ko est relu en entier (20 Mo au plus) au lieu d'être coupé. Les pièces sont chiffrées sur le relais comme le reste des données, et effacées dès qu'elles sont rangées (au plus tard 30 jours après). Les logos de signature ne comptent plus comme des pièces jointes ; rien n'est gardé d'une lettre d'information.

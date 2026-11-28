@@ -168,6 +168,7 @@ Automatique et sans action de votre part.
 | `dictee.js`, `dictee_ui.js` | Dictée dans les zones de texte (réserves de livraison, notes) : reconnaissance vocale du téléphone, ponctuation dite en arabe, français, espagnol, anglais |
 | `mise_en_service.js`, `mise_en_service_ui.js` | Mise en service : ce qui est branché et ce qui manque (relais et sa version, e-mail, boîte, itinéraire, alertes du bureau, balises, chauffeurs joignables, charges fixes, clients, voyages, entreprise, copie, protection de l'appareil), ce que chaque point débloque, bouton vers la fiche à compléter ; carte en tête de Réglages → Général, bandeau du tableau de bord |
 | `pieces_demande.js`, `pieces_demande_ui.js`, `serveur/pieces.js` | Pièces jointes des demandes (relais 2.3, gardées chiffrées jusqu'au rangement) : document reconnu au nom (facture, colisage, phyto, EUR.1…), commande citée par l'e-mail et expéditeur vérifié, rangement sur la commande (automatique ou en un geste), documents cochés reçus |
+| `rapprochement.js`, `rapprochement_ui.js` | Rapprochement bancaire : relevé CSV, Excel (.xlsx) ou page web, en-tête et colonnes reconnus, nombres et dates des banques ; crédits rapprochés des factures à encaisser (numéro cité, client du libellé, paiement groupé, frais, change), validation, date de paiement de l'opération, solde de trésorerie, sans doublon au réimport |
 | `tickets_ui.js` (logique dans `capture.js`) | Ticket photographié par le chauffeur, rangé seul sur son voyage avec la photo (ou en attente) ; pleins du voyage avec leurs tickets dans la fiche |
 | `liens.js`, `liens_ui.js`, `serveur/liens.js`, `serveur/page-lien.js` | Liens sans compte servis par le relais : dépôt des documents par le client (photo ou PDF, rangés dans les photos du voyage, documents marqués reçus) et étapes de douane notées par le transitaire, appliquées au voyage (testé) |
 | `boite.js`, `boite_ui.js`, `serveur/imap.js`, `serveur/mime.js` | Boîte des demandes : e-mails relevés par le relais (IMAP en lecture seule, lecture MIME sans dépendance) et messages partagés depuis WhatsApp, lus, triés en commande, devis ou ignorés (testé) |
@@ -211,7 +212,7 @@ Automatique et sans action de votre part.
 | `vendor/leaflet/` | Bibliothèque de carte Leaflet 1.9.4 (BSD-2-Clause), embarquée |
 | `sw.js`, `manifest.webmanifest`, `icon*.png/svg` | Application installable, hors ligne, rappels en arrière-plan |
 | `serveur/empreintes.js` | Empreinte de chaque fichier préchargé, posée à la publication : une mise à jour ne télécharge que les fichiers qui ont changé |
-| `tests/noyau.test.js`, `tests/relais.test.js` | 279 tests (236 application, 43 relais) |
+| `tests/noyau.test.js`, `tests/relais.test.js` | 281 tests (238 application, 43 relais) |
 | `tests/captures.js`, `tests/donnees-captures.js` | Captures de référence de chaque page (téléphone, bureau, clair, sombre) comparées à chaque livraison — outil de développement, demande Playwright |
 
 ```bash

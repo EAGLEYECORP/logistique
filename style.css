@@ -1206,3 +1206,17 @@ ol.etapes-mise-en-service { margin: 4px 0 8px; padding-inline-start: 20px; font-
 .dem-pieces-liste li.pale { border-style: dashed; }
 .dem-piece-nom { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
 .dem-pieces-liste li .btn { margin-inline-start: auto; }
+
+/* Rapprochement bancaire */
+.rb-liste { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rb-ligne { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.rb-ligne > .rb-op, .rb-ligne > .rb-fac { flex: 1 1 220px; min-width: 0; }
+label.check.rb-check { display: flex; gap: 10px; align-items: flex-start; width: 100%; margin: 0; padding: 0; cursor: pointer; font-weight: 400; }
+.rb-check > input { margin-top: 3px; flex: none; }
+.rb-check > span { display: flex; flex-wrap: wrap; gap: 6px 14px; flex: 1; min-width: 0; }
+.rb-check .rb-op, .rb-check .rb-fac { flex: 1 1 220px; min-width: 0; }
+.rb-op, .rb-fac { display: flex; flex-direction: column; gap: 2px; }
+.rb-f strong { font-weight: 600; }
+.rb-op .sub, .rb-fac .sub { overflow-wrap: anywhere; }
+.rb-fac .f { margin: 0; }
+.rb-sans > summary { cursor: pointer; color: var(--text-2); margin: 10px 0 6px; }
